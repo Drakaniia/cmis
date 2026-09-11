@@ -1,0 +1,6 @@
+{
+  "extends": "@cmis/config/tsconfig.base.json",
+  "compilerOptions": {
+    "strictNullChecks": true
+  }
+}

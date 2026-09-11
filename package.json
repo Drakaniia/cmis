@@ -1,0 +1,46 @@
+{
+  "name": "cmis",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "type": "module",
+  "scripts": {
+    "dev": "vp run -r dev",
+    "build": "vp run -r build",
+    "check-types": "vp run -r check-types",
+    "check": "ultracite check",
+    "lint": "vp lint",
+    "format": "vp fmt",
+    "format:check": "vp fmt --check",
+    "test": "vp run -r test",
+    "test:frontend": "pnpm --filter desktop test",
+    "staged": "vp staged",
+    "hooks:setup": "vp config",
+    "tauri": "pnpm --filter desktop tauri",
+    "desktop:dev": "pnpm --filter desktop desktop:dev",
+    "desktop:build": "pnpm --filter desktop desktop:build",
+    "dev:desktop": "vp run --filter desktop dev",
+    "fix": "ultracite fix"
+  },
+  "dependencies": {
+    "@cmis/env": "workspace:*",
+    "dotenv": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.9",
+    "@cmis/config": "workspace:*",
+    "@types/bun": "catalog:",
+    "concurrently": "^10.0.5",
+    "rolldown": "1.2.6",
+    "typescript": "catalog:",
+    "ultracite": "7.10.7",
+    "vite-plus": "0.3.0"
+  },
+  "overrides": {
+    "vite": "npm:@voidzero-dev/vite-plus-core@0.3.0"
+  },
+  "packageManager": "pnpm@12.3.4"
+}
