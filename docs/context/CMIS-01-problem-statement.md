@@ -18,10 +18,10 @@ Bukidnon State University clinics manage medicine stock manually or through disc
 
 ## Roles at a Glance
 
-| Role | Purpose |
-|---|---|
-| Admin | Manages the overall state of the system; full access; troubleshoots issues |
-| Staff | Handles day-to-day inventory: stock in/out, expiry/low-stock alerts, dispensing, procurement |
-| Viewer | Views available medicine, submits a request, claims medicine once approved |
+| Role   | Purpose                                                                                      |
+| ------ | -------------------------------------------------------------------------------------------- |
+| Admin  | Manages the overall state of the system; full access; troubleshoots issues                   |
+| Staff  | Handles day-to-day inventory: stock in/out, expiry/low-stock alerts, dispensing, procurement |
+| Viewer | Views available medicine, submits a request, claims medicine once approved                   |
 
 See `CMIS-02-user-stories.md` for detailed role permissions and user stories, and `CMIS-03-system-flow.md` for the process flow.
