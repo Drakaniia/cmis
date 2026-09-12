@@ -1,0 +1,18 @@
+# Code files handled by Biome
+*.js
+*.jsx
+*.ts
+*.tsx
+*.mjs
+*.cjs
+
+# Build & deps
+node_modules
+dist
+build
+target
+pnpm-lock.yaml
+Cargo.lock
+
+# Tauri generated
+apps/desktop/src-tauri

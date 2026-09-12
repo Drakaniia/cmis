@@ -22,7 +22,8 @@
     "desktop:dev": "pnpm --filter desktop desktop:dev",
     "desktop:build": "pnpm --filter desktop desktop:build",
     "dev:desktop": "vp run --filter desktop dev",
-    "fix": "ultracite fix"
+    "fix": "ultracite fix",
+    "format:prettier": "prettier --write ."
   },
   "dependencies": {
     "@cmis/env": "workspace:*",
@@ -34,7 +35,9 @@
     "@cmis/config": "workspace:*",
     "@types/bun": "catalog:",
     "concurrently": "^10.0.5",
+    "prettier": "^3.9.6",
     "rolldown": "1.2.6",
+    "shadcn": "^4.21.0",
     "typescript": "catalog:",
     "ultracite": "7.10.7",
     "vite-plus": "0.3.0"
