@@ -4,17 +4,17 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vp dev",
     "build": "vp build",
+    "check-types": "vp build && tsc --noEmit",
+    "desktop:build": "tauri build",
+    "desktop:dev": "tauri dev",
+    "dev": "vp dev",
     "serve": "vp preview",
     "start": "vp dev",
-    "check-types": "vp build && tsc --noEmit",
-    "test": "vp test --run --passWithNoTests",
-    "test:watch": "vp test --watch",
-    "test:coverage": "vp test --run --coverage",
     "tauri": "tauri",
-    "desktop:dev": "tauri dev",
-    "desktop:build": "tauri build"
+    "test": "vp test --run --passWithNoTests",
+    "test:coverage": "vp test --run --coverage",
+    "test:watch": "vp test --watch"
   },
   "dependencies": {
     "@cmis/env": "workspace:*",

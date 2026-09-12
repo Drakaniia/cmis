@@ -3,6 +3,79 @@
   "extends": [
     "ultracite/biome/core",
     "ultracite/biome/react",
-    "ultracite/biome/tanstack",
+    "ultracite/biome/tanstack"
   ],
+  "overrides": [
+    {
+      "includes": ["apps/desktop/src/components/mode-toggle.tsx"],
+      "linter": {
+        "rules": {
+          "performance": {
+            "noJsxPropsBind": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": [
+        "apps/desktop/src/components/theme-provider.tsx",
+        "packages/ui/src/lib/utils.ts"
+      ],
+      "linter": {
+        "rules": {
+          "performance": {
+            "noBarrelFile": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": [
+        "apps/desktop/src/lib/tauri.ts",
+        "packages/ui/src/components/message-scroller.tsx"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noExportedImports": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": ["packages/env/src/web.ts"],
+      "linter": {
+        "rules": {
+          "suspicious": {
+            "noExplicitAny": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": ["packages/ui/src/components/input-group.tsx"],
+      "linter": {
+        "rules": {
+          "a11y": {
+            "useSemanticElements": "off",
+            "useKeyWithClickEvents": "off",
+            "noNoninteractiveElementInteractions": "off"
+          },
+          "performance": {
+            "noJsxPropsBind": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": ["packages/ui/src/components/label.tsx"],
+      "linter": {
+        "rules": {
+          "a11y": {
+            "noLabelWithoutControl": "off"
+          }
+        }
+      }
+    }
+  ]
 }
