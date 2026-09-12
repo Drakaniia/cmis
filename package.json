@@ -1,29 +1,32 @@
 {
   "name": "cmis",
   "private": true,
+  "type": "module",
   "workspaces": [
     "apps/*",
     "packages/*"
   ],
-  "type": "module",
   "scripts": {
-    "dev": "vp run -r dev",
     "build": "vp run -r build",
-    "check-types": "vp run -r check-types",
     "check": "ultracite check",
-    "lint": "vp lint",
-    "format": "vp fmt",
-    "format:check": "vp fmt --check",
-    "test": "vp run -r test",
-    "test:frontend": "pnpm --filter desktop test",
-    "staged": "vp staged",
-    "hooks:setup": "vp config",
-    "tauri": "pnpm --filter desktop tauri",
-    "desktop:dev": "pnpm --filter desktop desktop:dev",
+    "check-types": "vp run -r check-types",
     "desktop:build": "pnpm --filter desktop desktop:build",
+    "desktop:dev": "pnpm --filter desktop desktop:dev",
+    "dev": "vp run -r dev",
     "dev:desktop": "vp run --filter desktop dev",
     "fix": "ultracite fix",
-    "format:prettier": "prettier --write ."
+    "format": "vp fmt",
+    "format:check": "vp fmt --check",
+    "format:prettier": "prettier --write .",
+    "hooks:setup": "vp config",
+    "lint": "vp lint",
+    "staged": "vp staged",
+    "tauri": "pnpm --filter desktop tauri",
+    "test": "vp run -r test",
+    "test:frontend": "pnpm --filter desktop test"
+  },
+  "overrides": {
+    "vite": "npm:@voidzero-dev/vite-plus-core@0.3.0"
   },
   "dependencies": {
     "@cmis/env": "workspace:*",
@@ -41,9 +44,6 @@
     "typescript": "catalog:",
     "ultracite": "7.10.7",
     "vite-plus": "0.3.0"
-  },
-  "overrides": {
-    "vite": "npm:@voidzero-dev/vite-plus-core@0.3.0"
   },
   "packageManager": "pnpm@12.3.4"
 }
