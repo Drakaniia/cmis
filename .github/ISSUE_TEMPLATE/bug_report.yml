@@ -1,0 +1,137 @@
+name: Bug Report
+description: Report a reproducible defect in CMIS (inventory, alerts, queue, dispensing, reports, viewer, admin, offline).
+title: "[Bug] "
+labels: ["bug"]
+assignees: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for filing a bug! Complete the form so we can reproduce it.
+        Before submitting, check `docs/context/CMIS-02-user-stories.md` (role matrix) and `docs/context/CMIS-03-system-flow.md` to confirm expected behavior.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area / Module
+      description: Where does the bug surface?
+      multiple: true
+      options:
+        - Shell / Nav / Auth (CMIS-UI-00)
+        - Home dashboards (CMIS-UI-01)
+        - Inventory management (CMIS-UI-02)
+        - Expiry alerts (CMIS-UI-03)
+        - Low-stock alerts (CMIS-UI-04)
+        - Request queue / Kanban (CMIS-UI-05)
+        - Dispensing log (CMIS-UI-06)
+        - Reports & analytics (CMIS-UI-07)
+        - Viewer portal (CMIS-UI-08)
+        - Admin (CMIS-UI-09)
+        - Offline / Sync (CMIS-03 §4)
+        - Packages (ui / env / config)
+        - Tauri / Desktop build
+        - CI / Tooling
+    validations:
+      required: true
+  - type: dropdown
+    id: role
+    attributes:
+      label: Role
+      description: Which role reproduces the bug?
+      options:
+        - Admin
+        - Staff
+        - Viewer
+        - All / N/A
+      default: 0
+    validations:
+      required: true
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity
+      description: Impact on clinic operations.
+      options:
+        - critical — blocks dispensing / stock-out / data loss
+        - high — major flow broken, workaround exists
+        - medium — minor flow broken
+        - low — cosmetic / polish
+      default: 2
+    validations:
+      required: true
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: One-sentence description.
+      placeholder: Staff expiry alert does not fire when batch expires within 7 days.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to Reproduce
+      description: Ordered steps. Include data seeded if relevant.
+      placeholder: |
+        1. Login as Staff
+        2. Go to Inventory → add batch with expiry = today + 3d
+        3. Navigate to Expiry alerts
+        4. Observe no alert
+      render: bash
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Result
+      description: What should happen per spec/user story?
+      placeholder: Alert bucket "Expiring in 7 days" should list the batch, per CMIS-UI-03.
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual Result
+      description: What happens instead? Include error messages.
+    validations:
+      required: true
+  - type: input
+    id: app_version
+    attributes:
+      label: App Version / Commit
+      description: "Run `git rev-parse --short HEAD` or provide release tag. For desktop, include Tauri version."
+      placeholder: 315b7a1
+    validations:
+      required: false
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      description: Where was this reproduced?
+      multiple: true
+      options:
+        - Web (Vite dev)
+        - Desktop — Windows
+        - Desktop — macOS
+        - Desktop — Linux
+        - Mobile viewport
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / Screenshots
+      description: "Console logs, `pnpm run check` output, or stack traces. Drag images here."
+      render: bash
+    validations:
+      required: false
+  - type: checkboxes
+    id: precheck
+    attributes:
+      label: Pre-submit Checks
+      options:
+        - label: I ran `pnpm dlx ultracite fix` / `pnpm run check` and `pnpm run check-types` locally if code was touched.
+          required: false
+        - label: I searched existing issues and did not find a duplicate.
+          required: true
+        - label: I can reproduce on `main` at the commit above.
+          required: true

@@ -1,0 +1,116 @@
+name: Feature Request
+description: Propose a new capability or enhancement aligned to CMIS roles and flows.
+title: "[Feat] "
+labels: ["enhancement"]
+assignees: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Propose one feature per issue. Ground it in `docs/context/CMIS-02-user-stories.md` (role) and `docs/spec/CMIS-ui-spec.md` / `docs/ui/*` if UI is involved.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area / Module
+      description: Primary module this feature touches.
+      multiple: true
+      options:
+        - Shell / Nav / Auth (CMIS-UI-00)
+        - Home dashboards (CMIS-UI-01)
+        - Inventory management (CMIS-UI-02)
+        - Expiry alerts (CMIS-UI-03)
+        - Low-stock alerts (CMIS-UI-04)
+        - Request queue / Kanban (CMIS-UI-05)
+        - Dispensing log (CMIS-UI-06)
+        - Reports & analytics (CMIS-UI-07)
+        - Viewer portal (CMIS-UI-08)
+        - Admin (CMIS-UI-09)
+        - Offline / Sync (CMIS-03 §4)
+        - Packages (ui / env / config)
+        - Tauri / Desktop / Build
+        - Tooling / CI / Docs
+    validations:
+      required: true
+  - type: dropdown
+    id: role
+    attributes:
+      label: Primary Role
+      description: Who benefits?
+      options:
+        - Admin
+        - Staff
+        - Viewer
+        - All roles
+      default: 3
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem Statement
+      description: What clinic problem does this solve? Link to pain points in CMIS-01 if relevant.
+      placeholder: Staff must manually check each batch to decide FEFO; errors cause expired dispensing.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed Solution
+      description: Desired behavior. Include role flows, states, or UI sketches if known.
+      placeholder: |
+        When dispensing, suggest earliest-expiring batch with sufficient qty; warn if user overrides.
+        States: empty → suggested → overridden → confirmed.
+    validations:
+      required: true
+  - type: textarea
+    id: stories
+    attributes:
+      label: User Stories
+      description: Follow the template "As a <role>, I want ... so that ...".
+      placeholder: |
+        - As Staff, I want FEFO suggestions at dispensing so I don't dispense expired stock.
+        - As Admin, I want to configure FEFO override reasons so audits stay compliant.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance Criteria
+      description: Testable conditions. Use checkboxes.
+      placeholder: |
+        - [ ] Dispensing modal lists batches sorted by expiry asc then quantity desc.
+        - [ ] Selecting non-FEFO batch requires reason from allowed list.
+        - [ ] `pnpm run check-types` and `pnpm run test` pass; a11y labels present.
+      render: markdown
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives Considered
+      description: Other approaches and why not chosen.
+    validations:
+      required: false
+  - type: dropdown
+    id: effort
+    attributes:
+      label: Estimated Effort
+      description: Rough sizing for planning.
+      options:
+        - XS (< 1 day)
+        - S (1-2 days)
+        - M (3-5 days)
+        - L (1-2 weeks)
+        - Needs scoping
+      default: 4
+    validations:
+      required: false
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: I checked `docs/ui/README.md` and existing issues for duplicates.
+          required: true
+        - label: This aligns with the role permission matrix in `CMIS-02` (or proposes a matrix change with rationale).
+          required: true
