@@ -87,6 +87,7 @@ Conflicts (if any) flagged for Admin/Staff review
 ---
 
 ## 5. Open Questions for Further Scoping
+
 - Does "claim right away" mean auto-approval, or does Staff need to manually approve every request before the Viewer can claim?
 - Should multi-branch stock be fully separate per branch, or shared/transferable between branches?
 - What identity source is used for Viewers (student ID system integration, manual account creation, etc.)?
