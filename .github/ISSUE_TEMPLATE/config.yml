@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: CMIS Context & Specs
+    url: https://github.com/Drakaniia/CMIS/tree/main/docs
+    about: Read problem statement, user stories, system flows, and UI specs before filing.
+  - name: Discussions / Questions
+    url: https://github.com/Drakaniia/CMIS/discussions
+    about: Ask design or scoping questions — not a bug or feature.

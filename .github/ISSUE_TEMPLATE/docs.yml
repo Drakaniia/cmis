@@ -1,0 +1,49 @@
+name: Docs / Question
+description: Documentation fix, spec clarification, or scoping question for CMIS.
+title: "[Docs] "
+labels: ["documentation"]
+assignees: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        For spec gaps, see `docs/context/` and `docs/spec/` first. Questions about `CMIS-03` open questions belong here.
+  - type: dropdown
+    id: doc_area
+    attributes:
+      label: Doc Area
+      multiple: true
+      options:
+        - context — problem / roles / flows (CMIS-01/02/03)
+        - spec — CMIS-ui-spec
+        - ui — CMIS-UI-00..09
+        - README / AGENTS.md
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: current
+    attributes:
+      label: Current State
+      description: What does the doc say today? Quote or link.
+      placeholder: CMIS-03 §5 asks whether Viewer claim is auto-approved or Staff-approved — no decision yet.
+    validations:
+      required: true
+  - type: textarea
+    id: proposed
+    attributes:
+      label: Proposed Change / Question
+      description: What should change or be decided? Provide options if relevant.
+      placeholder: |
+        Option A: auto-approve if in-stock, else queue.
+        Option B: always require Staff approval.
+        Preference: A for throughput, with audit log.
+    validations:
+      required: true
+  - type: checkboxes
+    id: confirm
+    attributes:
+      label: Checks
+      options:
+        - label: I checked `docs/ui/README.md` and `docs/spec/CMIS-ui-spec.md` for existing coverage.
+          required: true

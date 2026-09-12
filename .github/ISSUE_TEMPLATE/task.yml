@@ -1,0 +1,86 @@
+name: Task / Chore
+description: Engineering task, refactor, tech debt, CI, or Tauri work — not a user-facing feature.
+title: "[Task] "
+labels: ["task"]
+assignees: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use for refactors, deps, tooling, CI, and Tauri tasks. For bugs use Bug Report; for features use Feature Request.
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Kind
+      description: What type of task is this?
+      options:
+        - refactor
+        - chore — deps / tooling
+        - ci / release
+        - tauri / desktop
+        - test / quality
+        - docs-only task
+      default: 0
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      multiple: true
+      options:
+        - Shell / Nav / Auth
+        - Inventory / Batches
+        - Expiry / Low-stock
+        - Queue / Kanban / Dispensing
+        - Reports / Analytics
+        - Viewer / Admin
+        - Offline / Sync
+        - packages/ui
+        - packages/env
+        - packages/config
+        - apps/desktop (Tauri)
+        - .github / CI
+        - Root tooling (biome, ultracite, pnpm)
+      default: 11
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Context / Motivation
+      description: Why now? Link to failing check, debt, or spec.
+      placeholder: pnpm audit flagged zod; or CI lint step flakes on Windows.
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope & Out of Scope
+      description: Be explicit to keep the PR atomic.
+      placeholder: |
+        In scope: bump zod, run ultracite fix, update pnpm-lock.
+        Out of scope: FEFO logic change.
+    validations:
+      required: true
+  - type: textarea
+    id: done
+    attributes:
+      label: Definition of Done
+      description: What must be true to close?
+      placeholder: |
+        - [ ] `pnpm dlx ultracite fix` + `pnpm run check` clean
+        - [ ] `pnpm run check-types` passes
+        - [ ] `pnpm run test` passes (or `pnpm run test:frontend`)
+        - [ ] CI green on this branch
+      render: markdown
+    validations:
+      required: true
+  - type: input
+    id: owner
+    attributes:
+      label: Owner / Assignee Hint
+      description: Optional — who should pick this up.
+      placeholder: "@Drakaniia"
+    validations:
+      required: false
