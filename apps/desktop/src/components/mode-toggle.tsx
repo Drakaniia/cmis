@@ -4,31 +4,32 @@ import { Monitor, Moon, Sun } from "lucide-react";
 import { motion, useReducedMotion } from "motion/react";
 import { useTheme } from "next-themes";
 import type { JSX } from "react";
-import { useSyncExternalStore } from "react";
 
 function ThemeOption({
   icon,
   value,
   isActive,
-  onClick,
+  onSelect,
 }: {
   icon: JSX.Element;
   value: string;
-  isActive?: boolean;
-  onClick: (value: string) => void;
+  isActive: boolean;
+  onSelect: (value: string) => void;
 }) {
   const reduceMotion = useReducedMotion();
   return (
-    <button
-      aria-checked={isActive}
-      aria-label={`Switch to ${value} theme`}
-      className="relative flex size-8 cursor-pointer items-center justify-center rounded-full text-muted-foreground transition-[color] hover:text-foreground data-[active=true]:text-foreground [&_svg]:size-4"
-      data-active={isActive}
-      onClick={() => onClick(value)}
-      role="radio"
-    >
+    <label className="relative flex size-8 cursor-pointer items-center justify-center rounded-full text-muted-foreground transition-[color] hover:text-foreground has-[:checked]:text-foreground has-[:focus-visible]:ring-1 has-[:focus-visible]:ring-ring [&_svg]:size-4">
+      <input
+        aria-label={`Switch to ${value} theme`}
+        checked={isActive}
+        className="sr-only"
+        name="theme"
+        onChange={() => onSelect(value)}
+        type="radio"
+        value={value}
+      />
       {icon}{" "}
-      {isActive && (
+      {isActive ? (
         <motion.span
           className="absolute inset-0 rounded-full border"
           layoutId="theme-option"
@@ -38,8 +39,8 @@ function ThemeOption({
               : { bounce: 0.3, duration: 0.6, type: "spring" }
           }
         />
-      )}
-    </button>
+      ) : null}
+    </label>
   );
 }
 
@@ -62,22 +63,12 @@ export function ThemeSwitcher() {
   const { theme, setTheme } = useTheme();
   const reduceMotion = useReducedMotion();
 
-  const isMounted = useSyncExternalStore(
-    () => () => {},
-    () => true,
-    () => false
-  );
-
-  if (!isMounted) {
-    return <div className="flex h-8 w-24" />;
-  }
-
   return (
     <motion.div
       animate={{ opacity: 1 }}
       className="inset-ring-1 inset-ring-border inline-flex items-center overflow-clip rounded-full bg-background"
       initial={{ opacity: 0 }}
-      key={String(isMounted)}
+      key="theme-switcher"
       role="radiogroup"
       transition={reduceMotion ? { duration: 0 } : { duration: 0.3 }}
     >
@@ -86,7 +77,7 @@ export function ThemeSwitcher() {
           icon={option.icon}
           isActive={theme === option.value}
           key={option.value}
-          onClick={setTheme}
+          onSelect={setTheme}
           value={option.value}
         />
       ))}
