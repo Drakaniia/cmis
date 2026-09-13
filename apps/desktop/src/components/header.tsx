@@ -4,8 +4,10 @@ import { Settings } from "lucide-react";
 import { CommandPalette } from "./command-palette";
 import { ThemeSwitcher } from "./mode-toggle";
 
+const trailingSlashes = /\/+$/;
+
 function resolveTitle(pathname: string): string {
-  const normalized = pathname.replace(/\/+$/, "") || "/";
+  const normalized = pathname.replace(trailingSlashes, "") || "/";
   if (normalized === "/admin") {
     return "System overview";
   }
