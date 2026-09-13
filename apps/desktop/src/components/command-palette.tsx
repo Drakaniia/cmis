@@ -125,6 +125,14 @@ export function CommandPalette() {
     setOpen(true);
   }, []);
 
+  const handleClose = useCallback(() => {
+    setOpen(false);
+  }, []);
+
+  const handleDialogClick = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+  }, []);
+
   const groupedItems = useMemo(() => {
     const groups: Record<string, CommandEntry[]> = {};
     for (const item of COMMAND_ITEMS) {
@@ -174,20 +182,18 @@ export function CommandPalette() {
               className="fixed inset-0 z-50 bg-black/32"
               exit={{ opacity: 0 }}
               initial={{ opacity: 0 }}
-              onClick={() => setOpen(false)}
+              onClick={handleClose}
               transition={{ duration: 0.18 }}
             />
 
             {/* Palette container — click outside the panel to close (Apple §2 Agency). */}
-            <div
-              className="fixed inset-0 z-50 flex items-start justify-center px-4 pt-[20vh] sm:pt-[18vh]"
-              onClick={() => setOpen(false)}
-              onKeyDown={(e) => {
-                if (e.key === "Escape") {
-                  setOpen(false);
-                }
-              }}
-            >
+            <div className="fixed inset-0 z-50 flex items-start justify-center px-4 pt-[20vh] sm:pt-[18vh]">
+              <button
+                aria-label="Close command palette"
+                className="absolute inset-0 cursor-default"
+                onClick={handleClose}
+                type="button"
+              />
               {/* §12 surface-frosted: translucent material with backdrop-blur.
                * §4 materializeEnter: scale + blur enter, blur + fade exit.
                * §7 Spatial consistency: centered origin. */}
@@ -195,10 +201,10 @@ export function CommandPalette() {
                 animate="animate"
                 aria-label="Command palette"
                 aria-modal="true"
-                className="surface-frosted flex w-full max-w-[560px] flex-col overflow-hidden rounded-xl border border-border/50 shadow-xl"
+                className="surface-frosted relative z-10 flex w-full max-w-[560px] flex-col overflow-hidden rounded-xl border border-border/50 shadow-xl"
                 exit="exit"
                 initial={reduceMotion ? "animate" : "initial"}
-                onClick={(e) => e.stopPropagation()}
+                onClick={handleDialogClick}
                 role="dialog"
                 style={{
                   transformOrigin: "center center",
