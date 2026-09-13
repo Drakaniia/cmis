@@ -176,7 +176,7 @@ export function TimeSeriesChartInner(props: TimeSeriesChartInnerProps) {
   return <TimeSeriesChartCore {...props} />;
 }
 
-const TimeSeriesChartCore = memo(function TimeSeriesChartCore({
+const TimeSeriesChartCore = memo(function TimeSeriesChartCoreImpl({
   width,
   height,
   data,

@@ -89,8 +89,6 @@ export function computeYDomainsByAxis({
     domains[normalizeYAxisId(axisId)] = niceYDomain(resolveDomain(dataKeys));
   }
 
-
-
   return domains;
 }
 

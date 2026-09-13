@@ -90,5 +90,3 @@ LineSeriesTerminalMarker.displayName = "LineSeriesTerminalMarker";
 (
   LineSeriesTerminalMarker as unknown as Record<string, boolean>
 ).__isPostOverlay = true;
-
-export default LineSeriesTerminalMarker;

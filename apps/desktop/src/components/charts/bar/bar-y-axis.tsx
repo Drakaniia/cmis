@@ -138,5 +138,3 @@ const BarYAxisInner = memo(function BarYAxisInnerComponent({
 });
 
 BarYAxis.displayName = "BarYAxis";
-
-

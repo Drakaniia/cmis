@@ -58,6 +58,7 @@ export function usePathStrokeMetrics(
         ? prev
         : { pathD: d, pathLength: len }
     );
+    // biome-ignore lint/correctness/useExhaustiveDependencies: caller-managed deps are intentional
   }, deps);
 
   return metrics;

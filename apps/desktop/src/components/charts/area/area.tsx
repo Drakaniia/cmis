@@ -378,5 +378,3 @@ export function Area({
 }
 
 Area.displayName = "Area";
-
-

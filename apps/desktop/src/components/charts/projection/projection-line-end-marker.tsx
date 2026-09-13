@@ -65,5 +65,3 @@ ProjectionLineEndMarker.displayName = "ProjectionLineEndMarker";
 (
   ProjectionLineEndMarker as unknown as Record<string, boolean>
 ).__isPostOverlay = true;
-
-export default ProjectionLineEndMarker;

@@ -65,6 +65,7 @@ export function useScheduledTooltip<T>(): ScheduledTooltipControls<T> {
         rafRef.current = null;
         const next = pendingRef.current;
         const nextKey = pendingKeyRef.current;
+        // biome-ignore lint/suspicious/noUnnecessaryConditions: ref values are set at runtime and can be non-null here
         if (next && nextKey) {
           commitTooltip(next, nextKey);
         }

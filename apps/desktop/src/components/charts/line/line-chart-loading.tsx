@@ -108,5 +108,3 @@ export function LineChartLoading({
     </LineChart>
   );
 }
-
-export default LineChartLoading;

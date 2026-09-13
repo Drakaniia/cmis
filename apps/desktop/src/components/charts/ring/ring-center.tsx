@@ -115,5 +115,3 @@ export function RingCenter({
 }
 
 RingCenter.displayName = "RingCenter";
-
-export default RingCenter;

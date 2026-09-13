@@ -172,5 +172,3 @@ export function TooltipDot({
 }
 
 TooltipDot.displayName = "TooltipDot";
-
-export default TooltipDot;

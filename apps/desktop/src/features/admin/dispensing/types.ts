@@ -82,6 +82,7 @@ export function filterDispensingRows(
   const query = filters.search.trim().toLowerCase();
   const requestorQuery = filters.requestor.trim().toLowerCase();
 
+  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: sequential independent predicates
   return rows.filter((row) => {
     if (cutoff !== null && new Date(row.dispensedAt).getTime() < cutoff) {
       return false;

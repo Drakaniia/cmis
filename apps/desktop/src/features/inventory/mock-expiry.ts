@@ -106,7 +106,7 @@ export function buildExpiryRows(items: InventoryItem[]): ExpiryRow[] {
 export function buildMinimapBuckets(rows: ExpiryRow[]): MinimapBucket[] {
   const now = new Date();
   const buckets: MinimapBucket[] = [];
-  for (let i = 0; i < 12; i++) {
+  for (let i = 0; i < 12; i += 1) {
     const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
     const monthKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
     const label = d.toLocaleDateString("en-US", { month: "short" });

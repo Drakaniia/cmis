@@ -12,10 +12,12 @@ function kindFromName(fileName: string): ImportDiff["kind"] {
   return "csv";
 }
 
+const CSV_LINE_SPLIT = /\r?\n/;
+
 function csvRows(content: string): string[] {
   return content
     .trim()
-    .split(/\r?\n/)
+    .split(CSV_LINE_SPLIT)
     .filter((line) => line.trim().length > 0);
 }
 

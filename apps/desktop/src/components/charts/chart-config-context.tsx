@@ -68,7 +68,7 @@ export function resolveTooltipBoxMotion(damping?: number): {
   }
 
   const effectiveDamping = damping ?? DEFAULT_TOOLTIP_BOX_DAMPING;
-  let stiffness = DEFAULT_CHART_CONFIG.tooltipBoxSpring.stiffness;
+  let { stiffness } = DEFAULT_CHART_CONFIG.tooltipBoxSpring;
 
   if (effectiveDamping < DEFAULT_TOOLTIP_BOX_DAMPING) {
     const t =

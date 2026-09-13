@@ -266,5 +266,3 @@ export function AreaChart({
     </div>
   );
 }
-
-

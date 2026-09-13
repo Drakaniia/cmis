@@ -5,7 +5,7 @@ import {
   HeadContent,
   Outlet,
 } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { AppSidebar } from "@/components/app-sidebar";
 import Header from "@/components/header";
@@ -61,6 +61,10 @@ function RootComponent() {
     }
   }, [sidebarCollapsed]);
 
+  const handleToggle = useCallback(() => {
+    setSidebarCollapsed((prev) => !prev);
+  }, []);
+
   return (
     <>
       <HeadContent />
@@ -71,10 +75,7 @@ function RootComponent() {
         storageKey="vite-ui-theme"
       >
         <div className="flex h-svh overflow-hidden overflow-x-hidden">
-          <AppSidebar
-            collapsed={sidebarCollapsed}
-            onToggle={() => setSidebarCollapsed((prev) => !prev)}
-          />
+          <AppSidebar collapsed={sidebarCollapsed} onToggle={handleToggle} />
           <div className="flex min-w-0 flex-1 flex-col">
             <Header />
             <main className="flex-1 overflow-y-auto">

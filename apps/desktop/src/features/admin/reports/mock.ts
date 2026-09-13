@@ -17,9 +17,11 @@ function seeded(seed: string, i: number): number {
   let h = 2_166_136_261;
   const s = `${seed}:${i}`;
   for (let c = 0; c < s.length; c += 1) {
+    // biome-ignore lint/suspicious/noBitwiseOperators: FNV-1a mixes the byte in with XOR
     h ^= s.charCodeAt(c);
     h = Math.imul(h, 16_777_619);
   }
+  // biome-ignore lint/suspicious/noBitwiseOperators: fold the signed 32-bit state back to unsigned
   return (h >>> 0) / 4_294_967_295;
 }
 

@@ -52,5 +52,3 @@ export function ChartLoadingLabel({
     </motion.div>
   );
 }
-
-export default ChartLoadingLabel;

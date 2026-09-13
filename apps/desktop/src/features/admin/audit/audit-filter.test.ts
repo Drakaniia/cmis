@@ -118,7 +118,7 @@ describe("buildAuditCsv", () => {
     const csv = buildAuditCsv([
       row({ detail: 'Stock "correction", verified' }),
     ]);
-    const dataLine = csv.split("\n")[1];
+    const [, dataLine] = csv.split("\n");
     expect(dataLine).toContain('"Stock ""correction"", verified"');
     expect(csv.split("\n")).toHaveLength(2);
   });
