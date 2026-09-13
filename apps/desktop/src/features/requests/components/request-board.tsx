@@ -1,4 +1,4 @@
-import * as React from "react";
+import { type HTMLAttributes, type RefObject, useMemo } from "react";
 
 import type { Density } from "@/hooks/use-density";
 import type { RequestAction } from "../transitions";
@@ -45,8 +45,8 @@ export function RequestBoard({
   shake,
   totalVisible,
 }: {
-  boardRef: React.RefObject<HTMLDivElement | null>;
-  cardHandlers?: (item: RequestItem) => React.HTMLAttributes<HTMLElement>;
+  boardRef: RefObject<HTMLDivElement | null>;
+  cardHandlers?: (item: RequestItem) => HTMLAttributes<HTMLElement>;
   deniedCollapsed: boolean;
   density: Density;
   dragActive: boolean;
@@ -75,7 +75,7 @@ export function RequestBoard({
 }) {
   // A drag suspends scroll-snap; otherwise the board yanks the column back
   // under the card's home lane mid-gesture (Apple §3: don't fight the user).
-  const className = React.useMemo(
+  const className = useMemo(
     () =>
       `h-full overflow-x-auto overflow-y-hidden px-3 pb-3 ${
         dragActive ? "snap-none" : "snap-x snap-mandatory"
@@ -109,11 +109,10 @@ export function RequestBoard({
   }
 
   return (
-    <div
+    <section
       aria-label="Request queue board"
       className={className}
       ref={boardRef}
-      role="group"
     >
       <div className="flex h-full min-h-0 gap-2">
         {groups.map((group) => (
@@ -145,6 +144,6 @@ export function RequestBoard({
           />
         ))}
       </div>
-    </div>
+    </section>
   );
 }

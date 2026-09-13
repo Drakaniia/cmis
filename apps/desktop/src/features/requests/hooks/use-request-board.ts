@@ -1,4 +1,4 @@
-import * as React from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 
 import { canMove } from "../transitions";
 import type {
@@ -99,20 +99,20 @@ export function useRequestBoard(
   initial: RequestItem[],
   onPersist?: (item: RequestItem) => void
 ) {
-  const [items, setItems] = React.useState<RequestItem[]>(initial);
-  const [selectedIds, setSelectedIds] = React.useState<ReadonlySet<string>>(
+  const [items, setItems] = useState<RequestItem[]>(initial);
+  const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(
     () => new Set()
   );
-  const [lastMove, setLastMove] = React.useState<{
+  const [lastMove, setLastMove] = useState<{
     entries: { from: RequestStatus; id: string; index: number }[];
   } | null>(null);
 
-  const persistRef = React.useRef(onPersist);
+  const persistRef = useRef(onPersist);
   persistRef.current = onPersist;
   // Once a card has been touched, hydration must not clobber the live board.
-  const dirtyRef = React.useRef(false);
+  const dirtyRef = useRef(false);
 
-  const persist = React.useCallback((changed: RequestItem[]) => {
+  const persist = useCallback((changed: RequestItem[]) => {
     dirtyRef.current = true;
     for (const item of changed) {
       persistRef.current?.(item);
@@ -120,7 +120,8 @@ export function useRequestBoard(
   }, []);
 
   /** Adopts state read from disk, unless the user already changed something. */
-  const replaceAll = React.useCallback((next: RequestItem[]) => {
+  const replaceAll = useCallback((next: RequestItem[]) => {
+    // biome-ignore lint/suspicious/noUnnecessaryConditions: ref is mutated by persist()
     if (dirtyRef.current) {
       return false;
     }
@@ -128,7 +129,7 @@ export function useRequestBoard(
     return true;
   }, []);
 
-  const toggleSelect = React.useCallback((id: string) => {
+  const toggleSelect = useCallback((id: string) => {
     setSelectedIds((prev) => {
       const next = new Set(prev);
       if (next.has(id)) {
@@ -140,7 +141,7 @@ export function useRequestBoard(
     });
   }, []);
 
-  const selectMany = React.useCallback((ids: string[], select: boolean) => {
+  const selectMany = useCallback((ids: string[], select: boolean) => {
     setSelectedIds((prev) => {
       const next = new Set(prev);
       for (const id of ids) {
@@ -154,7 +155,7 @@ export function useRequestBoard(
     });
   }, []);
 
-  const clearSelection = React.useCallback(() => {
+  const clearSelection = useCallback(() => {
     setSelectedIds(new Set());
   }, []);
 
@@ -163,7 +164,7 @@ export function useRequestBoard(
    * menu, the modal footer, the keyboard and the drag engine all behave
    * identically. `index` is the drop position within the destination column.
    */
-  const moveRequestAt = React.useCallback(
+  const moveRequestAt = useCallback(
     (id: string, to: RequestStatus, index: number): MoveOutcome => {
       const current = items.find((item) => item.id === id);
       if (!(current && canMove(current.status, to))) {
@@ -191,14 +192,14 @@ export function useRequestBoard(
   );
 
   /** Menu/keyboard moves land at the end of the destination column. */
-  const moveRequest = React.useCallback(
+  const moveRequest = useCallback(
     (id: string, to: RequestStatus): MoveOutcome =>
       moveRequestAt(id, to, countInStatus(items, to)),
     [items, moveRequestAt]
   );
 
   /** Bulk move — every legal member moves, illegal ones are silently skipped. */
-  const moveRequests = React.useCallback(
+  const moveRequests = useCallback(
     (ids: string[], to: RequestStatus): number => {
       const moving = items.filter(
         (item) => ids.includes(item.id) && canMove(item.status, to)
@@ -237,7 +238,7 @@ export function useRequestBoard(
     [items, persist]
   );
 
-  const denyRequests = React.useCallback(
+  const denyRequests = useCallback(
     (ids: string[], reason: DenyReason, note: string): number => {
       const denyable = items.filter(
         (item) => ids.includes(item.id) && canMove(item.status, "denied")
@@ -261,7 +262,7 @@ export function useRequestBoard(
     [items, persist]
   );
 
-  const dispenseRequest = React.useCallback(
+  const dispenseRequest = useCallback(
     (id: string, payload: DispensePayload): boolean => {
       const current = items.find((item) => item.id === id);
       if (!(current && canMove(current.status, "claimed"))) {
@@ -292,7 +293,7 @@ export function useRequestBoard(
    * Bulk dispense — each request keeps its own batch, so staff can confirm a
    * whole column without the records collapsing into one.
    */
-  const dispenseRequests = React.useCallback(
+  const dispenseRequests = useCallback(
     (payloads: { id: string; payload: DispensePayload }[]): number => {
       const at = new Date().toISOString();
       const byId = new Map(payloads.map((entry) => [entry.id, entry.payload]));
@@ -327,7 +328,7 @@ export function useRequestBoard(
     [items, persist]
   );
 
-  const addNote = React.useCallback(
+  const addNote = useCallback(
     (id: string, text: string) => {
       const trimmed = text.trim();
       const current = items.find((item) => item.id === id);
@@ -351,7 +352,7 @@ export function useRequestBoard(
    * Undo the last structural move — Apple §16 Agency: easy undo for slips.
    * Dispense and Deny are excluded: both write audit records.
    */
-  const undoLastMove = React.useCallback(() => {
+  const undoLastMove = useCallback(() => {
     if (!lastMove) {
       return false;
     }
@@ -374,7 +375,7 @@ export function useRequestBoard(
     return true;
   }, [items, lastMove, persist]);
 
-  const selectedItems = React.useMemo(
+  const selectedItems = useMemo(
     () => items.filter((item) => selectedIds.has(item.id)),
     [items, selectedIds]
   );

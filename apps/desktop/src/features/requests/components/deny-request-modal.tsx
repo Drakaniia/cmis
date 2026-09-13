@@ -2,7 +2,7 @@ import { Button } from "@cmis/ui/components/button";
 import { cn } from "@cmis/ui/lib/utils";
 import { X } from "lucide-react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import * as React from "react";
+import { type ChangeEvent, useCallback, useEffect, useState } from "react";
 
 import { materializeEnter, sheetSpring } from "@/lib/motion";
 import type { DenyReason } from "../types";
@@ -18,7 +18,7 @@ export function DenyRequestModal({
   onConfirm,
   onOpenChange,
   open,
-  originRect,
+  originRect: _originRect,
   requestLabel,
 }: {
   count: number;
@@ -28,12 +28,12 @@ export function DenyRequestModal({
   originRect: DOMRect | null;
   requestLabel: string;
 }) {
-  const [reason, setReason] = React.useState<DenyReason>("Out of Stock");
-  const [note, setNote] = React.useState("");
-  const [attempted, setAttempted] = React.useState(false);
+  const [reason, setReason] = useState<DenyReason>("Out of Stock");
+  const [note, setNote] = useState("");
+  const [attempted, setAttempted] = useState(false);
   const reduceMotion = useReducedMotion();
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (open) {
       setReason("Out of Stock");
       setNote("");
@@ -41,7 +41,7 @@ export function DenyRequestModal({
     }
   }, [open]);
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (!open) {
       return;
     }
@@ -57,14 +57,32 @@ export function DenyRequestModal({
   const noteRequired = reason === "Other";
   const valid = !noteRequired || note.trim().length > 0;
 
-  function handleConfirm() {
+  const handleClose = useCallback(() => {
+    onOpenChange(false);
+  }, [onOpenChange]);
+
+  const handleReasonChange = useCallback(
+    (event: ChangeEvent<HTMLSelectElement>) => {
+      setReason(event.target.value as DenyReason);
+    },
+    []
+  );
+
+  const handleNoteChange = useCallback(
+    (event: ChangeEvent<HTMLTextAreaElement>) => {
+      setNote(event.target.value);
+    },
+    []
+  );
+
+  const handleConfirm = useCallback(() => {
     if (!valid) {
       setAttempted(true);
       return;
     }
     onConfirm(reason, note.trim());
     onOpenChange(false);
-  }
+  }, [valid, onConfirm, reason, note, onOpenChange]);
 
   const transformOrigin = "center center";
 
@@ -78,7 +96,7 @@ export function DenyRequestModal({
             className="fixed inset-0 z-[60] bg-black/32"
             exit={{ opacity: 0 }}
             initial={{ opacity: 0 }}
-            onClick={() => onOpenChange(false)}
+            onClick={handleClose}
             transition={{ duration: 0.18 }}
           />
           <div className="fixed inset-0 z-[60] flex items-center justify-center p-3 sm:p-6">
@@ -104,7 +122,7 @@ export function DenyRequestModal({
                 <Button
                   aria-label="Close"
                   className="press-feedback"
-                  onClick={() => onOpenChange(false)}
+                  onClick={handleClose}
                   size="icon-sm"
                   variant="ghost"
                 >
@@ -129,9 +147,7 @@ export function DenyRequestModal({
                   Reason
                   <select
                     className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-1 focus:ring-ring"
-                    onChange={(event) =>
-                      setReason(event.target.value as DenyReason)
-                    }
+                    onChange={handleReasonChange}
                     value={reason}
                   >
                     {DENY_REASONS.map((option) => (
@@ -150,7 +166,7 @@ export function DenyRequestModal({
                       "mt-1 min-h-[72px] w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-1 focus:ring-ring",
                       attempted && !valid && "border-destructive"
                     )}
-                    onChange={(event) => setNote(event.target.value)}
+                    onChange={handleNoteChange}
                     placeholder="Context for the audit log…"
                     value={note}
                   />
@@ -165,7 +181,7 @@ export function DenyRequestModal({
               <div className="flex items-center justify-end gap-2 border-border/50 border-t px-4 py-3">
                 <Button
                   className="press-feedback"
-                  onClick={() => onOpenChange(false)}
+                  onClick={handleClose}
                   size="sm"
                   variant="ghost"
                 >

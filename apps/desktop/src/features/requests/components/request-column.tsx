@@ -1,6 +1,13 @@
 import { cn } from "@cmis/ui/lib/utils";
 import { motion } from "motion/react";
-import * as React from "react";
+import {
+  Fragment,
+  type HTMLAttributes,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 
 import type { Density } from "@/hooks/use-density";
 import type { RequestAction } from "../transitions";
@@ -8,7 +15,7 @@ import type { RequestColumnMeta, RequestItem } from "../types";
 import { RequestCard } from "./request-card";
 
 /** A column body clips once its cards no longer fit the scroll box. */
-function overflowsBottom(element: HTMLDivElement | null): boolean {
+function overflowsBottom(element: HTMLElement | null): boolean {
   return (
     (element?.scrollHeight ?? 0) -
       (element?.scrollTop ?? 0) -
@@ -19,11 +26,12 @@ function overflowsBottom(element: HTMLDivElement | null): boolean {
 
 function DropIndicator() {
   return (
-    <div
-      aria-hidden
-      className="h-0.5 shrink-0 rounded-full bg-[var(--ring)]"
-      style={{ borderTop: "2px dashed var(--ring)" }}
-    />
+    <li aria-hidden className="list-none">
+      <div
+        className="h-0.5 shrink-0 rounded-full bg-[var(--ring)]"
+        style={{ borderTop: "2px dashed var(--ring)" }}
+      />
+    </li>
   );
 }
 
@@ -58,7 +66,7 @@ export function RequestColumn({
   total,
 }: {
   anySelected: boolean;
-  cardHandlers?: (item: RequestItem) => React.HTMLAttributes<HTMLElement>;
+  cardHandlers?: (item: RequestItem) => HTMLAttributes<HTMLElement>;
   collapsed: boolean;
   column: RequestColumnMeta;
   density: Density;
@@ -89,18 +97,18 @@ export function RequestColumn({
   shake?: boolean;
   total: number;
 }) {
-  const bodyRef = React.useRef<HTMLDivElement>(null);
-  const [showFade, setShowFade] = React.useState(false);
+  const bodyRef = useRef<HTMLUListElement>(null);
+  const [showFade, setShowFade] = useState(false);
   const headerId = `request-column-${column.status}`;
 
-  const columnRef = React.useCallback(
+  const columnRef = useCallback(
     (element: HTMLElement | null) => onRegisterColumn(column.status, element),
     [column.status, onRegisterColumn]
   );
 
   // The scroll box keeps its own height as cards are added, so re-measure on
   // list change rather than watching the element's box.
-  React.useEffect(() => {
+  useEffect(() => {
     if (items.length === 0) {
       setShowFade(false);
       return;
@@ -108,7 +116,7 @@ export function RequestColumn({
     setShowFade(overflowsBottom(bodyRef.current));
   }, [items.length]);
 
-  const handleScroll = React.useCallback(() => {
+  const handleScroll = useCallback(() => {
     setShowFade(overflowsBottom(bodyRef.current));
   }, []);
 
@@ -209,22 +217,23 @@ export function RequestColumn({
       </motion.header>
 
       <div className="relative min-h-0 flex-1">
-        <div
-          className="h-full space-y-2 overflow-y-auto p-1.5"
+        <ul
+          className="h-full list-none space-y-2 overflow-y-auto p-1.5"
           onScroll={handleScroll}
           ref={bodyRef}
-          role="list"
         >
           {items.length === 0 ? (
-            <p className="rounded-lg border border-border/70 border-dashed px-2 py-6 text-center text-caption text-muted-foreground">
-              {total === 0
-                ? `No ${column.label.toLowerCase()} requests`
-                : "No matches for filters"}
-            </p>
+            <li className="list-none">
+              <p className="rounded-lg border border-border/70 border-dashed px-2 py-6 text-center text-caption text-muted-foreground">
+                {total === 0
+                  ? `No ${column.label.toLowerCase()} requests`
+                  : "No matches for filters"}
+              </p>
+            </li>
           ) : null}
 
           {items.map((item, index) => (
-            <React.Fragment key={item.id}>
+            <Fragment key={item.id}>
               {showIndicator && dropIndex === index ? <DropIndicator /> : null}
               <RequestCard
                 anySelected={anySelected}
@@ -239,13 +248,13 @@ export function RequestColumn({
                 onToggleSelect={onToggleSelect}
                 selected={selectedIds.has(item.id)}
               />
-            </React.Fragment>
+            </Fragment>
           ))}
 
           {showIndicator && (dropIndex ?? 0) >= items.length ? (
             <DropIndicator />
           ) : null}
-        </div>
+        </ul>
 
         {showFade ? (
           <div

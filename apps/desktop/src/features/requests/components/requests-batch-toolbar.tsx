@@ -1,8 +1,30 @@
 import { Button } from "@cmis/ui/components/button";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
+import { useCallback } from "react";
 
 import { sheetSpring } from "@/lib/motion";
 import type { BatchAction } from "../transitions";
+
+function BatchActionButton({
+  action,
+  onAction,
+}: {
+  action: BatchAction;
+  onAction: (action: BatchAction) => void;
+}) {
+  const handleClick = useCallback(() => onAction(action), [action, onAction]);
+
+  return (
+    <Button
+      className="press-feedback rounded-full"
+      onClick={handleClick}
+      size="sm"
+      variant={action.destructive ? "destructive" : "secondary"}
+    >
+      {action.label}
+    </Button>
+  );
+}
 
 /**
  * CMIS-UI-05 §4.4 — the batch toolbar.
@@ -43,15 +65,11 @@ export function RequestsBatchToolbar({
             </span>
             <span aria-hidden className="mx-0.5 h-5 w-px bg-border" />
             {actions.map((action) => (
-              <Button
-                className="press-feedback rounded-full"
+              <BatchActionButton
+                action={action}
                 key={action.id}
-                onClick={() => onAction(action)}
-                size="sm"
-                variant={action.destructive ? "destructive" : "secondary"}
-              >
-                {action.label}
-              </Button>
+                onAction={onAction}
+              />
             ))}
             <Button
               className="press-feedback rounded-full text-muted-foreground"

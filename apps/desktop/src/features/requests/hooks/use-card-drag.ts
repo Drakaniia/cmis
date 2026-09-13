@@ -4,7 +4,14 @@ import {
   useMotionValue,
   useReducedMotion,
 } from "motion/react";
-import * as React from "react";
+import {
+  type PointerEvent,
+  type RefObject,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 
 import {
   dragHysteresisPx,
@@ -79,6 +86,40 @@ function sameTarget(a: DropTarget | null, b: DropTarget | null): boolean {
   return a.index === b.index && a.status === b.status && a.valid === b.valid;
 }
 
+/** Apple §9 — resist progressively past an edge instead of stopping dead. */
+function resistOvershoot(
+  position: number,
+  lower: number,
+  upper: number,
+  size: number
+): number {
+  if (position < lower) {
+    return lower + rubberband(position - lower, size);
+  }
+  if (position > upper) {
+    return upper + rubberband(position - upper, size);
+  }
+  return position;
+}
+
+/** Re-map a card offset so it rubber-bands against the board's live edges. */
+function correctedOffset(
+  offset: number,
+  originStart: number,
+  originSize: number,
+  min: number,
+  max: number,
+  size: number
+): number {
+  const corrected = resistOvershoot(
+    originStart + offset,
+    min + EDGE_INSET,
+    max - originSize - EDGE_INSET,
+    size
+  );
+  return corrected - originStart;
+}
+
 /**
  * CMIS-UI-05 §4.1 — the Kanban drag engine.
  *
@@ -95,7 +136,7 @@ export function useCardDrag({
   onCommit,
   onForbidden,
 }: {
-  boardRef: React.RefObject<HTMLDivElement | null>;
+  boardRef: RefObject<HTMLDivElement | null>;
   onCommit: (id: string, status: RequestStatus, index: number) => void;
   onForbidden: (status: RequestStatus) => void;
 }) {
@@ -103,23 +144,23 @@ export function useCardDrag({
   const y = useMotionValue(0);
   const prefersReducedMotion = useReducedMotion();
 
-  const sessionRef = React.useRef<Session | null>(null);
-  const settleRef = React.useRef<AnimationPlaybackControls[] | null>(null);
-  const columnRefs = React.useRef(new Map<RequestStatus, HTMLElement>());
-  const suppressClickRef = React.useRef(false);
+  const sessionRef = useRef<Session | null>(null);
+  const settleRef = useRef<AnimationPlaybackControls[] | null>(null);
+  const columnRefs = useRef(new Map<RequestStatus, HTMLElement>());
+  const suppressClickRef = useRef(false);
 
-  const [overlay, setOverlay] = React.useState<DragOverlay | null>(null);
-  const [shake, setShake] = React.useState<RequestStatus | null>(null);
+  const [overlay, setOverlay] = useState<DragOverlay | null>(null);
+  const [shake, setShake] = useState<RequestStatus | null>(null);
 
-  const onCommitRef = React.useRef(onCommit);
+  const onCommitRef = useRef(onCommit);
   onCommitRef.current = onCommit;
-  const onForbiddenRef = React.useRef(onForbidden);
+  const onForbiddenRef = useRef(onForbidden);
   onForbiddenRef.current = onForbidden;
-  const reducedRef = React.useRef(prefersReducedMotion);
+  const reducedRef = useRef(prefersReducedMotion);
   reducedRef.current = prefersReducedMotion;
 
   /** Columns register themselves so hit-testing can use live geometry. */
-  const registerColumn = React.useCallback(
+  const registerColumn = useCallback(
     (status: RequestStatus, element: HTMLElement | null) => {
       if (element) {
         columnRefs.current.set(status, element);
@@ -130,14 +171,14 @@ export function useCardDrag({
     []
   );
 
-  const stopSettle = React.useCallback(() => {
+  const stopSettle = useCallback(() => {
     for (const controls of settleRef.current ?? []) {
       controls.stop();
     }
     settleRef.current = null;
   }, []);
 
-  const measureColumns = React.useCallback(
+  const measureColumns = useCallback(
     () =>
       [...columnRefs.current.entries()]
         .map(([status, element]) => {
@@ -157,29 +198,26 @@ export function useCardDrag({
   );
 
   /** Siblings inside a column body, excluding the card currently in flight. */
-  const siblingsOf = React.useCallback(
-    (status: RequestStatus, excludeId: string) => {
-      const element = columnRefs.current.get(status);
-      if (!element) {
-        return [];
-      }
-      const cards = element.querySelectorAll<HTMLElement>("[data-request-id]");
-      return [...cards]
-        .filter((card) => card.dataset.requestId !== excludeId)
-        .map((card) => {
-          const rect = card.getBoundingClientRect();
-          return {
-            height: rect.height,
-            left: rect.left,
-            top: rect.top,
-            width: rect.width,
-          };
-        });
-    },
-    []
-  );
+  const siblingsOf = useCallback((status: RequestStatus, excludeId: string) => {
+    const element = columnRefs.current.get(status);
+    if (!element) {
+      return [];
+    }
+    const cards = element.querySelectorAll<HTMLElement>("[data-request-id]");
+    return [...cards]
+      .filter((card) => card.dataset.requestId !== excludeId)
+      .map((card) => {
+        const rect = card.getBoundingClientRect();
+        return {
+          height: rect.height,
+          left: rect.left,
+          top: rect.top,
+          width: rect.width,
+        };
+      });
+  }, []);
 
-  const targetFor = React.useCallback(
+  const targetFor = useCallback(
     (
       session: Session,
       pointerX: number,
@@ -210,7 +248,7 @@ export function useCardDrag({
   );
 
   /** Where the card would sit visually once it lands. */
-  const slotRectFor = React.useCallback(
+  const slotRectFor = useCallback(
     (status: RequestStatus, index: number, session: Session): Rect | null => {
       const column = columnRefs.current.get(status);
       const siblings = siblingsOf(status, session.cardId);
@@ -241,7 +279,7 @@ export function useCardDrag({
     [siblingsOf]
   );
 
-  const clearOverlay = React.useCallback(() => {
+  const clearOverlay = useCallback(() => {
     x.set(0);
     y.set(0);
     setOverlay(null);
@@ -251,7 +289,7 @@ export function useCardDrag({
    * Apple §5/§6 — settle with the gesture's velocity. Reduced motion swaps the
    * spring for a static jump (Apple §14: gentler, not animated).
    */
-  const settleTo = React.useCallback(
+  const settleTo = useCallback(
     (
       targetX: number,
       targetY: number,
@@ -292,28 +330,27 @@ export function useCardDrag({
     [stopSettle, x, y]
   );
 
-  const springBack = React.useCallback(
-    (session: Session, velocity: { x: number; y: number }) => {
+  const springBack = useCallback(
+    (velocity: { x: number; y: number }) => {
       const hasVelocity =
         Math.hypot(velocity.x, velocity.y) >= snapVelocityPxPerSec;
       settleTo(0, 0, velocity, hasVelocity, clearOverlay);
-      void session;
     },
     [clearOverlay, settleTo]
   );
 
-  const cancelDrag = React.useCallback(() => {
+  const cancelDrag = useCallback(() => {
     const session = sessionRef.current;
-    if (!session) {
+    if (session === null) {
       return;
     }
     sessionRef.current = null;
-    springBack(session, { x: 0, y: 0 });
+    springBack({ x: 0, y: 0 });
   }, [springBack]);
 
-  const startDrag = React.useCallback(
+  const startDrag = useCallback(
     (
-      event: React.PointerEvent<HTMLElement>,
+      event: PointerEvent<HTMLElement>,
       item: RequestItem,
       fromOverlay: boolean
     ) => {
@@ -321,7 +358,7 @@ export function useCardDrag({
         return;
       }
       const element = event.currentTarget;
-      const current = sessionRef.current;
+      const { current } = sessionRef;
       // Grabbing a card mid-flight continues from its live position (§3).
       const baseX = fromOverlay ? x.get() : 0;
       const baseY = fromOverlay ? y.get() : 0;
@@ -367,10 +404,10 @@ export function useCardDrag({
     [stopSettle, x, y]
   );
 
-  const handlePointerMove = React.useCallback(
-    (event: React.PointerEvent<HTMLElement>) => {
+  const handlePointerMove = useCallback(
+    (event: PointerEvent<HTMLElement>) => {
       const session = sessionRef.current;
-      if (!session || event.pointerId !== session.pointerId) {
+      if (session === null || event.pointerId !== session.pointerId) {
         return;
       }
       const dx = event.clientX - session.startPoint.x;
@@ -390,44 +427,28 @@ export function useCardDrag({
           target: null,
         });
       }
-
       const board = boardRef.current?.getBoundingClientRect();
       let nextX = session.baseX + dx;
       let nextY = session.baseY + dy;
 
       if (board && !reducedRef.current) {
-        // Apple §9 — resist progressively past the board edges.
-        const minX = board.left + EDGE_INSET - session.originRect.left;
-        const maxX =
-          board.right -
-          session.originRect.width -
-          EDGE_INSET -
-          session.originRect.left;
-        const renderedX = session.originRect.left + nextX;
-        if (renderedX < minX + session.originRect.left) {
-          const overshoot = renderedX - (minX + session.originRect.left);
-          nextX += -overshoot + rubberband(overshoot, board.width);
-        } else if (renderedX > maxX + session.originRect.left) {
-          const bound = maxX + session.originRect.left;
-          const overshoot = renderedX - bound;
-          nextX += -overshoot + rubberband(overshoot, board.width);
-        }
-
-        const minY = board.top + EDGE_INSET - session.originRect.top;
-        const maxY =
-          board.bottom -
-          session.originRect.height -
-          EDGE_INSET -
-          session.originRect.top;
-        const renderedY = session.originRect.top + nextY;
-        if (renderedY < minY + session.originRect.top) {
-          const overshoot = renderedY - (minY + session.originRect.top);
-          nextY += -overshoot + rubberband(overshoot, board.height);
-        } else if (renderedY > maxY + session.originRect.top) {
-          const bound = maxY + session.originRect.top;
-          const overshoot = renderedY - bound;
-          nextY += -overshoot + rubberband(overshoot, board.height);
-        }
+        const { originRect } = session;
+        nextX = correctedOffset(
+          nextX,
+          originRect.left,
+          originRect.width,
+          board.left,
+          board.right,
+          board.width
+        );
+        nextY = correctedOffset(
+          nextY,
+          originRect.top,
+          originRect.height,
+          board.top,
+          board.bottom,
+          board.height
+        );
       }
 
       // 1:1 tracking — the pointer writes the motion value directly.
@@ -448,10 +469,10 @@ export function useCardDrag({
     [boardRef, targetFor, x, y]
   );
 
-  const finishDrag = React.useCallback(
-    (event: React.PointerEvent<HTMLElement>) => {
+  const finishDrag = useCallback(
+    (event: PointerEvent<HTMLElement>) => {
       const session = sessionRef.current;
-      if (!session || event.pointerId !== session.pointerId) {
+      if (session === null || event.pointerId !== session.pointerId) {
         return;
       }
       sessionRef.current = null;
@@ -477,7 +498,7 @@ export function useCardDrag({
       );
 
       if (!status) {
-        springBack(session, velocity);
+        springBack(velocity);
         return;
       }
 
@@ -488,7 +509,7 @@ export function useCardDrag({
         setShake(status);
         window.setTimeout(() => setShake(null), 600);
         onForbiddenRef.current(status);
-        springBack(session, velocity);
+        springBack(velocity);
         return;
       }
 
@@ -499,7 +520,7 @@ export function useCardDrag({
       const slot = slotRectFor(status, index, session);
 
       if (!slot) {
-        springBack(session, velocity);
+        springBack(velocity);
         return;
       }
 
@@ -522,7 +543,7 @@ export function useCardDrag({
   );
 
   /** Alt+←/→ — the same spring path as a drop, never an instant teleport (§4.3). */
-  const animateMove = React.useCallback(
+  const animateMove = useCallback(
     (
       item: RequestItem,
       status: RequestStatus,
@@ -572,7 +593,7 @@ export function useCardDrag({
   );
 
   // Escape cancels a gesture in flight and returns the card home (§4.1).
-  React.useEffect(() => {
+  useEffect(() => {
     if (!overlay) {
       return;
     }
@@ -587,30 +608,30 @@ export function useCardDrag({
     return () => window.removeEventListener("keydown", onKey, true);
   }, [cancelDrag, overlay]);
 
-  React.useEffect(() => stopSettle, [stopSettle]);
+  useEffect(() => stopSettle, [stopSettle]);
 
-  const consumeSuppressedClick = React.useCallback(() => {
-    if (!suppressClickRef.current) {
+  const consumeSuppressedClick = useCallback(() => {
+    if (suppressClickRef.current === false) {
       return false;
     }
     suppressClickRef.current = false;
     return true;
   }, []);
 
-  const cardHandlers = React.useCallback(
+  const cardHandlers = useCallback(
     (item: RequestItem) => ({
       onLostPointerCapture: () => {
         if (sessionRef.current?.cardId === item.id) {
           cancelDrag();
         }
       },
-      onPointerCancel: (event: React.PointerEvent<HTMLElement>) => {
+      onPointerCancel: (event: PointerEvent<HTMLElement>) => {
         if (sessionRef.current?.cardId === item.id) {
           event.preventDefault();
           cancelDrag();
         }
       },
-      onPointerDown: (event: React.PointerEvent<HTMLElement>) => {
+      onPointerDown: (event: PointerEvent<HTMLElement>) => {
         startDrag(event, item, false);
       },
       onPointerMove: handlePointerMove,
@@ -619,9 +640,9 @@ export function useCardDrag({
     [cancelDrag, finishDrag, handlePointerMove, startDrag]
   );
 
-  const overlayHandlers = React.useCallback(
+  const overlayHandlers = useCallback(
     (item: RequestItem) => ({
-      onPointerDown: (event: React.PointerEvent<HTMLElement>) => {
+      onPointerDown: (event: PointerEvent<HTMLElement>) => {
         event.preventDefault();
         startDrag(event, item, true);
       },

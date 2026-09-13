@@ -1,7 +1,15 @@
 import { Checkbox } from "@cmis/ui/components/checkbox";
 import { cn } from "@cmis/ui/lib/utils";
 import { motion } from "motion/react";
-import * as React from "react";
+import {
+  type HTMLAttributes,
+  type KeyboardEvent,
+  type MouseEvent,
+  type PointerEvent,
+  useCallback,
+  useRef,
+  useState,
+} from "react";
 
 import type { Density } from "@/hooks/use-density";
 import { dragSpring } from "@/lib/motion";
@@ -68,7 +76,7 @@ export function RequestCardContent({
  */
 export function RequestCard({
   anySelected,
-  density,
+  density: _density,
   dragHandlers,
   dragging,
   item,
@@ -82,7 +90,7 @@ export function RequestCard({
   anySelected: boolean;
   density: Density;
   /** Pointer handlers from the drag engine — 1:1 tracking lives there. */
-  dragHandlers?: React.HTMLAttributes<HTMLElement>;
+  dragHandlers?: HTMLAttributes<HTMLElement>;
   /** True while this card is the one in flight (its slot shows a ghost). */
   dragging?: boolean;
   item: RequestItem;
@@ -98,7 +106,7 @@ export function RequestCard({
   onToggleSelect: (id: string) => void;
   selected: boolean;
 }) {
-  const [menuOpen, setMenuOpen] = React.useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const meta = statusMetaOf(item.status);
   const time = relativeTimeLabel(item.submittedAt, now);
 
@@ -106,10 +114,10 @@ export function RequestCard({
    * Track when the pointer went down so we can ignore clicks that follow a
    * long hold — only a quick tap should open the detail modal.
    */
-  const pointerDownTimeRef = React.useRef(0);
+  const pointerDownTimeRef = useRef(0);
 
-  const handleClick = React.useCallback(
-    (event: React.MouseEvent<HTMLButtonElement>) => {
+  const handleClick = useCallback(
+    (event: MouseEvent<HTMLButtonElement>) => {
       // A long hold is not a tap — don't open the detail modal.
       const holdDuration = event.timeStamp - pointerDownTimeRef.current;
       if (holdDuration > 300) {
@@ -120,56 +128,77 @@ export function RequestCard({
     [item, onOpen]
   );
 
-  const handlePointerDownCapture = React.useCallback(
-    (event: React.PointerEvent<HTMLButtonElement>) => {
+  const handlePointerDownCapture = useCallback(
+    (event: PointerEvent<HTMLButtonElement>) => {
       pointerDownTimeRef.current = event.timeStamp;
     },
     []
   );
 
-  function openDetail(element: HTMLElement) {
-    onOpen(item, element.getBoundingClientRect());
-  }
+  const openDetail = useCallback(
+    (element: HTMLElement) => {
+      onOpen(item, element.getBoundingClientRect());
+    },
+    [item, onOpen]
+  );
 
-  function handleKeyDown(event: React.KeyboardEvent<HTMLButtonElement>) {
-    if (event.key === "Enter") {
-      event.preventDefault();
-      openDetail(event.currentTarget);
-      return;
-    }
-    if (event.key === " ") {
-      // Space selects (§4.3) — it must not fall through to the button click.
-      event.preventDefault();
-      onToggleSelect(item.id);
-      return;
-    }
-    if (
-      event.key === "ContextMenu" ||
-      (event.shiftKey && event.key === "F10")
-    ) {
-      event.preventDefault();
-      setMenuOpen(true);
-      return;
-    }
-    if (
-      event.altKey &&
-      (event.key === "ArrowLeft" || event.key === "ArrowRight")
-    ) {
-      event.preventDefault();
-      event.stopPropagation();
-      onKeyboardMove?.(
-        item,
-        event.key === "ArrowRight" ? 1 : -1,
-        event.currentTarget.getBoundingClientRect()
-      );
-    }
-  }
+  const handleToggleSelect = useCallback(
+    () => onToggleSelect(item.id),
+    [item.id, onToggleSelect]
+  );
+
+  const handleStopPropagation = useCallback(
+    (event: MouseEvent<HTMLElement>) => event.stopPropagation(),
+    []
+  );
+
+  const handleMenuAction = useCallback(
+    (action: RequestAction) => onAction(item, action),
+    [item, onAction]
+  );
+
+  const handleKeyDown = useCallback(
+    (event: KeyboardEvent<HTMLButtonElement>) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        openDetail(event.currentTarget);
+        return;
+      }
+      if (event.key === " ") {
+        // Space selects (§4.3) — it must not fall through to the button click.
+        event.preventDefault();
+        onToggleSelect(item.id);
+        return;
+      }
+      if (
+        event.key === "ContextMenu" ||
+        (event.shiftKey && event.key === "F10")
+      ) {
+        event.preventDefault();
+        setMenuOpen(true);
+        return;
+      }
+      if (
+        event.altKey &&
+        (event.key === "ArrowLeft" || event.key === "ArrowRight")
+      ) {
+        event.preventDefault();
+        event.stopPropagation();
+        onKeyboardMove?.(
+          item,
+          event.key === "ArrowRight" ? 1 : -1,
+          event.currentTarget.getBoundingClientRect()
+        );
+      }
+    },
+    [item, onKeyboardMove, onToggleSelect, openDetail]
+  );
 
   return (
-    <div
+    <li
       aria-roledescription="draggable request card"
       className={cn(
-        "kanban-card group/card relative rounded-xl border bg-card shadow-sm transition-colors",
+        "kanban-card group/card relative list-none rounded-xl border bg-card shadow-sm transition-colors",
         dragging
           ? "pointer-events-none border-ring/60 border-dashed bg-muted/20 opacity-40"
           : "border-border/60",
@@ -177,7 +206,6 @@ export function RequestCard({
       )}
       data-request-id={item.id}
       data-status={item.status}
-      role="listitem"
     >
       {dragging ? (
         <span className="sr-only" role="status">
@@ -215,21 +243,21 @@ export function RequestCard({
             checked={selected}
             className="size-[18px]"
             data-drag-exclude
-            onCheckedChange={() => onToggleSelect(item.id)}
-            onClick={(event) => event.stopPropagation()}
+            onCheckedChange={handleToggleSelect}
+            onClick={handleStopPropagation}
           />
         </motion.span>
       </span>
 
       <span className="absolute right-1.5 bottom-1.5 z-10" data-drag-exclude>
         <RequestCardMenu
-          onAction={(action) => onAction(item, action)}
+          onAction={handleMenuAction}
           onOpenChange={setMenuOpen}
           open={menuOpen}
           requestorName={item.requestor.name}
           status={item.status}
         />
       </span>
-    </div>
+    </li>
   );
 }

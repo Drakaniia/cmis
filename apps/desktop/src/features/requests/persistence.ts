@@ -246,25 +246,36 @@ export async function saveRequest(item: RequestItem): Promise<void> {
     await db.execute("DELETE FROM request_history WHERE request_id = $1", [
       item.id,
     ]);
-    for (const entry of item.history) {
-      await db.execute(
-        `INSERT INTO request_history
-           (request_id, at, actor, from_status, to_status, note)
-         VALUES ($1, $2, $3, $4, $5, $6)`,
-        [item.id, entry.at, entry.by, entry.from, entry.to, entry.note ?? null]
-      );
-    }
+    await Promise.all(
+      item.history.map((entry) =>
+        db.execute(
+          `INSERT INTO request_history
+             (request_id, at, actor, from_status, to_status, note)
+           VALUES ($1, $2, $3, $4, $5, $6)`,
+          [
+            item.id,
+            entry.at,
+            entry.by,
+            entry.from,
+            entry.to,
+            entry.note ?? null,
+          ]
+        )
+      )
+    );
 
     await db.execute("DELETE FROM request_notes WHERE request_id = $1", [
       item.id,
     ]);
-    for (const note of item.notes) {
-      await db.execute(
-        `INSERT INTO request_notes (request_id, at, author, text)
-         VALUES ($1, $2, $3, $4)`,
-        [item.id, note.at, note.author, note.text]
-      );
-    }
+    await Promise.all(
+      item.notes.map((note) =>
+        db.execute(
+          `INSERT INTO request_notes (request_id, at, author, text)
+           VALUES ($1, $2, $3, $4)`,
+          [item.id, note.at, note.author, note.text]
+        )
+      )
+    );
 
     if (item.dispensing) {
       await db.execute(

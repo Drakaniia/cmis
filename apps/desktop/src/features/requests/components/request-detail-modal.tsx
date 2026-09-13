@@ -7,7 +7,15 @@ import {
   useMotionValue,
   useReducedMotion,
 } from "motion/react";
-import * as React from "react";
+import {
+  type ChangeEvent,
+  type PointerEvent,
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 
 import {
   materializeEnter,
@@ -34,7 +42,7 @@ import { RequestStatusBadge } from "./request-status-badge";
  * Forbidden actions are not rendered at all — no disabled-visible actions, so
  * there is no error surface to discover.
  */
-function SectionHeading({ children }: { children: React.ReactNode }) {
+function SectionHeading({ children }: { children: ReactNode }) {
   return (
     <h3 className="font-semibold text-caption text-muted-foreground uppercase tracking-widest">
       {children}
@@ -94,6 +102,17 @@ function InternalNotesSection({
   onAddNote: (id: string, text: string) => void;
   onNoteChange: (value: string) => void;
 }) {
+  const handleNoteChange = useCallback(
+    (event: ChangeEvent<HTMLTextAreaElement>) =>
+      onNoteChange(event.target.value),
+    [onNoteChange]
+  );
+
+  const handleAddNote = useCallback(
+    () => onAddNote(item.id, note),
+    [item.id, note, onAddNote]
+  );
+
   return (
     <section className="space-y-2">
       <SectionHeading>Internal notes</SectionHeading>
@@ -119,7 +138,7 @@ function InternalNotesSection({
         Add note
         <textarea
           className="mt-1 min-h-[56px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-1 focus:ring-ring"
-          onChange={(event) => onNoteChange(event.target.value)}
+          onChange={handleNoteChange}
           placeholder="Context for other staff…"
           value={note}
         />
@@ -127,13 +146,42 @@ function InternalNotesSection({
       <Button
         className="press-feedback"
         disabled={!note.trim()}
-        onClick={() => onAddNote(item.id, note)}
+        onClick={handleAddNote}
         size="sm"
         variant="outline"
       >
         Add note
       </Button>
     </section>
+  );
+}
+
+function ActionButton({
+  action,
+  item,
+  label,
+  variant,
+  onAction,
+}: {
+  action: RequestAction;
+  item: RequestItem;
+  label?: string;
+  variant?: "outline" | "destructive";
+  onAction: (item: RequestItem, action: RequestAction) => void;
+}) {
+  const handleAction = useCallback(
+    () => onAction(item, action),
+    [action, item, onAction]
+  );
+  return (
+    <Button
+      className="press-feedback"
+      onClick={handleAction}
+      size="sm"
+      variant={variant}
+    >
+      {label ?? action.label}
+    </Button>
   );
 }
 
@@ -174,7 +222,7 @@ export function RequestDetailModal({
   onAddNote,
   onOpenChange,
   open,
-  originRect,
+  originRect: _originRect,
 }: {
   item: RequestItem | null;
   onAction: (item: RequestItem, action: RequestAction) => void;
@@ -185,18 +233,18 @@ export function RequestDetailModal({
 }) {
   const y = useMotionValue(0);
   const reduceMotion = useReducedMotion();
-  const [note, setNote] = React.useState("");
-  const startYRef = React.useRef<number | null>(null);
-  const historyRef = React.useRef<{ t: number; y: number }[]>([]);
+  const [note, setNote] = useState("");
+  const startYRef = useRef<number | null>(null);
+  const historyRef = useRef<{ t: number; y: number }[]>([]);
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (open) {
       setNote("");
       y.set(0);
     }
   }, [open, y]);
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (!open) {
       return;
     }
@@ -209,55 +257,76 @@ export function RequestDetailModal({
     return () => window.removeEventListener("keydown", onKey);
   }, [open, onOpenChange]);
 
-  function handlePointerDown(event: React.PointerEvent) {
-    if (reduceMotion) {
-      return;
-    }
-    (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
-    startYRef.current = event.clientY;
-    historyRef.current = [];
-  }
+  const handleClose = useCallback(() => {
+    onOpenChange(false);
+  }, [onOpenChange]);
 
-  function handlePointerMove(event: React.PointerEvent) {
-    if (startYRef.current === null) {
-      return;
-    }
-    const delta = event.clientY - startYRef.current;
-    if (delta < 0) {
-      // Resist upward overscroll — Apple §9 rubber-banding.
-      y.set(rubberband(delta, 420));
-      return;
-    }
-    historyRef.current.push({ t: Date.now(), y: delta });
-    if (historyRef.current.length > 8) {
-      historyRef.current.shift();
-    }
-    y.set(delta);
-  }
+  const handleAddNoteWithReset = useCallback(
+    (id: string, text: string) => {
+      onAddNote(id, text);
+      setNote("");
+    },
+    [onAddNote]
+  );
 
-  function handlePointerUp(event: React.PointerEvent) {
-    if (startYRef.current === null) {
-      return;
-    }
-    const delta = event.clientY - startYRef.current;
-    startYRef.current = null;
+  const handlePointerDown = useCallback(
+    (event: PointerEvent) => {
+      if (reduceMotion) {
+        return;
+      }
+      (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+      startYRef.current = event.clientY;
+      historyRef.current = [];
+    },
+    [reduceMotion]
+  );
 
-    const history = historyRef.current;
-    const last = history.at(-1);
-    const previous = history.at(Math.max(0, history.length - 3));
-    let releaseVelocity = 0;
-    if (last && previous) {
-      const dt = Math.max(1, last.t - previous.t);
-      releaseVelocity = ((last.y - previous.y) / dt) * 1000;
-    }
+  const handlePointerMove = useCallback(
+    (event: PointerEvent) => {
+      if (startYRef.current === null) {
+        return;
+      }
+      const delta = event.clientY - startYRef.current;
+      if (delta < 0) {
+        // Resist upward overscroll — Apple §9 rubber-banding.
+        y.set(rubberband(delta, 420));
+        return;
+      }
+      historyRef.current.push({ t: Date.now(), y: delta });
+      if (historyRef.current.length > 8) {
+        historyRef.current.shift();
+      }
+      y.set(delta);
+    },
+    [y]
+  );
 
-    // Apple §6 — decide from where the gesture is going, not where it stopped.
-    const projected = delta + project(releaseVelocity);
-    if (projected > 80 || releaseVelocity > 200) {
-      onOpenChange(false);
-    }
-    y.set(0);
-  }
+  const handlePointerUp = useCallback(
+    (event: PointerEvent) => {
+      if (startYRef.current === null) {
+        return;
+      }
+      const delta = event.clientY - startYRef.current;
+      startYRef.current = null;
+
+      const history = historyRef.current;
+      const last = history.at(-1);
+      const previous = history.at(Math.max(0, history.length - 3));
+      let releaseVelocity = 0;
+      if (last && previous) {
+        const dt = Math.max(1, last.t - previous.t);
+        releaseVelocity = ((last.y - previous.y) / dt) * 1000;
+      }
+
+      // Apple §6 — decide from where the gesture is going, not where it stopped.
+      const projected = delta + project(releaseVelocity);
+      if (projected > 80 || releaseVelocity > 200) {
+        onOpenChange(false);
+      }
+      y.set(0);
+    },
+    [onOpenChange, y]
+  );
 
   if (!item) {
     return null;
@@ -284,7 +353,7 @@ export function RequestDetailModal({
             className="fixed inset-0 z-50 bg-black/32"
             exit={{ opacity: 0 }}
             initial={{ opacity: 0 }}
-            onClick={() => onOpenChange(false)}
+            onClick={handleClose}
             transition={{ duration: 0.18 }}
           />
           <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6">
@@ -308,7 +377,7 @@ export function RequestDetailModal({
               <Button
                 aria-label="Close"
                 className="press-feedback absolute top-3 right-3 z-10"
-                onClick={() => onOpenChange(false)}
+                onClick={handleClose}
                 size="icon-sm"
                 variant="ghost"
               >
@@ -391,10 +460,7 @@ export function RequestDetailModal({
                 <InternalNotesSection
                   item={item}
                   note={note}
-                  onAddNote={(id, text) => {
-                    onAddNote(id, text);
-                    setNote("");
-                  }}
+                  onAddNote={handleAddNoteWithReset}
                   onNoteChange={setNote}
                 />
 
@@ -415,34 +481,29 @@ export function RequestDetailModal({
 
               <div className="flex shrink-0 items-center justify-end gap-2 border-border/50 border-t px-4 py-3">
                 {secondary.map((action) => (
-                  <Button
-                    className="press-feedback"
+                  <ActionButton
+                    action={action}
+                    item={item}
                     key={action.id}
-                    onClick={() => onAction(item, action)}
-                    size="sm"
+                    onAction={onAction}
                     variant="outline"
-                  >
-                    {action.label}
-                  </Button>
+                  />
                 ))}
                 {deny ? (
-                  <Button
-                    className="press-feedback"
-                    onClick={() => onAction(item, deny)}
-                    size="sm"
+                  <ActionButton
+                    action={deny}
+                    item={item}
+                    label="Deny"
+                    onAction={onAction}
                     variant="destructive"
-                  >
-                    Deny
-                  </Button>
+                  />
                 ) : null}
                 {primary ? (
-                  <Button
-                    className="press-feedback"
-                    onClick={() => onAction(item, primary)}
-                    size="sm"
-                  >
-                    {primary.label}
-                  </Button>
+                  <ActionButton
+                    action={primary}
+                    item={item}
+                    onAction={onAction}
+                  />
                 ) : null}
               </div>
             </motion.div>

@@ -1,5 +1,5 @@
 import { useNavigate, useSearch } from "@tanstack/react-router";
-import * as React from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { useDensity } from "@/hooks/use-density";
@@ -81,7 +81,7 @@ export function RequestsPage({ to }: { to: "/admin/requests" }) {
   const search: RequestsSearch = useSearch({ from: to });
 
   // Deep-linked filters seed the initial state; later edits flow back to the URL.
-  const [initialFilters] = React.useState(() => filtersFromSearch(search));
+  const [initialFilters] = useState(() => filtersFromSearch(search));
   const {
     activeChips,
     categories,
@@ -97,35 +97,35 @@ export function RequestsPage({ to }: { to: "/admin/requests" }) {
     visibleItems,
   } = useRequestFilters(board.items, now, initialFilters);
 
-  const [deniedCollapsed, setDeniedCollapsed] = React.useState(true);
-  const [openId, setOpenId] = React.useState<string | null>(null);
-  const [originRect, setOriginRect] = React.useState<DOMRect | null>(null);
-  const [denyTarget, setDenyTarget] = React.useState<{
+  const [deniedCollapsed, setDeniedCollapsed] = useState(true);
+  const [openId, setOpenId] = useState<string | null>(null);
+  const [originRect, setOriginRect] = useState<DOMRect | null>(null);
+  const [denyTarget, setDenyTarget] = useState<{
     ids: string[];
     label: string;
   } | null>(null);
-  const [dispenseId, setDispenseId] = React.useState<string | null>(null);
-  const [batchDispenseOpen, setBatchDispenseOpen] = React.useState(false);
-  const [announcement, setAnnouncement] = React.useState("");
+  const [dispenseId, setDispenseId] = useState<string | null>(null);
+  const [batchDispenseOpen, setBatchDispenseOpen] = useState(false);
+  const [announcement, setAnnouncement] = useState("");
 
-  const boardRef = React.useRef<HTMLDivElement | null>(null);
+  const boardRef = useRef<HTMLDivElement | null>(null);
 
   // Rows read from disk replace the mock seed, unless the user got there first.
   const { replaceAll } = board;
-  React.useEffect(() => {
+  useEffect(() => {
     if (persistence.hydrated) {
       replaceAll(persistence.hydrated);
     }
   }, [persistence.hydrated, replaceAll]);
 
-  const commitMove = React.useCallback(
+  const commitMove = useCallback(
     (item: RequestItem, status: RequestStatus, index: number) => {
       const outcome = board.moveRequestAt(item.id, status, index);
       if (!outcome.ok) {
         toast.error(FORBIDDEN_MESSAGE);
         return;
       }
-      const label = statusMetaOf(status).label;
+      const { label } = statusMetaOf(status);
       setAnnouncement(
         `${item.medicine} for ${item.requestor.name} moved to ${label}.`
       );
@@ -139,7 +139,7 @@ export function RequestsPage({ to }: { to: "/admin/requests" }) {
 
   const drag = useCardDrag({
     boardRef,
-    onCommit: React.useCallback(
+    onCommit: useCallback(
       (id: string, status: RequestStatus, index: number) => {
         const item = board.items.find((candidate) => candidate.id === id);
         if (item) {
@@ -148,7 +148,7 @@ export function RequestsPage({ to }: { to: "/admin/requests" }) {
       },
       [board.items, commitMove]
     ),
-    onForbidden: React.useCallback((status: RequestStatus) => {
+    onForbidden: useCallback((status: RequestStatus) => {
       toast.error(FORBIDDEN_MESSAGE);
       setAnnouncement(
         `Cannot move to ${statusMetaOf(status).label}. ${FORBIDDEN_MESSAGE}`
@@ -156,7 +156,7 @@ export function RequestsPage({ to }: { to: "/admin/requests" }) {
     }, []),
   });
 
-  React.useEffect(() => {
+  useEffect(() => {
     const next = searchFromFilters(filters);
     if (!requestsSearchEquals(next, search)) {
       // Filters stay bookmarkable and shareable between the two routes (§5).
@@ -164,7 +164,7 @@ export function RequestsPage({ to }: { to: "/admin/requests" }) {
     }
   }, [filters, navigate, search, to]);
 
-  const groups = React.useMemo(
+  const groups = useMemo(
     () =>
       REQUEST_COLUMNS.map((column) => ({
         column,
@@ -179,154 +179,202 @@ export function RequestsPage({ to }: { to: "/admin/requests" }) {
   const dispenseItem =
     board.items.find((item) => item.id === dispenseId) ?? null;
 
-  const availableBatchActions = React.useMemo(
+  const availableBatchActions = useMemo(
     () => batchActions(board.selectedItems.map((item) => item.status)),
     [board.selectedItems]
   );
 
   /** Ctrl/⌘+A — the board's own select-all, scoped to what's visible. */
-  function handleBoardKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
-    if (
-      !((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "a") ||
-      acceptsTypedText(event.target)
-    ) {
-      return;
+  useEffect(() => {
+    function handleSelectAllShortcut(event: KeyboardEvent) {
+      if (
+        !(
+          (event.metaKey || event.ctrlKey) &&
+          event.key.toLowerCase() === "a"
+        ) ||
+        acceptsTypedText(event.target)
+      ) {
+        return;
+      }
+      event.preventDefault();
+      const ids = visibleItems.map((item) => item.id);
+      board.selectMany(ids, true);
+      setAnnouncement(`${ids.length} visible requests selected.`);
     }
-    event.preventDefault();
-    const ids = visibleItems.map((item) => item.id);
-    board.selectMany(ids, true);
-    setAnnouncement(`${ids.length} visible requests selected.`);
-  }
+    document.addEventListener("keydown", handleSelectAllShortcut);
+    return () => {
+      document.removeEventListener("keydown", handleSelectAllShortcut);
+    };
+  }, [visibleItems, board]);
 
-  function handleOpen(item: RequestItem, rect: DOMRect | null) {
-    // Suppress the click that follows a drag-cancel gesture — the card
-    // lifted but the user released without committing a move.
-    if (drag.consumeSuppressedClick()) {
-      return;
-    }
-    setOriginRect(rect);
-    setOpenId(item.id);
-  }
+  const { consumeSuppressedClick, animateMove } = drag;
 
-  function handleMove(item: RequestItem, target: RequestStatus) {
-    commitMove(item, target, countInStatus(board.items, target));
-  }
-
-  function handleKeyboardMove(
-    item: RequestItem,
-    direction: -1 | 1,
-    rect: DOMRect
-  ) {
-    const target = keyboardTargetStatus(item.status, direction);
-    if (!target) {
-      setAnnouncement(
-        `No column to the ${direction > 0 ? "right" : "left"} of ${statusMetaOf(item.status).label}.`
-      );
-      return;
-    }
-    drag.animateMove(item, target, rect, countInStatus(board.items, target));
-  }
-
-  function handleAction(item: RequestItem, action: RequestAction) {
-    if (action.id === "view" || action.id === "view-dispensing-record") {
-      setOriginRect(null);
+  const handleOpen = useCallback(
+    (item: RequestItem, rect: DOMRect | null) => {
+      // Suppress the click that follows a drag-cancel gesture — the card
+      // lifted but the user released without committing a move.
+      if (consumeSuppressedClick()) {
+        return;
+      }
+      setOriginRect(rect);
       setOpenId(item.id);
-      return;
-    }
-    if (action.id === "deny") {
-      setDenyTarget({
-        ids: [item.id],
-        label: `${item.medicine} — ${item.requestor.name}`,
+    },
+    [consumeSuppressedClick]
+  );
+
+  const handleMove = useCallback(
+    (item: RequestItem, target: RequestStatus) => {
+      commitMove(item, target, countInStatus(board.items, target));
+    },
+    [board.items, commitMove]
+  );
+
+  const handleKeyboardMove = useCallback(
+    (item: RequestItem, direction: -1 | 1, rect: DOMRect) => {
+      const target = keyboardTargetStatus(item.status, direction);
+      if (!target) {
+        setAnnouncement(
+          `No column to the ${direction > 0 ? "right" : "left"} of ${statusMetaOf(item.status).label}.`
+        );
+        return;
+      }
+      animateMove(item, target, rect, countInStatus(board.items, target));
+    },
+    [animateMove, board.items]
+  );
+
+  const handleAction = useCallback(
+    (item: RequestItem, action: RequestAction) => {
+      if (action.id === "view" || action.id === "view-dispensing-record") {
+        setOriginRect(null);
+        setOpenId(item.id);
+        return;
+      }
+      if (action.id === "deny") {
+        setDenyTarget({
+          ids: [item.id],
+          label: `${item.medicine} — ${item.requestor.name}`,
+        });
+        setOpenId(null);
+        return;
+      }
+      if (action.id === "dispense") {
+        setDispenseId(item.id);
+        setOpenId(null);
+        return;
+      }
+      if (action.to) {
+        handleMove(item, action.to);
+      }
+    },
+    [handleMove]
+  );
+
+  const handleBatchAction = useCallback(
+    (action: BatchAction) => {
+      const ids = board.selectedItems.map((item) => item.id);
+      if (ids.length === 0) {
+        return;
+      }
+      if (action.to === "denied") {
+        setOriginRect(null);
+        setDenyTarget({
+          ids,
+          label: `${ids.length} selected requests`,
+        });
+        return;
+      }
+      if (action.to === "claimed") {
+        setBatchDispenseOpen(true);
+        return;
+      }
+      const moved = board.moveRequests(ids, action.to);
+      if (moved === 0) {
+        toast.error(FORBIDDEN_MESSAGE);
+        return;
+      }
+      const { label } = statusMetaOf(action.to);
+      setAnnouncement(`${moved} requests moved to ${label}.`);
+      toast.success(`${moved} moved to ${label}`, {
+        action: { label: "Undo", onClick: () => board.undoLastMove() },
       });
+    },
+    [board.moveRequests, board.selectedItems, board.undoLastMove]
+  );
+
+  const handleDenyConfirm = useCallback(
+    (reason: Parameters<typeof board.denyRequests>[1], note: string) => {
+      if (!denyTarget) {
+        return;
+      }
+      const count = board.denyRequests(denyTarget.ids, reason, note);
+      if (count > 0) {
+        setAnnouncement(`${count} requests denied.`);
+        toast.success(`${count} request${count === 1 ? "" : "s"} denied`, {
+          description: reason,
+        });
+        board.clearSelection();
+      }
+      setDenyTarget(null);
+    },
+    [board.clearSelection, board.denyRequests, denyTarget]
+  );
+
+  const handleDispenseConfirm = useCallback(
+    (payload: DispensePayload) => {
+      if (!dispenseItem) {
+        return;
+      }
+      const applied = board.dispenseRequest(dispenseItem.id, payload);
+      if (applied) {
+        setAnnouncement(
+          `Dispensing logged for ${dispenseItem.medicine} for ${dispenseItem.requestor.name}.`
+        );
+        toast.success(`Dispensing logged for ${dispenseItem.medicine}`, {
+          description: `Batch ${payload.batch} · ${payload.qty} ${dispenseItem.unit}`,
+        });
+      }
+      setDispenseId(null);
+    },
+    [board.dispenseRequest, dispenseItem]
+  );
+
+  const handleBatchDispenseConfirm = useCallback(
+    (payloads: { id: string; payload: DispensePayload }[]) => {
+      const applied = board.dispenseRequests(payloads);
+      if (applied > 0) {
+        setAnnouncement(`${applied} requests dispensed and moved to Claimed.`);
+        toast.success(`${applied} requests dispensed`, {
+          description: "Dispensing records logged",
+        });
+        board.clearSelection();
+      }
+      setBatchDispenseOpen(false);
+    },
+    [board.clearSelection, board.dispenseRequests]
+  );
+
+  const handleToggleDenied = useCallback(() => {
+    setDeniedCollapsed((value) => !value);
+  }, []);
+
+  const handleDetailOpenChange = useCallback((next: boolean) => {
+    if (!next) {
       setOpenId(null);
-      return;
     }
-    if (action.id === "dispense") {
-      setDispenseId(item.id);
-      setOpenId(null);
-      return;
-    }
-    if (action.to) {
-      handleMove(item, action.to);
-    }
-  }
+  }, []);
 
-  function handleBatchAction(action: BatchAction) {
-    const ids = board.selectedItems.map((item) => item.id);
-    if (ids.length === 0) {
-      return;
+  const handleDenyOpenChange = useCallback((next: boolean) => {
+    if (!next) {
+      setDenyTarget(null);
     }
-    if (action.to === "denied") {
-      setOriginRect(null);
-      setDenyTarget({
-        ids,
-        label: `${ids.length} selected requests`,
-      });
-      return;
-    }
-    if (action.to === "claimed") {
-      setBatchDispenseOpen(true);
-      return;
-    }
-    const moved = board.moveRequests(ids, action.to);
-    if (moved === 0) {
-      toast.error(FORBIDDEN_MESSAGE);
-      return;
-    }
-    const label = statusMetaOf(action.to).label;
-    setAnnouncement(`${moved} requests moved to ${label}.`);
-    toast.success(`${moved} moved to ${label}`, {
-      action: { label: "Undo", onClick: () => board.undoLastMove() },
-    });
-  }
+  }, []);
 
-  function handleDenyConfirm(
-    reason: Parameters<typeof board.denyRequests>[1],
-    note: string
-  ) {
-    if (!denyTarget) {
-      return;
+  const handleDispenseOpenChange = useCallback((next: boolean) => {
+    if (!next) {
+      setDispenseId(null);
     }
-    const count = board.denyRequests(denyTarget.ids, reason, note);
-    if (count > 0) {
-      setAnnouncement(`${count} requests denied.`);
-      toast.success(`${count} request${count === 1 ? "" : "s"} denied`, {
-        description: reason,
-      });
-      board.clearSelection();
-    }
-    setDenyTarget(null);
-  }
-
-  function handleDispenseConfirm(payload: DispensePayload) {
-    if (!dispenseItem) {
-      return;
-    }
-    const applied = board.dispenseRequest(dispenseItem.id, payload);
-    if (applied) {
-      setAnnouncement(
-        `Dispensing logged for ${dispenseItem.medicine} for ${dispenseItem.requestor.name}.`
-      );
-      toast.success(`Dispensing logged for ${dispenseItem.medicine}`, {
-        description: `Batch ${payload.batch} · ${payload.qty} ${dispenseItem.unit}`,
-      });
-    }
-    setDispenseId(null);
-  }
-
-  function handleBatchDispenseConfirm(
-    payloads: { id: string; payload: DispensePayload }[]
-  ) {
-    const applied = board.dispenseRequests(payloads);
-    if (applied > 0) {
-      setAnnouncement(`${applied} requests dispensed and moved to Claimed.`);
-      toast.success(`${applied} requests dispensed`, {
-        description: "Dispensing records logged",
-      });
-      board.clearSelection();
-    }
-    setBatchDispenseOpen(false);
-  }
+  }, []);
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
@@ -348,10 +396,7 @@ export function RequestsPage({ to }: { to: "/admin/requests" }) {
         {announcement}
       </p>
 
-      <div
-        className="min-h-0 flex-1 overflow-hidden"
-        onKeyDown={handleBoardKeyDown}
-      >
+      <div className="min-h-0 flex-1 overflow-hidden">
         <RequestBoard
           boardRef={boardRef}
           cardHandlers={drag.cardHandlers}
@@ -370,7 +415,7 @@ export function RequestsPage({ to }: { to: "/admin/requests" }) {
           onKeyboardMove={handleKeyboardMove}
           onOpen={handleOpen}
           onRegisterColumn={drag.registerColumn}
-          onToggleDenied={() => setDeniedCollapsed((value) => !value)}
+          onToggleDenied={handleToggleDenied}
           onToggleSelect={board.toggleSelect}
           selectedIds={board.selectedIds}
           shake={drag.shake}
@@ -399,11 +444,7 @@ export function RequestsPage({ to }: { to: "/admin/requests" }) {
         item={openItem}
         onAction={handleAction}
         onAddNote={board.addNote}
-        onOpenChange={(next) => {
-          if (!next) {
-            setOpenId(null);
-          }
-        }}
+        onOpenChange={handleDetailOpenChange}
         open={openId !== null}
         originRect={originRect}
       />
@@ -411,11 +452,7 @@ export function RequestsPage({ to }: { to: "/admin/requests" }) {
       <DenyRequestModal
         count={denyTarget?.ids.length ?? 1}
         onConfirm={handleDenyConfirm}
-        onOpenChange={(next) => {
-          if (!next) {
-            setDenyTarget(null);
-          }
-        }}
+        onOpenChange={handleDenyOpenChange}
         open={denyTarget !== null}
         originRect={originRect}
         requestLabel={denyTarget?.label ?? ""}
@@ -423,11 +460,7 @@ export function RequestsPage({ to }: { to: "/admin/requests" }) {
 
       <DispenseRequestModal
         onConfirm={handleDispenseConfirm}
-        onOpenChange={(next) => {
-          if (!next) {
-            setDispenseId(null);
-          }
-        }}
+        onOpenChange={handleDispenseOpenChange}
         open={dispenseId !== null}
         originRect={originRect}
         request={dispenseItem}

@@ -101,7 +101,9 @@ describe("useRequestBoard", () => {
       act(() => {
         result.current.moveRequestAt("REQ-001", "approved", 0);
       });
-      const moved = result.current.items.find((item) => item.id === "REQ-001");
+      const moved = result.current.items.find(
+        (found) => found.id === "REQ-001"
+      );
       expect(moved).toBeDefined();
       expect(moved?.history).toHaveLength(1);
       expect(moved?.history[0].from).toBe("pending");
@@ -141,11 +143,11 @@ describe("useRequestBoard", () => {
   describe("moveRequests (bulk)", () => {
     it("moves multiple pending requests to approved", () => {
       const { result } = renderHook(() => useRequestBoard(ITEMS));
-      let moved: number;
+      let moved = 0;
       act(() => {
         moved = result.current.moveRequests(["REQ-001", "REQ-002"], "approved");
       });
-      expect(moved!).toBe(2);
+      expect(moved).toBe(2);
       const approved = result.current.items.filter(
         (item) => item.status === "approved"
       );
@@ -154,27 +156,27 @@ describe("useRequestBoard", () => {
 
     it("silently skips forbidden moves", () => {
       const { result } = renderHook(() => useRequestBoard(ITEMS));
-      let moved: number;
+      let moved = 0;
       act(() => {
         moved = result.current.moveRequests(["REQ-005", "REQ-006"], "denied");
       });
-      expect(moved!).toBe(0);
+      expect(moved).toBe(0);
     });
 
     it("returns count of successfully moved items", () => {
       const { result } = renderHook(() => useRequestBoard(ITEMS));
-      let moved: number;
+      let moved = 0;
       act(() => {
         moved = result.current.moveRequests(["REQ-001", "REQ-005"], "approved");
       });
-      expect(moved!).toBe(1);
+      expect(moved).toBe(1);
     });
   });
 
   describe("denyRequests", () => {
     it("denies a pending request", () => {
       const { result } = renderHook(() => useRequestBoard(ITEMS));
-      let count: number;
+      let count = 0;
       act(() => {
         count = result.current.denyRequests(
           ["REQ-001"],
@@ -182,8 +184,10 @@ describe("useRequestBoard", () => {
           "No stock available"
         );
       });
-      expect(count!).toBe(1);
-      const denied = result.current.items.find((item) => item.id === "REQ-001");
+      expect(count).toBe(1);
+      const denied = result.current.items.find(
+        (found) => found.id === "REQ-001"
+      );
       expect(denied?.status).toBe("denied");
       expect(denied?.deniedReason).toBe("Out of Stock");
       expect(denied?.deniedNote).toBe("No stock available");
@@ -194,7 +198,9 @@ describe("useRequestBoard", () => {
       act(() => {
         result.current.denyRequests(["REQ-001"], "Out of Stock", "");
       });
-      const denied = result.current.items.find((item) => item.id === "REQ-001");
+      const denied = result.current.items.find(
+        (found) => found.id === "REQ-001"
+      );
       expect(denied?.history).toHaveLength(1);
       expect(denied?.history[0].to).toBe("denied");
       expect(denied?.history[0].from).toBe("pending");
@@ -202,16 +208,16 @@ describe("useRequestBoard", () => {
 
     it("returns 0 when no items can be denied", () => {
       const { result } = renderHook(() => useRequestBoard(ITEMS));
-      let count: number;
+      let count = 0;
       act(() => {
         count = result.current.denyRequests(["REQ-005"], "Out of Stock", "");
       });
-      expect(count!).toBe(0);
+      expect(count).toBe(0);
     });
 
     it("denies multiple items at once", () => {
       const { result } = renderHook(() => useRequestBoard(ITEMS));
-      let count: number;
+      let count = 0;
       act(() => {
         count = result.current.denyRequests(
           ["REQ-001", "REQ-003"],
@@ -219,14 +225,14 @@ describe("useRequestBoard", () => {
           ""
         );
       });
-      expect(count!).toBe(2);
+      expect(count).toBe(2);
     });
   });
 
   describe("dispenseRequest", () => {
     it("dispenses a ready request to claimed", () => {
       const { result } = renderHook(() => useRequestBoard(ITEMS));
-      let ok: boolean;
+      let ok = false;
       act(() => {
         ok = result.current.dispenseRequest("REQ-004", {
           batch: "B-2026-04",
@@ -234,7 +240,7 @@ describe("useRequestBoard", () => {
           qty: 5,
         });
       });
-      expect(ok!).toBe(true);
+      expect(ok).toBe(true);
       const claimed = result.current.items.find(
         (item) => item.id === "REQ-004"
       );
@@ -246,7 +252,7 @@ describe("useRequestBoard", () => {
 
     it("rejects dispensing a non-ready request", () => {
       const { result } = renderHook(() => useRequestBoard(ITEMS));
-      let ok: boolean;
+      let ok = false;
       act(() => {
         ok = result.current.dispenseRequest("REQ-001", {
           batch: "B-2026-04",
@@ -254,15 +260,15 @@ describe("useRequestBoard", () => {
           qty: 2,
         });
       });
-      expect(ok!).toBe(false);
+      expect(ok).toBe(false);
       expect(
-        result.current.items.find((item) => item.id === "REQ-001")?.status
+        result.current.items.find((found) => found.id === "REQ-001")?.status
       ).toBe("pending");
     });
 
     it("rejects dispensing a claimed request", () => {
       const { result } = renderHook(() => useRequestBoard(ITEMS));
-      let ok: boolean;
+      let ok = false;
       act(() => {
         ok = result.current.dispenseRequest("REQ-005", {
           batch: "B-2026-04",
@@ -270,7 +276,7 @@ describe("useRequestBoard", () => {
           qty: 5,
         });
       });
-      expect(ok!).toBe(false);
+      expect(ok).toBe(false);
     });
 
     it("records dispensing history", () => {
@@ -293,7 +299,7 @@ describe("useRequestBoard", () => {
   describe("dispenseRequests (bulk)", () => {
     it("dispenses multiple ready requests", () => {
       const { result } = renderHook(() => useRequestBoard(ITEMS));
-      let applied: number;
+      let applied = 0;
       act(() => {
         applied = result.current.dispenseRequests([
           {
@@ -306,15 +312,15 @@ describe("useRequestBoard", () => {
           },
         ]);
       });
-      expect(applied!).toBe(1);
+      expect(applied).toBe(1);
       expect(
-        result.current.items.find((item) => item.id === "REQ-004")?.status
+        result.current.items.find((found) => found.id === "REQ-004")?.status
       ).toBe("claimed");
     });
 
     it("skips items that cannot be dispensed", () => {
       const { result } = renderHook(() => useRequestBoard(ITEMS));
-      let applied: number;
+      let applied = 0;
       act(() => {
         applied = result.current.dispenseRequests([
           {
@@ -335,7 +341,7 @@ describe("useRequestBoard", () => {
           },
         ]);
       });
-      expect(applied!).toBe(1);
+      expect(applied).toBe(1);
     });
   });
 
@@ -346,26 +352,26 @@ describe("useRequestBoard", () => {
         result.current.moveRequestAt("REQ-001", "approved", 0);
       });
       expect(
-        result.current.items.find((item) => item.id === "REQ-001")?.status
+        result.current.items.find((found) => found.id === "REQ-001")?.status
       ).toBe("approved");
 
-      let undone: boolean;
+      let undone = false;
       act(() => {
         undone = result.current.undoLastMove();
       });
-      expect(undone!).toBe(true);
+      expect(undone).toBe(true);
       expect(
-        result.current.items.find((item) => item.id === "REQ-001")?.status
+        result.current.items.find((found) => found.id === "REQ-001")?.status
       ).toBe("pending");
     });
 
     it("returns false when there is nothing to undo", () => {
       const { result } = renderHook(() => useRequestBoard(ITEMS));
-      let undone: boolean;
+      let undone = false;
       act(() => {
         undone = result.current.undoLastMove();
       });
-      expect(undone!).toBe(false);
+      expect(undone).toBe(false);
     });
 
     it("removes the history entry on undo", () => {
@@ -374,14 +380,14 @@ describe("useRequestBoard", () => {
         result.current.moveRequestAt("REQ-001", "approved", 0);
       });
       expect(
-        result.current.items.find((item) => item.id === "REQ-001")?.history
+        result.current.items.find((found) => found.id === "REQ-001")?.history
       ).toHaveLength(1);
 
       act(() => {
         result.current.undoLastMove();
       });
       expect(
-        result.current.items.find((item) => item.id === "REQ-001")?.history
+        result.current.items.find((found) => found.id === "REQ-001")?.history
       ).toHaveLength(0);
     });
   });
@@ -416,11 +422,11 @@ describe("useRequestBoard", () => {
     it("replaces all items with new ones", () => {
       const { result } = renderHook(() => useRequestBoard(ITEMS));
       const newItems = [makeItem({ id: "REQ-NEW-1" })];
-      let replaced: boolean;
+      let replaced = false;
       act(() => {
         replaced = result.current.replaceAll(newItems);
       });
-      expect(replaced!).toBe(true);
+      expect(replaced).toBe(true);
       expect(result.current.items).toHaveLength(1);
       expect(result.current.items[0].id).toBe("REQ-NEW-1");
     });
@@ -429,11 +435,11 @@ describe("useRequestBoard", () => {
       const { result } = renderHook(() => useRequestBoard(ITEMS));
       act(() => result.current.moveRequestAt("REQ-001", "approved", 0));
 
-      let replaced: boolean;
+      let replaced = false;
       act(() => {
         replaced = result.current.replaceAll([makeItem({ id: "REQ-NEW-1" })]);
       });
-      expect(replaced!).toBe(false);
+      expect(replaced).toBe(false);
       expect(result.current.items.length).toBe(ITEMS.length);
     });
   });
@@ -442,7 +448,7 @@ describe("useRequestBoard", () => {
     it("adds an internal note to a request", () => {
       const { result } = renderHook(() => useRequestBoard(ITEMS));
       act(() => result.current.addNote("REQ-001", "Verified by staff"));
-      const item = result.current.items.find((item) => item.id === "REQ-001");
+      const item = result.current.items.find((found) => found.id === "REQ-001");
       expect(item?.notes).toHaveLength(1);
       expect(item?.notes[0].text).toBe("Verified by staff");
       expect(item?.notes[0].author).toBe("You");
@@ -452,14 +458,14 @@ describe("useRequestBoard", () => {
       const { result } = renderHook(() => useRequestBoard(ITEMS));
       act(() => result.current.addNote("REQ-001", ""));
       act(() => result.current.addNote("REQ-001", "   "));
-      const item = result.current.items.find((item) => item.id === "REQ-001");
+      const item = result.current.items.find((found) => found.id === "REQ-001");
       expect(item?.notes).toHaveLength(0);
     });
 
     it("trims whitespace from notes", () => {
       const { result } = renderHook(() => useRequestBoard(ITEMS));
       act(() => result.current.addNote("REQ-001", "  Note text  "));
-      const item = result.current.items.find((item) => item.id === "REQ-001");
+      const item = result.current.items.find((found) => found.id === "REQ-001");
       expect(item?.notes[0].text).toBe("Note text");
     });
   });
@@ -503,7 +509,7 @@ describe("useRequestBoard", () => {
         result.current.moveRequestAt("REQ-006", "pending", 0);
       });
       expect(
-        result.current.items.find((item) => item.id === "REQ-006")?.status
+        result.current.items.find((found) => found.id === "REQ-006")?.status
       ).toBe("pending");
     });
   });

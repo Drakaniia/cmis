@@ -2,7 +2,7 @@ import { Button } from "@cmis/ui/components/button";
 import { cn } from "@cmis/ui/lib/utils";
 import { AlertTriangle, X } from "lucide-react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import * as React from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { expiryLabel } from "@/features/inventory/mock";
 import { materializeEnter, sheetSpring } from "@/lib/motion";
@@ -12,21 +12,21 @@ import { batchOptionsFor, hasInventoryItem, onHandFor } from "../stock";
 import type { RequestItem } from "../types";
 
 function StockWarnings({
-  hasInventoryItem,
+  hasItem,
   medicine,
   outOfStock,
   qty,
   stock,
   unit,
 }: {
-  hasInventoryItem: boolean;
+  hasItem: boolean;
   medicine: string;
   outOfStock: boolean;
   qty: number;
   stock: number;
   unit: string;
 }) {
-  if (!hasInventoryItem) {
+  if (!hasItem) {
     return (
       <div className="rounded-md border border-destructive/30 bg-destructive/5 p-3">
         <p className="font-medium text-destructive text-sm">
@@ -77,6 +77,10 @@ function BatchOptionRow({
   qty: number;
 }) {
   const tooSmall = option.qty < qty;
+  const handleChange = useCallback(() => {
+    onSelect(option.batch);
+  }, [onSelect, option.batch]);
+
   return (
     <label
       className={cn(
@@ -87,7 +91,7 @@ function BatchOptionRow({
       <input
         checked={isSelected}
         name="fefo-batch"
-        onChange={() => onSelect(option.batch)}
+        onChange={handleChange}
         type="radio"
         value={option.batch}
       />
@@ -161,7 +165,7 @@ export function DispenseRequestModal({
   onConfirm,
   onOpenChange,
   open,
-  originRect,
+  originRect: _originRect,
   request,
 }: {
   onConfirm: (payload: DispensePayload) => void;
@@ -175,14 +179,14 @@ export function DispenseRequestModal({
   const medicine = request?.medicine ?? "";
   const known = hasInventoryItem(medicine);
   /** FEFO order, expired batches excluded — shared with the batch toolbar. */
-  const options: BatchOption[] = React.useMemo(
+  const options: BatchOption[] = useMemo(
     () => batchOptionsFor(medicine),
     [medicine]
   );
 
-  const [selectedBatch, setSelectedBatch] = React.useState<string | null>(null);
+  const [selectedBatch, setSelectedBatch] = useState<string | null>(null);
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (!(open && request)) {
       return;
     }
@@ -191,7 +195,7 @@ export function DispenseRequestModal({
     setSelectedBatch((covering ?? options[0])?.batch ?? null);
   }, [open, request, options]);
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (!open) {
       return;
     }
@@ -204,18 +208,20 @@ export function DispenseRequestModal({
     return () => window.removeEventListener("keydown", onKey);
   }, [open, onOpenChange]);
 
-  if (!request) {
-    return null;
-  }
-
   const stock = onHandFor(medicine);
   const selected =
     options.find((option) => option.batch === selectedBatch) ?? null;
-  const outOfStock = stock < request.qty;
-  const batchTooSmall = !!selected && selected.qty < request.qty;
+  const outOfStock = request ? stock < request.qty : false;
+  const batchTooSmall = Boolean(
+    selected && request && selected.qty < request.qty
+  );
   const canConfirm = !(outOfStock || batchTooSmall || !selected);
 
-  function handleConfirm() {
+  const handleClose = useCallback(() => {
+    onOpenChange(false);
+  }, [onOpenChange]);
+
+  const handleConfirm = useCallback(() => {
     if (!(canConfirm && selected)) {
       return;
     }
@@ -225,6 +231,10 @@ export function DispenseRequestModal({
       qty: request?.qty ?? 0,
     });
     onOpenChange(false);
+  }, [canConfirm, selected, onConfirm, request, onOpenChange]);
+
+  if (!request) {
+    return null;
   }
 
   const transformOrigin = "center center";
@@ -239,7 +249,7 @@ export function DispenseRequestModal({
             className="fixed inset-0 z-[60] bg-black/32"
             exit={{ opacity: 0 }}
             initial={{ opacity: 0 }}
-            onClick={() => onOpenChange(false)}
+            onClick={handleClose}
             transition={{ duration: 0.18 }}
           />
           <div className="fixed inset-0 z-[60] flex items-center justify-center p-3 sm:p-6">
@@ -265,7 +275,7 @@ export function DispenseRequestModal({
                 <Button
                   aria-label="Close"
                   className="press-feedback"
-                  onClick={() => onOpenChange(false)}
+                  onClick={handleClose}
                   size="icon-sm"
                   variant="ghost"
                 >
@@ -282,7 +292,7 @@ export function DispenseRequestModal({
                 </div>
 
                 <StockWarnings
-                  hasInventoryItem={known}
+                  hasItem={known}
                   medicine={request.medicine}
                   outOfStock={outOfStock}
                   qty={request.qty}
@@ -306,7 +316,7 @@ export function DispenseRequestModal({
               <div className="flex shrink-0 items-center justify-end gap-2 border-border/50 border-t px-4 py-3">
                 <Button
                   className="press-feedback"
-                  onClick={() => onOpenChange(false)}
+                  onClick={handleClose}
                   size="sm"
                   variant="ghost"
                 >

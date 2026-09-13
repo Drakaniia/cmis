@@ -2,7 +2,7 @@ import { Button } from "@cmis/ui/components/button";
 import { cn } from "@cmis/ui/lib/utils";
 import { AlertTriangle, CheckCircle2, X } from "lucide-react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import * as React from "react";
+import { useCallback, useEffect, useMemo } from "react";
 
 import { materializeEnter, sheetSpring } from "@/lib/motion";
 import type { DispensePayload } from "../hooks/use-request-board";
@@ -37,7 +37,7 @@ export function DispenseBatchModal({
 }) {
   const reduceMotion = useReducedMotion();
 
-  const plan = React.useMemo<PlanRow[]>(
+  const plan = useMemo<PlanRow[]>(
     () => items.map((item) => ({ check: checkStock(item), item })),
     [items]
   );
@@ -45,7 +45,7 @@ export function DispenseBatchModal({
   const ready = plan.filter((row) => row.check.state === "ok");
   const blocked = plan.filter((row) => row.check.state !== "ok");
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (!open) {
       return;
     }
@@ -58,7 +58,9 @@ export function DispenseBatchModal({
     return () => window.removeEventListener("keydown", onKey);
   }, [open, onOpenChange]);
 
-  function handleConfirm() {
+  const handleClose = useCallback(() => onOpenChange(false), [onOpenChange]);
+
+  const handleConfirm = useCallback(() => {
     const payloads = ready
       .map(({ check, item }) =>
         check.batch
@@ -80,7 +82,7 @@ export function DispenseBatchModal({
     }
     onConfirm(payloads);
     onOpenChange(false);
-  }
+  }, [onConfirm, onOpenChange, ready]);
 
   return (
     <AnimatePresence>
@@ -92,7 +94,7 @@ export function DispenseBatchModal({
             className="fixed inset-0 z-[60] bg-black/32"
             exit={{ opacity: 0 }}
             initial={{ opacity: 0 }}
-            onClick={() => onOpenChange(false)}
+            onClick={handleClose}
             transition={{ duration: 0.18 }}
           />
           <div className="fixed inset-0 z-[60] flex items-center justify-center p-3 sm:p-6">
@@ -115,7 +117,7 @@ export function DispenseBatchModal({
                 <Button
                   aria-label="Close"
                   className="press-feedback"
-                  onClick={() => onOpenChange(false)}
+                  onClick={handleClose}
                   size="icon-sm"
                   variant="ghost"
                 >
@@ -199,7 +201,7 @@ export function DispenseBatchModal({
               <div className="flex shrink-0 items-center justify-end gap-2 border-border/50 border-t px-4 py-3">
                 <Button
                   className="press-feedback"
-                  onClick={() => onOpenChange(false)}
+                  onClick={handleClose}
                   size="sm"
                   variant="ghost"
                 >

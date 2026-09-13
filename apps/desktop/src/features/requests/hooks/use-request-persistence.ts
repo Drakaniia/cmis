@@ -1,4 +1,4 @@
-import * as React from "react";
+import { useCallback, useEffect, useState } from "react";
 import { loadRequests, saveRequest, seedRequests } from "../persistence";
 import type { RequestItem } from "../types";
 
@@ -8,12 +8,12 @@ import type { RequestItem } from "../types";
  * writes, so the in-memory board behaves exactly as before.
  */
 export function useRequestPersistence(seed: RequestItem[]) {
-  const [hydrated, setHydrated] = React.useState<RequestItem[] | null>(null);
-  const [ready, setReady] = React.useState(false);
+  const [hydrated, setHydrated] = useState<RequestItem[] | null>(null);
+  const [ready, setReady] = useState(false);
 
-  React.useEffect(() => {
+  useEffect(() => {
     let cancelled = false;
-    void (async () => {
+    const load = async () => {
       const stored = await loadRequests();
       if (cancelled) {
         return;
@@ -28,14 +28,15 @@ export function useRequestPersistence(seed: RequestItem[]) {
       if (!cancelled) {
         setReady(true);
       }
-    })();
+    };
+    load();
     return () => {
       cancelled = true;
     };
   }, [seed]);
 
-  const persist = React.useCallback((item: RequestItem) => {
-    void saveRequest(item);
+  const persist = useCallback((item: RequestItem) => {
+    saveRequest(item);
   }, []);
 
   return { hydrated, persist, ready } as const;

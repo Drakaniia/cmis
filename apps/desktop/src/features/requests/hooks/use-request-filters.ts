@@ -1,4 +1,4 @@
-import * as React from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { endOfDayTimestamp, startOfDay, startOfDayTimestamp } from "../format";
 import { isArchivedClaimed } from "../transitions";
@@ -95,16 +95,16 @@ export function useRequestFilters(
   now: number,
   initial?: Partial<RequestFilters>
 ) {
-  const [filters, setFilters] = React.useState<RequestFilters>(() => ({
+  const [filters, setFilters] = useState<RequestFilters>(() => ({
     ...DEFAULT_REQUEST_FILTERS,
     ...initial,
   }));
-  const [debounced, setDebounced] = React.useState<RequestQuery>(() => ({
+  const [debounced, setDebounced] = useState<RequestQuery>(() => ({
     requestor: initial?.requestor ?? "",
     search: initial?.search ?? "",
   }));
 
-  React.useEffect(() => {
+  useEffect(() => {
     const timer = window.setTimeout(
       () =>
         setDebounced({ requestor: filters.requestor, search: filters.search }),
@@ -114,50 +114,50 @@ export function useRequestFilters(
   }, [filters.requestor, filters.search]);
 
   /** Claimed cards leave the board after 24h (§1) — before filters apply. */
-  const visibleItems = React.useMemo(
+  const visibleItems = useMemo(
     () => items.filter((item) => !isArchivedClaimed(item, now)),
     [items, now]
   );
 
-  const filteredItems = React.useMemo(
+  const filteredItems = useMemo(
     () => applyRequestFilters(visibleItems, filters, debounced, now),
     [visibleItems, filters, debounced, now]
   );
 
-  const categories = React.useMemo(() => {
+  const categories = useMemo(() => {
     const active = new Set(visibleItems.map((item) => item.category));
     return [...active].sort((a, b) => a.localeCompare(b));
   }, [visibleItems]);
 
-  const setSearch = React.useCallback((value: string) => {
+  const setSearch = useCallback((value: string) => {
     setFilters((prev) => ({ ...prev, search: value }));
   }, []);
 
-  const setRequestor = React.useCallback((value: string) => {
+  const setRequestor = useCallback((value: string) => {
     setFilters((prev) => ({ ...prev, requestor: value }));
   }, []);
 
-  const setCategory = React.useCallback((value: string) => {
+  const setCategory = useCallback((value: string) => {
     setFilters((prev) => ({ ...prev, category: value }));
   }, []);
 
-  const setDatePreset = React.useCallback(
+  const setDatePreset = useCallback(
     (datePreset: RequestFilters["datePreset"]) => {
       setFilters((prev) => ({ ...prev, datePreset }));
     },
     []
   );
 
-  const setCustomRange = React.useCallback((from: string, to: string) => {
+  const setCustomRange = useCallback((from: string, to: string) => {
     setFilters((prev) => ({ ...prev, datePreset: "custom", from, to }));
   }, []);
 
-  const clearFilters = React.useCallback(() => {
+  const clearFilters = useCallback(() => {
     setFilters(DEFAULT_REQUEST_FILTERS);
     setDebounced({ requestor: "", search: "" });
   }, []);
 
-  const removeChip = React.useCallback(
+  const removeChip = useCallback(
     (key: "category" | "datePreset" | "requestor" | "search") => {
       setFilters((prev) => {
         switch (key) {
@@ -178,7 +178,7 @@ export function useRequestFilters(
     []
   );
 
-  const activeChips = React.useMemo(() => {
+  const activeChips = useMemo(() => {
     const chips: {
       key: "category" | "datePreset" | "requestor" | "search";
       label: string;

@@ -27,6 +27,9 @@ function makeItem(overrides: Partial<RequestItem> = {}): RequestItem {
 
 const NOW = Date.now();
 const DENSITY: Density = "comfortable";
+const CARD_NAME_RE = /Maria Santos.*Paracetamol.*Pending/;
+const ACTIONS_NAME_RE = /Actions for Maria Santos/;
+const SELECT_NAME_RE = /Select request/;
 
 describe("RequestCardContent", () => {
   it("renders the requestor name", () => {
@@ -112,7 +115,7 @@ describe("RequestCard", () => {
   it("renders the card with correct aria-label", () => {
     render(<RequestCard {...defaultProps} />);
     const button = screen.getByRole("button", {
-      name: /Maria Santos.*Paracetamol.*Pending/,
+      name: CARD_NAME_RE,
     });
     expect(button.getAttribute("aria-label")).toContain("Maria Santos");
     expect(button.getAttribute("aria-label")).toContain("Paracetamol 500mg");
@@ -123,7 +126,7 @@ describe("RequestCard", () => {
     const onOpen = vi.fn();
     render(<RequestCard {...defaultProps} onOpen={onOpen} />);
     const button = screen.getByRole("button", {
-      name: /Maria Santos.*Paracetamol.*Pending/,
+      name: CARD_NAME_RE,
     });
     button.focus();
     button.dispatchEvent(
@@ -136,7 +139,7 @@ describe("RequestCard", () => {
     const onToggleSelect = vi.fn();
     render(<RequestCard {...defaultProps} onToggleSelect={onToggleSelect} />);
     const button = screen.getByRole("button", {
-      name: /Maria Santos.*Paracetamol.*Pending/,
+      name: CARD_NAME_RE,
     });
     button.focus();
     button.dispatchEvent(
@@ -148,7 +151,7 @@ describe("RequestCard", () => {
   it("opens menu on Shift+F10", () => {
     render(<RequestCard {...defaultProps} />);
     const dragButton = screen.getByRole("button", {
-      name: /Maria Santos.*Paracetamol.*Pending/,
+      name: CARD_NAME_RE,
     });
     dragButton.focus();
     dragButton.dispatchEvent(
@@ -160,7 +163,7 @@ describe("RequestCard", () => {
     );
     // The menu should open — check for the dropdown trigger
     const menuTrigger = screen.getByRole("button", {
-      name: /Actions for Maria Santos/,
+      name: ACTIONS_NAME_RE,
     });
     expect(menuTrigger).toBeInTheDocument();
   });
@@ -171,7 +174,7 @@ describe("RequestCard", () => {
     );
     // The checkbox is inside <span.block> inside <span.absolute.opacity-0>
     const checkbox = screen.getByRole("checkbox", {
-      name: /Select request/,
+      name: SELECT_NAME_RE,
     });
     // checkbox itself is a <span>, closest("span") returns itself
     // parent = <span class="block">, grandparent = <span class="absolute ... opacity-0 ...">
@@ -199,7 +202,7 @@ describe("RequestCard", () => {
   it("has a drag handle with touch-none", () => {
     render(<RequestCard {...defaultProps} />);
     const button = screen.getByRole("button", {
-      name: /Maria Santos.*Paracetamol.*Pending/,
+      name: CARD_NAME_RE,
     });
     expect(button).toHaveClass("touch-none");
     expect(button).toHaveClass("cursor-grab");
