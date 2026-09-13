@@ -35,6 +35,36 @@ interface NavSection {
   title: string;
 }
 
+interface ResolvedBadge {
+  className: string;
+  count: number | undefined;
+}
+
+function resolveBadge(
+  label: string,
+  badgeCounts?: { expiry?: number; lowStock?: number; pending?: number }
+): ResolvedBadge | null {
+  if (label === "Expiry Alerts") {
+    return {
+      className: "bg-destructive/12 text-destructive",
+      count: badgeCounts?.expiry,
+    };
+  }
+  if (label === "Low-Stock Alerts") {
+    return {
+      className: "bg-warning/15 text-warning-foreground",
+      count: badgeCounts?.lowStock,
+    };
+  }
+  if (label === "Request Queue") {
+    return {
+      className: "bg-warning/15 text-warning-foreground",
+      count: badgeCounts?.pending,
+    };
+  }
+  return null;
+}
+
 /** CMIS — admin-only navigation. Administration section moved to Settings page. */
 const ADMIN_NAV: NavSection[] = [
   {
@@ -75,6 +105,93 @@ const ADMIN_NAV: NavSection[] = [
     title: "Reports",
   },
 ];
+
+function NavItemLink({
+  item,
+  active,
+  badge,
+  showBadge,
+  collapsed,
+  hoveredItem,
+  onMouseEnter,
+  onMouseLeave,
+}: {
+  active: boolean;
+  badge: ResolvedBadge | null;
+  collapsed: boolean;
+  hoveredItem: string | null;
+  item: NavItem;
+  onMouseEnter: React.MouseEventHandler<HTMLAnchorElement>;
+  onMouseLeave: React.MouseEventHandler<HTMLAnchorElement>;
+  showBadge: boolean;
+}) {
+  const link = (
+    <Link
+      aria-current={active ? "page" : undefined}
+      className={cn(
+        "press-feedback group relative flex items-center gap-2 rounded-[6px] px-2.5 py-1.5 text-[13px] leading-tight",
+        active
+          ? "bg-primary/10 font-semibold text-primary"
+          : "font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground",
+        collapsed && "justify-center px-0 py-1.5"
+      )}
+      data-label={item.label}
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
+      to={item.to}
+    >
+      {active ? (
+        <span
+          aria-hidden
+          className="absolute top-1/2 left-0 h-3.5 w-[2.5px] -translate-y-1/2 rounded-r-full bg-primary"
+        />
+      ) : null}
+      <item.icon
+        aria-hidden
+        className={cn(
+          "size-3.5 shrink-0 transition-colors",
+          active
+            ? "text-primary"
+            : "text-muted-foreground/80 group-hover:text-accent-foreground"
+        )}
+      />{" "}
+      {collapsed ? null : (
+        <span className="min-w-0 flex-1 truncate">{item.label}</span>
+      )}
+      {showBadge && badge ? (
+        <span
+          className={cn(
+            "ml-auto shrink-0 rounded-full px-1.5 py-0.25 font-semibold text-[10px] tabular-nums leading-none",
+            badge.className
+          )}
+        >
+          {badge.count}
+        </span>
+      ) : null}
+    </Link>
+  );
+
+  if (!collapsed) {
+    return <span>{link}</span>;
+  }
+  if (hoveredItem !== item.label) {
+    return <span>{link}</span>;
+  }
+  return (
+    <span>
+      <Tooltip>
+        <TooltipTrigger render={link} />
+        <TooltipContent
+          className="rounded-[var(--radius-field)] border border-border bg-popover px-2.5 py-1.5 font-medium text-[13px] text-popover-foreground"
+          side="right"
+          sideOffset={8}
+        >
+          {item.label}
+        </TooltipContent>
+      </Tooltip>
+    </span>
+  );
+}
 
 /**
  * CMIS-UI-00 §1.2 / §2.1 — the sidebar is the *heavy* structural material:
@@ -236,98 +353,24 @@ export function AppSidebar({
                 <nav className="space-y-0.5">
                   {section.items.map((item) => {
                     const active = pathname === item.to;
-                    // CMIS-UI-03 §4 / CMIS-UI-04 §4 — badge per label
-                    let badge: {
-                      className: string;
-                      count: number | undefined;
-                    } | null = null;
-                    if (item.label === "Expiry Alerts") {
-                      badge = {
-                        className: "bg-destructive/12 text-destructive",
-                        count: badgeCounts?.expiry,
-                      };
-                    } else if (item.label === "Low-Stock Alerts") {
-                      badge = {
-                        className: "bg-warning/15 text-warning-foreground",
-                        count: badgeCounts?.lowStock,
-                      };
-                    } else if (item.label === "Request Queue") {
-                      badge = {
-                        className: "bg-warning/15 text-warning-foreground",
-                        count: badgeCounts?.pending,
-                      };
-                    }
+                    const badge = resolveBadge(item.label, badgeCounts);
                     const showBadge =
                       !collapsed &&
                       badge !== null &&
                       badge.count !== undefined &&
                       badge.count > 0;
-
-                    const link = (
-                      <Link
-                        aria-current={active ? "page" : undefined}
-                        className={cn(
-                          "press-feedback group relative flex items-center gap-2 rounded-[6px] px-2.5 py-1.5 text-[13px] leading-tight",
-                          active
-                            ? "bg-primary/10 font-semibold text-primary"
-                            : "font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground",
-                          collapsed && "justify-center px-0 py-1.5"
-                        )}
-                        data-label={item.label}
-                        onMouseEnter={handleItemMouseEnter}
-                        onMouseLeave={handleItemMouseLeave}
-                        to={item.to}
-                      >
-                        {active ? (
-                          <span
-                            aria-hidden
-                            className="absolute top-1/2 left-0 h-3.5 w-[2.5px] -translate-y-1/2 rounded-r-full bg-primary"
-                          />
-                        ) : null}
-                        <item.icon
-                          aria-hidden
-                          className={cn(
-                            "size-3.5 shrink-0 transition-colors",
-                            active
-                              ? "text-primary"
-                              : "text-muted-foreground/80 group-hover:text-accent-foreground"
-                          )}
-                        />
-                        {collapsed ? null : (
-                          <span className="min-w-0 flex-1 truncate">
-                            {item.label}
-                          </span>
-                        )}
-                        {showBadge && badge ? (
-                          <span
-                            className={cn(
-                              "ml-auto shrink-0 rounded-full px-1.5 py-0.25 font-semibold text-[10px] tabular-nums leading-none",
-                              badge.className
-                            )}
-                          >
-                            {badge.count}
-                          </span>
-                        ) : null}
-                      </Link>
-                    );
-                    if (!collapsed) {
-                      return <span key={item.label}>{link}</span>;
-                    }
-                    if (hoveredItem !== item.label) {
-                      return <span key={item.label}>{link}</span>;
-                    }
                     return (
                       <span key={item.label}>
-                        <Tooltip>
-                          <TooltipTrigger render={link} />
-                          <TooltipContent
-                            className="rounded-[var(--radius-field)] border border-border bg-popover px-2.5 py-1.5 font-medium text-[13px] text-popover-foreground"
-                            side="right"
-                            sideOffset={8}
-                          >
-                            {item.label}
-                          </TooltipContent>
-                        </Tooltip>
+                        <NavItemLink
+                          active={active}
+                          badge={badge}
+                          collapsed={collapsed}
+                          hoveredItem={hoveredItem}
+                          item={item}
+                          onMouseEnter={handleItemMouseEnter}
+                          onMouseLeave={handleItemMouseLeave}
+                          showBadge={showBadge}
+                        />
                       </span>
                     );
                   })}
