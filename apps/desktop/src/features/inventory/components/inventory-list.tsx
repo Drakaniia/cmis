@@ -9,29 +9,150 @@ import { Skeleton } from "@cmis/ui/components/skeleton";
 import { cn } from "@cmis/ui/lib/utils";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { ArrowDown, ArrowUp, ArrowUpDown, Package } from "lucide-react";
-import * as React from "react";
+import { type MouseEvent, type ReactElement, useCallback, useRef } from "react";
 import { daysUntilExpiry } from "../mock";
 import type { InventoryItem, SortKey } from "../types";
 
-function StatusDot({ status }: { status: InventoryItem["status"] }) {
-  const color =
-    status === "in"
-      ? "bg-[var(--success)]"
-      : status === "low"
-        ? "bg-[var(--warning)]"
-        : status === "out"
-          ? "bg-destructive"
-          : "bg-[var(--warning)]";
-  const label =
-    status === "in"
-      ? "In"
-      : status === "low"
-        ? "Low"
-        : status === "out"
-          ? "Out"
-          : "Expiring";
+const STATUS_DOT_CONFIG: Record<
+  InventoryItem["status"],
+  { color: string; label: string }
+> = {
+  expiring: { color: "bg-[var(--warning)]", label: "Expiring" },
+  in: { color: "bg-[var(--success)]", label: "In" },
+  low: { color: "bg-[var(--warning)]", label: "Low" },
+  out: { color: "bg-destructive", label: "Out" },
+};
+
+const SKELETON_ROW_KEYS = Array.from(
+  { length: 8 },
+  (_, index) => `inventory-skeleton-${index}`
+);
+
+function SortHeaderButton({
+  activeKey,
+  columnKey,
+  dir,
+  label,
+  onSort,
+}: {
+  activeKey: SortKey;
+  columnKey: SortKey;
+  dir: "asc" | "desc";
+  label: string;
+  onSort: (key: SortKey) => void;
+}) {
+  const handleSort = useCallback(() => onSort(columnKey), [columnKey, onSort]);
   return (
-    <span aria-label={label} className="inline-flex items-center gap-1.5">
+    <button
+      aria-sort={ariaSortFor(activeKey, columnKey, dir)}
+      className="flex items-center gap-1 text-left hover:text-foreground"
+      onClick={handleSort}
+      type="button"
+    >
+      {label}
+      {sortIcon(activeKey, dir, columnKey)}
+    </button>
+  );
+}
+
+function sortIcon(
+  activeKey: SortKey,
+  dir: "asc" | "desc",
+  key: SortKey
+): ReactElement {
+  if (activeKey !== key) {
+    return <ArrowUpDown aria-hidden className="size-3 text-muted-foreground" />;
+  }
+  return dir === "asc" ? (
+    <ArrowUp aria-hidden className="size-3 text-foreground" />
+  ) : (
+    <ArrowDown aria-hidden className="size-3 text-foreground" />
+  );
+}
+
+function InventoryRow({
+  item,
+  rowHeight,
+  selected,
+  onRowRect,
+  onSelect,
+}: {
+  item: InventoryItem;
+  rowHeight: number;
+  selected: boolean;
+  onRowRect?: (rect: DOMRect | null) => void;
+  onSelect: (id: string, rect: DOMRect | null) => void;
+}) {
+  const daysLeft = daysUntilExpiry(item.expiry);
+
+  const handleClick = useCallback(
+    (event: MouseEvent<HTMLButtonElement>) => {
+      const rect = event.currentTarget.getBoundingClientRect();
+      onRowRect?.(rect);
+      onSelect(item.id, rect);
+    },
+    [item.id, onRowRect, onSelect]
+  );
+
+  return (
+    <button
+      aria-selected={selected}
+      className={cn(
+        "grid w-full grid-cols-[1.7fr_0.9fr_0.9fr_0.6fr_0.8fr] items-center gap-2 border-border/50 border-b px-2 text-left text-sm transition-colors hover:bg-muted/60",
+        selected &&
+          "bg-accent text-accent-foreground ring-1 ring-primary/20 ring-inset",
+        item.qty === 0 && "text-muted-foreground"
+      )}
+      onClick={handleClick}
+      role="row"
+      style={{ height: rowHeight }}
+      type="button"
+    >
+      <span className="truncate font-medium" role="cell">
+        {item.name}
+        {daysLeft <= 7 && daysLeft >= 0 ? (
+          <span className="ml-1 text-[10px] text-[var(--warning)]">
+            • expiring
+          </span>
+        ) : null}
+      </span>
+      <span className="truncate text-caption" role="cell">
+        {item.sku}
+      </span>
+      <span className="truncate text-caption" role="cell">
+        {item.category}
+      </span>
+      <span
+        className={cn(
+          "text-caption",
+          item.qty === 0 && "font-semibold text-destructive"
+        )}
+        role="cell"
+      >
+        {item.qty}
+      </span>
+      <span role="cell">
+        <StatusDot status={item.status} />
+      </span>
+    </button>
+  );
+}
+
+function ariaSortFor(
+  sortKey: SortKey,
+  columnKey: SortKey,
+  sortDir: "asc" | "desc"
+): "ascending" | "descending" | "none" {
+  if (sortKey !== columnKey) {
+    return "none";
+  }
+  return sortDir === "asc" ? "ascending" : "descending";
+}
+
+function StatusDot({ status }: { status: InventoryItem["status"] }) {
+  const { color, label } = STATUS_DOT_CONFIG[status];
+  return (
+    <span className="inline-flex items-center gap-1.5">
       <span aria-hidden className={cn("size-2 rounded-full", color)} />
       <span className="text-xs">{label}</span>
     </span>
@@ -63,7 +184,7 @@ export function InventoryList({
   totalUnfiltered?: number;
   onClearFilters?: () => void;
 }) {
-  const parentRef = React.useRef<HTMLDivElement>(null);
+  const parentRef = useRef<HTMLDivElement>(null);
 
   const rowHeight = density === "compact" ? 44 : 56;
 
@@ -73,19 +194,6 @@ export function InventoryList({
     getScrollElement: () => parentRef.current,
     overscan: 8,
   });
-
-  const sortedIcon = (key: SortKey) => {
-    if (sortKey !== key) {
-      return (
-        <ArrowUpDown aria-hidden className="size-3 text-muted-foreground" />
-      );
-    }
-    return sortDir === "asc" ? (
-      <ArrowUp aria-hidden className="size-3 text-foreground" />
-    ) : (
-      <ArrowDown aria-hidden className="size-3 text-foreground" />
-    );
-  };
 
   if (loading) {
     return (
@@ -103,10 +211,10 @@ export function InventoryList({
           ))}
         </div>
         <div className="flex-1 space-y-1 p-2">
-          {Array.from({ length: 8 }).map((_, i) => (
+          {SKELETON_ROW_KEYS.map((key) => (
             <Skeleton
               className="w-full rounded-md"
-              key={i}
+              key={key}
               style={{ height: rowHeight }}
             />
           ))}
@@ -161,22 +269,14 @@ export function InventoryList({
             { key: "status" as SortKey, label: "Status" },
           ] as const
         ).map((col) => (
-          <button
-            aria-sort={
-              sortKey === col.key
-                ? sortDir === "asc"
-                  ? "ascending"
-                  : "descending"
-                : "none"
-            }
-            className="flex items-center gap-1 text-left hover:text-foreground"
+          <SortHeaderButton
+            activeKey={sortKey}
+            columnKey={col.key}
+            dir={sortDir}
             key={col.key}
-            onClick={() => onSort(col.key)}
-            type="button"
-          >
-            {col.label}
-            {sortedIcon(col.key)}
-          </button>
+            label={col.label}
+            onSort={onSort}
+          />
         ))}
       </div>
 
@@ -196,8 +296,6 @@ export function InventoryList({
         >
           {virtualizer.getVirtualItems().map((virtualRow) => {
             const item = items[virtualRow.index];
-            const selected = item.id === selectedId;
-            const daysLeft = daysUntilExpiry(item.expiry);
             return (
               <div
                 data-index={virtualRow.index}
@@ -212,52 +310,13 @@ export function InventoryList({
                   width: "100%",
                 }}
               >
-                <button
-                  aria-selected={selected}
-                  className={cn(
-                    "grid w-full grid-cols-[1.7fr_0.9fr_0.9fr_0.6fr_0.8fr] items-center gap-2 border-border/50 border-b px-2 text-left text-sm transition-colors hover:bg-muted/60",
-                    selected &&
-                      "bg-accent text-accent-foreground ring-1 ring-primary/20 ring-inset",
-                    item.qty === 0 && "text-muted-foreground"
-                  )}
-                  onClick={(e) => {
-                    const rect = (
-                      e.currentTarget as HTMLElement
-                    ).getBoundingClientRect();
-                    onRowRect?.(rect);
-                    onSelect(item.id, rect);
-                  }}
-                  role="row"
-                  style={{ height: rowHeight }}
-                  type="button"
-                >
-                  <span className="truncate font-medium" role="cell">
-                    {item.name}
-                    {daysLeft <= 7 && daysLeft >= 0 ? (
-                      <span className="ml-1 text-[10px] text-[var(--warning)]">
-                        • expiring
-                      </span>
-                    ) : null}
-                  </span>
-                  <span className="truncate text-caption" role="cell">
-                    {item.sku}
-                  </span>
-                  <span className="truncate text-caption" role="cell">
-                    {item.category}
-                  </span>
-                  <span
-                    className={cn(
-                      "text-caption",
-                      item.qty === 0 && "font-semibold text-destructive"
-                    )}
-                    role="cell"
-                  >
-                    {item.qty}
-                  </span>
-                  <span role="cell">
-                    <StatusDot status={item.status} />
-                  </span>
-                </button>
+                <InventoryRow
+                  item={item}
+                  onRowRect={onRowRect}
+                  onSelect={onSelect}
+                  rowHeight={rowHeight}
+                  selected={item.id === selectedId}
+                />
               </div>
             );
           })}

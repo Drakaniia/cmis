@@ -1,4 +1,4 @@
-import * as React from "react";
+import { useCallback, useState } from "react";
 import { toast } from "sonner";
 
 import { useDensity } from "@/hooks/use-density";
@@ -20,9 +20,9 @@ import { ReorderSheet } from "./reorder-sheet";
 export function LowStockPage() {
   const { density } = useDensity();
   const isWideEnough = useMediaQuery900();
-  const [items] = React.useState(mockLowStockItems);
-  const [selectedId, setSelectedId] = React.useState<string | null>(null);
-  const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set());
+  const [items] = useState(mockLowStockItems);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const {
     activeChips,
@@ -38,30 +38,23 @@ export function LowStockPage() {
     setSort,
     setStatus,
     setSupplier,
-    urgentCount,
   } = useLowStockFilters(items);
 
   // Reorder sheet state
-  const [reorderOpen, setReorderOpen] = React.useState(false);
-  const [reorderRow, setReorderRow] = React.useState<LowStockRow | null>(null);
-  const [reorderOrigin, setReorderOrigin] = React.useState<DOMRect | null>(
-    null
-  );
+  const [reorderOpen, setReorderOpen] = useState(false);
+  const [reorderRow, setReorderRow] = useState<LowStockRow | null>(null);
+  const [reorderOrigin, setReorderOrigin] = useState<DOMRect | null>(null);
 
   // Threshold popover state
-  const [thresholdOpen, setThresholdOpen] = React.useState(false);
-  const [thresholdRow, setThresholdRow] = React.useState<LowStockRow | null>(
-    null
-  );
-  const [thresholdOrigin, setThresholdOrigin] = React.useState<DOMRect | null>(
-    null
-  );
+  const [thresholdOpen, setThresholdOpen] = useState(false);
+  const [thresholdRow, setThresholdRow] = useState<LowStockRow | null>(null);
+  const [thresholdOrigin, setThresholdOrigin] = useState<DOMRect | null>(null);
 
-  function handleSelect(id: string, _rect: DOMRect | null) {
+  const handleSelect = useCallback((id: string, _rect: DOMRect | null) => {
     setSelectedId(id);
-  }
+  }, []);
 
-  function handleToggleItem(id: string) {
+  const handleToggleItem = useCallback((id: string) => {
     setSelectedIds((prev) => {
       const next = new Set(prev);
       if (next.has(id)) {
@@ -71,54 +64,73 @@ export function LowStockPage() {
       }
       return next;
     });
-  }
+  }, []);
 
-  function handleToggleAll() {
+  const handleToggleAll = useCallback(() => {
     if (selectedIds.size === filtered.length) {
       setSelectedIds(new Set());
     } else {
       setSelectedIds(new Set(filtered.map((r) => r.item.id)));
     }
-  }
+  }, [filtered, selectedIds.size]);
 
-  function handleReorder(row: LowStockRow, originRect: DOMRect | null) {
-    setReorderRow(row);
-    setReorderOrigin(originRect);
-    setReorderOpen(true);
-  }
+  const handleReorder = useCallback(
+    (row: LowStockRow, originRect: DOMRect | null) => {
+      setReorderRow(row);
+      setReorderOrigin(originRect);
+      setReorderOpen(true);
+    },
+    []
+  );
 
-  function handleAdjustThreshold(row: LowStockRow, originRect: DOMRect | null) {
-    setThresholdRow(row);
-    setThresholdOrigin(originRect);
-    setThresholdOpen(true);
-  }
+  const handleAdjustThreshold = useCallback(
+    (row: LowStockRow, originRect: DOMRect | null) => {
+      setThresholdRow(row);
+      setThresholdOrigin(originRect);
+      setThresholdOpen(true);
+    },
+    []
+  );
 
-  function handleView(row: LowStockRow, _originRect: DOMRect | null) {
-    setSelectedId(row.item.id);
-    toast.info(`Viewing: ${row.item.name}`);
-  }
+  const handleView = useCallback(
+    (row: LowStockRow, _originRect: DOMRect | null) => {
+      setSelectedId(row.item.id);
+      toast.info(`Viewing: ${row.item.name}`);
+    },
+    []
+  );
 
-  function handleReorderConfirm(payload: {
-    itemId: string;
-    itemName: string;
-    qty: number;
-    supplier: string;
-  }) {
-    toast.success(
-      `Reorder created: ${payload.itemName} ×${payload.qty} via ${payload.supplier}`
-    );
-  }
+  const handleReorderConfirm = useCallback(
+    (payload: {
+      itemId: string;
+      itemName: string;
+      qty: number;
+      supplier: string;
+    }) => {
+      toast.success(
+        `Reorder created: ${payload.itemName} ×${payload.qty} via ${payload.supplier}`
+      );
+    },
+    []
+  );
 
-  function handleThresholdConfirm(payload: {
-    itemId: string;
-    itemName: string;
-    newThreshold: number;
-    oldThreshold: number;
-  }) {
-    toast.success(
-      `Threshold for ${payload.itemName}: ${payload.oldThreshold} → ${payload.newThreshold}`
-    );
-  }
+  const handleThresholdConfirm = useCallback(
+    (payload: {
+      itemId: string;
+      itemName: string;
+      newThreshold: number;
+      oldThreshold: number;
+    }) => {
+      toast.success(
+        `Threshold for ${payload.itemName}: ${payload.oldThreshold} → ${payload.newThreshold}`
+      );
+    },
+    []
+  );
+
+  const handleBulkReorder = useCallback(() => {
+    toast.info(`Reorder ${selectedIds.size} selected items`);
+  }, [selectedIds.size]);
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
@@ -129,9 +141,7 @@ export function LowStockPage() {
         distinctCategories={distinctCategories}
         distinctSuppliers={distinctSuppliers}
         filters={filters}
-        onBulkReorder={() => {
-          toast.info(`Reorder ${selectedIds.size} selected items`);
-        }}
+        onBulkReorder={handleBulkReorder}
         onCategoryChange={setCategory}
         onClearFilters={clearFilters}
         onRemoveChip={removeChip}

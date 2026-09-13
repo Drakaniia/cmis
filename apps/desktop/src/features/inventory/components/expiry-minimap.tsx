@@ -1,7 +1,60 @@
 import { cn } from "@cmis/ui/lib/utils";
 import { motion } from "motion/react";
+import { useCallback } from "react";
 
 import type { MinimapBucket } from "../types";
+
+function BucketButton({
+  active,
+  bucket,
+  index,
+  maxCount,
+  onSelect,
+}: {
+  active: boolean;
+  bucket: MinimapBucket;
+  index: number;
+  maxCount: number;
+  onSelect: (monthKey: string | null) => void;
+}) {
+  const heightPct = maxCount > 0 ? (bucket.count / maxCount) * 18 : 0;
+  const handleClick = useCallback(
+    () => onSelect(active ? null : bucket.monthKey),
+    [active, bucket.monthKey, onSelect]
+  );
+
+  return (
+    <button
+      aria-label={`${bucket.label}: ${bucket.count} items expiring${active ? " (active filter)" : ""}`}
+      aria-pressed={active}
+      className={cn(
+        "group relative flex flex-1 items-end justify-center transition-colors",
+        bucket.count > 0 ? "hover:bg-muted/50" : "cursor-default"
+      )}
+      onClick={handleClick}
+      style={{ height: 24 }}
+      type="button"
+    >
+      <motion.div
+        animate={{ height: Math.max(2, heightPct) }}
+        className={cn(
+          "w-full max-w-[20px] rounded-t-sm",
+          active
+            ? "bg-primary"
+            : "bg-muted-foreground/40 group-hover:bg-muted-foreground/60"
+        )}
+        initial={false}
+        transition={{ bounce: 0, duration: 0.3, type: "spring" }}
+      />
+      {/* Month label — show every other month for legibility */}
+      {index % 2 === 0 ? (
+        <span className="absolute bottom-0 translate-y-full select-none text-[8px] text-muted-foreground">
+          {bucket.label}
+        </span>
+      ) : null}
+    </button>
+  );
+}
 
 /**
  * CMIS-UI-03 §3.2 — Timeline Minimap
@@ -26,42 +79,16 @@ export function ExpiryMinimap({
       className="flex shrink-0 items-end gap-px border-border/30 border-b bg-muted/30 px-3 py-1"
       role="toolbar"
     >
-      {buckets.map((bucket, index) => {
-        const isActive = activeMonth === bucket.monthKey;
-        const heightPct = maxCount > 0 ? (bucket.count / maxCount) * 18 : 0;
-        return (
-          <button
-            aria-label={`${bucket.label}: ${bucket.count} items expiring${isActive ? " (active filter)" : ""}`}
-            aria-pressed={isActive}
-            className={cn(
-              "group relative flex flex-1 items-end justify-center transition-colors",
-              bucket.count > 0 ? "hover:bg-muted/50" : "cursor-default"
-            )}
-            key={bucket.monthKey}
-            onClick={() => onSelectBucket(isActive ? null : bucket.monthKey)}
-            style={{ height: 24 }}
-            type="button"
-          >
-            <motion.div
-              animate={{ height: Math.max(2, heightPct) }}
-              className={cn(
-                "w-full max-w-[20px] rounded-t-sm",
-                isActive
-                  ? "bg-primary"
-                  : "bg-muted-foreground/40 group-hover:bg-muted-foreground/60"
-              )}
-              initial={false}
-              transition={{ bounce: 0, duration: 0.3, type: "spring" }}
-            />
-            {/* Month label — show every other month for legibility */}
-            {index % 2 === 0 ? (
-              <span className="absolute bottom-0 translate-y-full select-none text-[8px] text-muted-foreground">
-                {bucket.label}
-              </span>
-            ) : null}
-          </button>
-        );
-      })}
+      {buckets.map((bucket, index) => (
+        <BucketButton
+          active={activeMonth === bucket.monthKey}
+          bucket={bucket}
+          index={index}
+          key={bucket.monthKey}
+          maxCount={maxCount}
+          onSelect={onSelectBucket}
+        />
+      ))}
     </div>
   );
 }

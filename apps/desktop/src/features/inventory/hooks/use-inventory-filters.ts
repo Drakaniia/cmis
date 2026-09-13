@@ -1,4 +1,4 @@
-import * as React from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type {
   InventoryFilters,
   InventoryItem,
@@ -79,39 +79,38 @@ function applyFilters(
 }
 
 export function useInventoryFilters(items: InventoryItem[]) {
-  const [filters, setFilters] =
-    React.useState<InventoryFilters>(DEFAULT_FILTERS);
-  const [debouncedSearch, setDebouncedSearch] = React.useState(filters.search);
+  const [filters, setFilters] = useState<InventoryFilters>(DEFAULT_FILTERS);
+  const [debouncedSearch, setDebouncedSearch] = useState(filters.search);
 
   // Debounce search 150ms per spec §2.2
-  React.useEffect(() => {
+  useEffect(() => {
     const t = window.setTimeout(() => setDebouncedSearch(filters.search), 150);
     return () => window.clearTimeout(t);
   }, [filters.search]);
 
-  const effectiveFilters = React.useMemo(
+  const effectiveFilters = useMemo(
     () => ({ ...filters, search: debouncedSearch }),
     [filters, debouncedSearch]
   );
 
-  const filtered = React.useMemo(
+  const filtered = useMemo(
     () => applyFilters(items, effectiveFilters),
     [items, effectiveFilters]
   );
 
-  const setSearch = React.useCallback((v: string) => {
+  const setSearch = useCallback((v: string) => {
     setFilters((p) => ({ ...p, search: v }));
   }, []);
 
-  const setCategory = React.useCallback((v: string) => {
+  const setCategory = useCallback((v: string) => {
     setFilters((p) => ({ ...p, category: v }));
   }, []);
 
-  const setStatus = React.useCallback((v: string) => {
+  const setStatus = useCallback((v: string) => {
     setFilters((p) => ({ ...p, status: v }));
   }, []);
 
-  const setSort = React.useCallback((key: SortKey) => {
+  const setSort = useCallback((key: SortKey) => {
     setFilters((p) => {
       if (p.sortKey === key) {
         const nextDir: SortDir = p.sortDir === "asc" ? "desc" : "asc";
@@ -121,12 +120,12 @@ export function useInventoryFilters(items: InventoryItem[]) {
     });
   }, []);
 
-  const clearFilters = React.useCallback(() => {
+  const clearFilters = useCallback(() => {
     setFilters(DEFAULT_FILTERS);
     setDebouncedSearch("");
   }, []);
 
-  const activeChips = React.useMemo(() => {
+  const activeChips = useMemo(() => {
     const chips: {
       key: keyof InventoryFilters;
       label: string;
@@ -156,7 +155,7 @@ export function useInventoryFilters(items: InventoryItem[]) {
     return chips;
   }, [filters]);
 
-  const removeChip = React.useCallback((key: keyof InventoryFilters) => {
+  const removeChip = useCallback((key: keyof InventoryFilters) => {
     setFilters((p) => {
       if (key === "search") {
         return { ...p, search: "" };

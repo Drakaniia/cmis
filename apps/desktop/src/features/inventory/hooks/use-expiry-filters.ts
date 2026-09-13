@@ -1,4 +1,4 @@
-import * as React from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { buildExpiryRows } from "../mock-expiry";
 import type {
   ExpiryDatePreset,
@@ -17,91 +17,99 @@ const DEFAULT_EXPIRY_FILTERS: ExpiryFilters = {
   status: "all",
 };
 
+function monthKeyOf(iso: string): string {
+  const d = new Date(iso);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function matchesDatePreset(
+  daysUntil: number,
+  preset: ExpiryDatePreset
+): boolean {
+  switch (preset) {
+    case "expired":
+      return daysUntil < 0;
+    case "next-30d":
+      return daysUntil >= 0 && daysUntil <= 30;
+    case "30-90d":
+      return daysUntil >= 30 && daysUntil <= 90;
+    default:
+      return true;
+  }
+}
+
+function matchesSearch(row: ExpiryRow, query: string): boolean {
+  if (query.length === 0) {
+    return true;
+  }
+  const hay =
+    `${row.item.name} ${row.item.sku} ${row.batch.batch} ${row.item.barcode ?? ""}`.toLowerCase();
+  return hay.includes(query);
+}
+
+function matchesExpiryFilters(
+  row: ExpiryRow,
+  filters: ExpiryFilters,
+  query: string,
+  activeMonth: string | null
+): boolean {
+  // Status filter
+  if (filters.status !== "all" && row.expiryStatus !== filters.status) {
+    return false;
+  }
+  // Date preset filter
+  if (
+    filters.datePreset !== "all" &&
+    !matchesDatePreset(row.daysUntil, filters.datePreset)
+  ) {
+    return false;
+  }
+  // Minimap month filter — CMIS-UI-03 §3.2
+  if (activeMonth && monthKeyOf(row.batch.expiry) !== activeMonth) {
+    return false;
+  }
+  return matchesSearch(row, query);
+}
+
+function sortValueOf(row: ExpiryRow, key: SortKey): string | number {
+  switch (key) {
+    case "name":
+      return row.item.name;
+    case "sku":
+      return row.item.sku;
+    case "batch":
+      return row.batch.batch;
+    case "qty":
+      return row.batch.qty;
+    default:
+      return row.daysUntil;
+  }
+}
+
+function compareExpiryRows(
+  a: ExpiryRow,
+  b: ExpiryRow,
+  filters: ExpiryFilters
+): number {
+  const dir = filters.sortDir === "asc" ? 1 : -1;
+  const va = sortValueOf(a, filters.sortKey);
+  const vb = sortValueOf(b, filters.sortKey);
+  if (typeof va === "number" && typeof vb === "number") {
+    return (va - vb) * dir;
+  }
+  return String(va).localeCompare(String(vb)) * dir;
+}
+
 function applyExpiryFilters(
   rows: ExpiryRow[],
   filters: ExpiryFilters,
   activeMonth: string | null
 ): ExpiryRow[] {
   const q = filters.search.trim().toLowerCase();
-
-  let out = rows.filter((row) => {
-    // Status filter
-    if (filters.status !== "all" && row.expiryStatus !== filters.status) {
-      return false;
-    }
-
-    // Date preset filter
-    if (filters.datePreset !== "all") {
-      const d = row.daysUntil;
-      if (filters.datePreset === "expired" && d >= 0) {
-        return false;
-      }
-      if (filters.datePreset === "next-30d" && (d < 0 || d > 30)) {
-        return false;
-      }
-      if (filters.datePreset === "30-90d" && (d < 30 || d > 90)) {
-        return false;
-      }
-    }
-
-    // Minimap month filter — CMIS-UI-03 §3.2
-    if (activeMonth) {
-      const exp = new Date(row.batch.expiry);
-      const rowMonthKey = `${exp.getFullYear()}-${String(exp.getMonth() + 1).padStart(2, "0")}`;
-      if (rowMonthKey !== activeMonth) {
-        return false;
-      }
-    }
-
-    // Search
-    if (q) {
-      const hay =
-        `${row.item.name} ${row.item.sku} ${row.batch.batch} ${row.item.barcode ?? ""}`.toLowerCase();
-      if (!hay.includes(q)) {
-        return false;
-      }
-    }
-
-    return true;
-  });
-
-  // Sort
-  out = [...out].sort((a, b) => {
-    const dir = filters.sortDir === "asc" ? 1 : -1;
-    let va: string | number = "";
-    let vb: string | number = "";
-    switch (filters.sortKey) {
-      case "name":
-        va = a.item.name;
-        vb = b.item.name;
-        break;
-      case "sku":
-        va = a.item.sku;
-        vb = b.item.sku;
-        break;
-      case "batch":
-        va = a.batch.batch;
-        vb = b.batch.batch;
-        break;
-      case "qty":
-        va = a.batch.qty;
-        vb = b.batch.qty;
-        break;
-      case "expiry":
-        va = a.daysUntil;
-        vb = b.daysUntil;
-        break;
-      default:
-        va = a.daysUntil;
-        vb = b.daysUntil;
-    }
-    if (typeof va === "number" && typeof vb === "number") {
-      return (va - vb) * dir;
-    }
-    return String(va).localeCompare(String(vb)) * dir;
-  });
-
-  return out;
+  const matched = rows.filter((row) =>
+    matchesExpiryFilters(row, filters, q, activeMonth)
+  );
+  return [...matched].sort((a, b) => compareExpiryRows(a, b, filters));
 }
 
 export function useExpiryFilters(
@@ -109,31 +117,29 @@ export function useExpiryFilters(
   activeMonth: string | null,
   onMonthClear?: () => void
 ) {
-  const allRows = React.useMemo(() => buildExpiryRows(items), [items]);
+  const allRows = useMemo(() => buildExpiryRows(items), [items]);
 
-  const [filters, setFilters] = React.useState<ExpiryFilters>(
-    DEFAULT_EXPIRY_FILTERS
-  );
-  const [debouncedSearch, setDebouncedSearch] = React.useState(filters.search);
+  const [filters, setFilters] = useState<ExpiryFilters>(DEFAULT_EXPIRY_FILTERS);
+  const [debouncedSearch, setDebouncedSearch] = useState(filters.search);
 
   // Debounce search 150ms
-  React.useEffect(() => {
+  useEffect(() => {
     const t = window.setTimeout(() => setDebouncedSearch(filters.search), 150);
     return () => window.clearTimeout(t);
   }, [filters.search]);
 
-  const effectiveFilters = React.useMemo(
+  const effectiveFilters = useMemo(
     () => ({ ...filters, search: debouncedSearch }),
     [filters, debouncedSearch]
   );
 
-  const filtered = React.useMemo(
+  const filtered = useMemo(
     () => applyExpiryFilters(allRows, effectiveFilters, activeMonth),
     [allRows, effectiveFilters, activeMonth]
   );
 
   // Counts for sidebar badge — CMIS-UI-03 §4 (Expired + Expiring Soon)
-  const urgentCount = React.useMemo(
+  const urgentCount = useMemo(
     () =>
       allRows.filter(
         (r) =>
@@ -142,19 +148,19 @@ export function useExpiryFilters(
     [allRows]
   );
 
-  const setSearch = React.useCallback((v: string) => {
+  const setSearch = useCallback((v: string) => {
     setFilters((p) => ({ ...p, search: v }));
   }, []);
 
-  const setStatus = React.useCallback((v: ExpiryFilters["status"]) => {
+  const setStatus = useCallback((v: ExpiryFilters["status"]) => {
     setFilters((p) => ({ ...p, status: v }));
   }, []);
 
-  const setDatePreset = React.useCallback((v: ExpiryDatePreset) => {
+  const setDatePreset = useCallback((v: ExpiryDatePreset) => {
     setFilters((p) => ({ ...p, datePreset: v }));
   }, []);
 
-  const setSort = React.useCallback((key: SortKey) => {
+  const setSort = useCallback((key: SortKey) => {
     setFilters((p) => {
       if (p.sortKey === key) {
         const nextDir: SortDir = p.sortDir === "asc" ? "desc" : "asc";
@@ -164,12 +170,12 @@ export function useExpiryFilters(
     });
   }, []);
 
-  const clearFilters = React.useCallback(() => {
+  const clearFilters = useCallback(() => {
     setFilters(DEFAULT_EXPIRY_FILTERS);
     setDebouncedSearch("");
   }, []);
 
-  const activeChips = React.useMemo(() => {
+  const activeChips = useMemo(() => {
     const chips: { key: string; label: string; value: string }[] = [];
     // Minimap month chip — CMIS-UI-03 §3.2
     if (activeMonth) {
@@ -214,7 +220,7 @@ export function useExpiryFilters(
     return chips;
   }, [filters, activeMonth]);
 
-  const removeChip = React.useCallback(
+  const removeChip = useCallback(
     (key: string) => {
       if (key === "month") {
         onMonthClear?.();

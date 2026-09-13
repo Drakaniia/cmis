@@ -5,7 +5,7 @@ import {
   useReducedMotion,
   useTransform,
 } from "motion/react";
-import * as React from "react";
+import { type PointerEvent, useCallback, useEffect, useRef } from "react";
 
 import {
   materializeEnter,
@@ -21,7 +21,7 @@ export function InventoryDetailSheet({
   open,
   onOpenChange,
   item,
-  originRect,
+  originRect: _originRect,
   onStockIn,
   onStockOut,
 }: {
@@ -38,69 +38,79 @@ export function InventoryDetailSheet({
   const _opacity = useTransform(y, [0, 120], [1, 0.6]);
 
   // Pointer swipe to close — Apple Design §5 velocity handoff + §6 momentum projection
-  const startYRef = React.useRef<number | null>(null);
-  const startTimeRef = React.useRef<number>(0);
-  const velocityHistoryRef = React.useRef<{ t: number; y: number }[]>([]);
+  const startYRef = useRef<number | null>(null);
+  const startTimeRef = useRef<number>(0);
+  const velocityHistoryRef = useRef<{ t: number; y: number }[]>([]);
 
-  function handlePointerDown(e: React.PointerEvent) {
+  const handleClose = useCallback(() => {
+    onOpenChange(false);
+  }, [onOpenChange]);
+
+  const handlePointerDown = useCallback((e: PointerEvent) => {
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
     startYRef.current = e.clientY;
     startTimeRef.current = Date.now();
     velocityHistoryRef.current = [];
-  }
+  }, []);
 
-  function handlePointerMove(e: React.PointerEvent) {
-    if (startYRef.current === null) {
-      return;
-    }
-    const delta = e.clientY - startYRef.current;
-    if (delta < 0) {
-      // resist upward overscroll — Apple §9 rubber-banding
-      y.set(rubberband(delta, 400));
-      return;
-    }
-    // track position + timestamp history for velocity at release
-    velocityHistoryRef.current.push({ t: Date.now(), y: delta });
-    if (velocityHistoryRef.current.length > 8) {
-      velocityHistoryRef.current.shift();
-    }
-    y.set(delta);
-  }
+  const handlePointerMove = useCallback(
+    (e: PointerEvent) => {
+      if (startYRef.current === null) {
+        return;
+      }
+      const delta = e.clientY - startYRef.current;
+      if (delta < 0) {
+        // resist upward overscroll — Apple §9 rubber-banding
+        y.set(rubberband(delta, 400));
+        return;
+      }
+      // track position + timestamp history for velocity at release
+      velocityHistoryRef.current.push({ t: Date.now(), y: delta });
+      if (velocityHistoryRef.current.length > 8) {
+        velocityHistoryRef.current.shift();
+      }
+      y.set(delta);
+    },
+    [y]
+  );
 
-  function handlePointerUp(e: React.PointerEvent) {
-    if (startYRef.current === null) {
-      return;
-    }
-    const delta = e.clientY - startYRef.current;
-    startYRef.current = null;
+  const handlePointerUp = useCallback(
+    (e: PointerEvent) => {
+      if (startYRef.current === null) {
+        return;
+      }
+      const delta = e.clientY - startYRef.current;
+      startYRef.current = null;
 
-    // Apple §5: compute release velocity from history
-    const history = velocityHistoryRef.current;
-    let releaseVelocity = 0;
-    if (history.length >= 2) {
-      const last = history.at(-1);
-      const prev = history[Math.max(0, history.length - 3)];
-      if (last && prev) {
-        const dt = Math.max(1, last.t - prev.t);
-        releaseVelocity = ((last.y - prev.y) / dt) * 1000;
-      } // px/s
-    }
+      // Apple §5: compute release velocity from history
+      const history = velocityHistoryRef.current;
+      let releaseVelocity = 0;
+      if (history.length >= 2) {
+        const last = history.at(-1);
+        const prev = history[Math.max(0, history.length - 3)];
+        if (last && prev) {
+          const dt = Math.max(1, last.t - prev.t);
+          releaseVelocity = ((last.y - prev.y) / dt) * 1000;
+        } // px/s
+      }
 
-    // Apple §6: project momentum to decide close target
-    const projectedEndpoint = delta + project(releaseVelocity);
-    const CLOSE_THRESHOLD = 80;
+      // Apple §6: project momentum to decide close target
+      const projectedEndpoint = delta + project(releaseVelocity);
+      const CLOSE_THRESHOLD = 80;
 
-    // Velocity-driven or position-driven close decision
-    const shouldClose =
-      projectedEndpoint > CLOSE_THRESHOLD || releaseVelocity > 200;
+      // Velocity-driven or position-driven close decision
+      const shouldClose =
+        projectedEndpoint > CLOSE_THRESHOLD || releaseVelocity > 200;
 
-    if (shouldClose) {
-      onOpenChange(false);
-    }
-    y.set(0);
-  }
+      if (shouldClose) {
+        onOpenChange(false);
+      }
+      y.set(0);
+    },
+    [onOpenChange, y]
+  );
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (!open) {
       y.set(0);
       return;
@@ -124,7 +134,7 @@ export function InventoryDetailSheet({
             className="fixed inset-0 z-40 bg-black/32"
             exit={{ opacity: 0 }}
             initial={{ opacity: 0 }}
-            onClick={() => onOpenChange(false)}
+            onClick={handleClose}
             transition={reduceMotion ? { duration: 0 } : { duration: 0.18 }}
           />
           <div className="fixed inset-0 z-50 flex items-end justify-center p-3 sm:items-center sm:p-6">
@@ -159,7 +169,7 @@ export function InventoryDetailSheet({
                 <InventoryDetailContent
                   autoFocus
                   item={item}
-                  onClose={() => onOpenChange(false)}
+                  onClose={handleClose}
                   onStockIn={onStockIn}
                   onStockOut={onStockOut}
                 />

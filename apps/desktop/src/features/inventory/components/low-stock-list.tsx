@@ -28,11 +28,102 @@ import {
   ShoppingCart,
 } from "lucide-react";
 import { motion } from "motion/react";
-import * as React from "react";
+import { type MouseEvent, type ReactElement, useCallback, useRef } from "react";
 
 import { densitySpring } from "@/lib/motion";
 import { getLeadTime, LOW_STOCK_STATUS_CONFIG } from "../mock-low-stock";
 import type { LowStockRow, LowStockSortKey } from "../types";
+
+const SKELETON_ROW_KEYS = Array.from(
+  { length: 8 },
+  (_, index) => `low-stock-skeleton-${index}`
+);
+
+function gridColsFor(
+  showSku: boolean | undefined,
+  showSupplier: boolean | undefined
+): string {
+  if (showSku && showSupplier) {
+    return "grid-cols-[32px_1.4fr_0.6fr_1.2fr_0.6fr_0.5fr_0.6fr_0.9fr_80px]";
+  }
+  if (showSku) {
+    return "grid-cols-[32px_1.4fr_0.6fr_1.2fr_0.6fr_0.5fr_0.9fr_80px]";
+  }
+  if (showSupplier) {
+    return "grid-cols-[32px_1.4fr_1.2fr_0.6fr_0.5fr_0.6fr_0.9fr_80px]";
+  }
+  return "grid-cols-[32px_1.4fr_1.2fr_0.6fr_0.5fr_0.9fr_80px]";
+}
+
+function ariaSortFor(
+  sortKey: LowStockSortKey,
+  columnKey: LowStockSortKey,
+  sortDir: "asc" | "desc"
+): "ascending" | "descending" | "none" {
+  if (sortKey !== columnKey) {
+    return "none";
+  }
+  return sortDir === "asc" ? "ascending" : "descending";
+}
+
+function sortIcon(
+  activeKey: LowStockSortKey,
+  dir: "asc" | "desc",
+  key: LowStockSortKey
+): ReactElement {
+  if (activeKey !== key) {
+    return <ArrowUpDown aria-hidden className="size-3 text-muted-foreground" />;
+  }
+  return dir === "asc" ? (
+    <ArrowUp aria-hidden className="size-3 text-foreground" />
+  ) : (
+    <ArrowDown aria-hidden className="size-3 text-foreground" />
+  );
+}
+
+function SortHeaderButton({
+  activeKey,
+  columnKey,
+  dir,
+  label,
+  onSort,
+}: {
+  activeKey: LowStockSortKey;
+  columnKey: LowStockSortKey;
+  dir: "asc" | "desc";
+  label: string;
+  onSort: (key: LowStockSortKey) => void;
+}) {
+  const handleSort = useCallback(() => onSort(columnKey), [columnKey, onSort]);
+  return (
+    <button
+      aria-sort={ariaSortFor(activeKey, columnKey, dir)}
+      className="flex items-center gap-1 text-left hover:text-foreground"
+      onClick={handleSort}
+      type="button"
+    >
+      {label}
+      {sortIcon(activeKey, dir, columnKey)}
+    </button>
+  );
+}
+
+function SelectAllCheckbox({
+  allSelected,
+  onToggleAll,
+}: {
+  allSelected: boolean;
+  onToggleAll: () => void;
+}) {
+  const handleChange = useCallback(() => onToggleAll(), [onToggleAll]);
+  return (
+    <Checkbox
+      aria-label="Select all"
+      checked={allSelected}
+      onCheckedChange={handleChange}
+    />
+  );
+}
 
 // ─── CMIS-UI-04 §2.1 — Status Badge ───────────────────────────────────────
 
@@ -47,7 +138,8 @@ function StatusBadge({ row }: { row: LowStockRow }) {
     >
       {row.lowStockStatus === "out-of-stock" ? (
         <AlertCircle aria-hidden className="size-3" />
-      ) : row.lowStockStatus === "low-stock" ? (
+      ) : null}
+      {row.lowStockStatus === "low-stock" ? (
         <AlertTriangle aria-hidden className="size-3" />
       ) : null}
       {config.label}
@@ -131,6 +223,168 @@ function SupplierCell({ row }: { row: LowStockRow }) {
   );
 }
 
+interface LowStockRowItemProps {
+  gridCols: string;
+  isHighlighted: boolean;
+  isSelected: boolean;
+  onAdjustThreshold: (row: LowStockRow, originRect: DOMRect | null) => void;
+  onReorder: (row: LowStockRow, originRect: DOMRect | null) => void;
+  onSelect: (id: string, rect: DOMRect | null) => void;
+  onToggleItem: (id: string) => void;
+  onView: (row: LowStockRow, originRect: DOMRect | null) => void;
+  row: LowStockRow;
+  showSku: boolean | undefined;
+  showSupplier: boolean | undefined;
+}
+
+function LowStockRowItem({
+  gridCols,
+  isHighlighted,
+  isSelected,
+  row,
+  showSku,
+  showSupplier,
+  onAdjustThreshold,
+  onReorder,
+  onSelect,
+  onToggleItem,
+  onView,
+}: LowStockRowItemProps) {
+  const config = LOW_STOCK_STATUS_CONFIG[row.lowStockStatus];
+
+  const handleToggle = useCallback(
+    () => onToggleItem(row.item.id),
+    [onToggleItem, row.item.id]
+  );
+
+  const handleSelectItem = useCallback(
+    (event: MouseEvent<HTMLElement>) => {
+      onSelect(row.item.id, event.currentTarget.getBoundingClientRect());
+    },
+    [onSelect, row.item.id]
+  );
+
+  const handleReorder = useCallback(
+    (event: MouseEvent<HTMLElement>) =>
+      onReorder(row, event.currentTarget.getBoundingClientRect()),
+    [onReorder, row]
+  );
+
+  const handleAdjustThreshold = useCallback(
+    (event: MouseEvent<HTMLElement>) =>
+      onAdjustThreshold(row, event.currentTarget.getBoundingClientRect()),
+    [onAdjustThreshold, row]
+  );
+
+  const handleView = useCallback(
+    (event: MouseEvent<HTMLElement>) =>
+      onView(row, event.currentTarget.getBoundingClientRect()),
+    [onView, row]
+  );
+
+  return (
+    <div
+      className={cn(
+        "group grid h-full items-center gap-2 border-border/50 border-b px-2 transition-colors",
+        gridCols,
+        isHighlighted && "bg-accent/50",
+        row.lowStockStatus === "out-of-stock" && "bg-destructive/5"
+      )}
+      role="row"
+      style={{ paddingRight: 16 }}
+    >
+      {/* Checkbox */}
+      <div className="flex items-center justify-center">
+        <Checkbox
+          aria-label={`Select ${row.item.name}`}
+          checked={isSelected}
+          onCheckedChange={handleToggle}
+        />
+      </div>
+
+      {/* Item name + 4px status edge bar — CMIS-UI-04 §2 */}
+      <button
+        className="flex min-w-0 items-center gap-2 text-left"
+        onClick={handleSelectItem}
+        type="button"
+      >
+        <span
+          aria-hidden
+          className="h-8 w-1 shrink-0 rounded-full"
+          style={{ backgroundColor: config.edgeColor }}
+        />
+        <span className="min-w-0 truncate font-medium text-sm">
+          {row.item.name}
+        </span>
+      </button>
+
+      {/* SKU — hidden at narrower widths per §6 */}
+      {showSku ? (
+        <span className="truncate text-caption" role="cell">
+          {row.item.sku}
+        </span>
+      ) : null}
+
+      {/* Current Qty with inline bar — CMIS-UI-04 §2 */}
+      <span role="cell">
+        <QuantityBar row={row} />
+      </span>
+
+      {/* Threshold */}
+      <span className="text-caption tabular-nums" role="cell">
+        {row.threshold}
+      </span>
+
+      {/* Gap — CMIS-UI-04 §2 primary signal */}
+      <span role="cell">
+        <GapDisplay row={row} />
+      </span>
+
+      {/* Status badge — CMIS-UI-04 §2.1 */}
+      <span role="cell">
+        <StatusBadge row={row} />
+      </span>
+
+      {/* Supplier — CMIS-UI-04 §3.2 with lead time hint */}
+      {showSupplier ? <SupplierCell row={row} /> : null}
+
+      {/* Actions — always visible */}
+      <div className="flex items-center justify-end gap-1">
+        {/* Reorder — CMIS-UI-04 §3.1 primary action */}
+        <Button
+          aria-label={`Reorder ${row.item.name}`}
+          className="press-feedback"
+          onClick={handleReorder}
+          size="icon-xs"
+        >
+          <ShoppingCart className="size-3.5" />
+        </Button>
+        {/* Adjust threshold — CMIS-UI-04 §3.1 */}
+        <Button
+          aria-label={`Adjust threshold for ${row.item.name}`}
+          className="press-feedback"
+          onClick={handleAdjustThreshold}
+          size="icon-xs"
+          variant="secondary"
+        >
+          <Package className="size-3.5" />
+        </Button>
+        {/* More menu */}
+        <DropdownMenu>
+          <DropdownMenuTrigger className="press-feedback inline-flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground">
+            <MoreHorizontal className="size-3.5" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={handleView}>
+              View details
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+    </div>
+  );
+}
+
 // ─── CMIS-UI-04 §3.1 — Low-Stock Table List ───────────────────────────────
 
 export function LowStockList({
@@ -173,17 +427,11 @@ export function LowStockList({
   sortKey: LowStockSortKey;
   totalUnfiltered?: number;
 }) {
-  const parentRef = React.useRef<HTMLDivElement>(null);
+  const parentRef = useRef<HTMLDivElement>(null);
   const rowHeight = density === "compact" ? 44 : 56;
 
   // CMIS-UI-04 §6 — grid columns adapt at breakpoints
-  const gridCols = showSku
-    ? showSupplier
-      ? "grid-cols-[32px_1.4fr_0.6fr_1.2fr_0.6fr_0.5fr_0.6fr_0.9fr_80px]"
-      : "grid-cols-[32px_1.4fr_0.6fr_1.2fr_0.6fr_0.5fr_0.9fr_80px]"
-    : showSupplier
-      ? "grid-cols-[32px_1.4fr_1.2fr_0.6fr_0.5fr_0.6fr_0.9fr_80px]"
-      : "grid-cols-[32px_1.4fr_1.2fr_0.6fr_0.5fr_0.9fr_80px]";
+  const gridCols = gridColsFor(showSku, showSupplier);
 
   const allSelected =
     rows.length > 0 && rows.every((r) => selectedIds.has(r.item.id));
@@ -194,19 +442,6 @@ export function LowStockList({
     getScrollElement: () => parentRef.current,
     overscan: 8,
   });
-
-  const sortedIcon = (key: LowStockSortKey) => {
-    if (sortKey !== key) {
-      return (
-        <ArrowUpDown aria-hidden className="size-3 text-muted-foreground" />
-      );
-    }
-    return sortDir === "asc" ? (
-      <ArrowUp aria-hidden className="size-3 text-foreground" />
-    ) : (
-      <ArrowDown aria-hidden className="size-3 text-foreground" />
-    );
-  };
 
   if (loading) {
     return (
@@ -236,10 +471,10 @@ export function LowStockList({
           ))}
         </div>
         <div className="flex-1 space-y-1 p-2">
-          {Array.from({ length: 8 }).map((_, i) => (
+          {SKELETON_ROW_KEYS.map((key) => (
             <Skeleton
               className="w-full rounded-md"
-              key={i}
+              key={key}
               style={{ height: rowHeight }}
             />
           ))}
@@ -293,10 +528,9 @@ export function LowStockList({
       >
         {/* Bulk select checkbox */}
         <div className="flex items-center justify-center">
-          <Checkbox
-            aria-label="Select all"
-            checked={allSelected}
-            onCheckedChange={() => onToggleAll()}
+          <SelectAllCheckbox
+            allSelected={allSelected}
+            onToggleAll={onToggleAll}
           />
         </div>
         {(
@@ -315,23 +549,15 @@ export function LowStockList({
                 ] as const)
               : []),
           ] as const
-        ).map((col, i) => (
-          <button
-            aria-sort={
-              sortKey === col.key
-                ? sortDir === "asc"
-                  ? "ascending"
-                  : "descending"
-                : "none"
-            }
-            className="flex items-center gap-1 text-left hover:text-foreground"
-            key={`${col.key}-${i}`}
-            onClick={() => onSort(col.key)}
-            type="button"
-          >
-            {col.label}
-            {sortedIcon(col.key)}
-          </button>
+        ).map((col) => (
+          <SortHeaderButton
+            activeKey={sortKey}
+            columnKey={col.key}
+            dir={sortDir}
+            key={col.key}
+            label={col.label}
+            onSort={onSort}
+          />
         ))}
         <span className="text-right">Actions</span>
       </div>
@@ -352,9 +578,6 @@ export function LowStockList({
         >
           {virtualizer.getVirtualItems().map((virtualRow) => {
             const row = rows[virtualRow.index];
-            const isSelected = selectedIds.has(row.item.id);
-            const isHighlighted = row.item.id === selectedId;
-            const config = LOW_STOCK_STATUS_CONFIG[row.lowStockStatus];
 
             return (
               <div
@@ -370,127 +593,19 @@ export function LowStockList({
                   width: "100%",
                 }}
               >
-                <div
-                  className={cn(
-                    "group grid h-full items-center gap-2 border-border/50 border-b px-2 transition-colors",
-                    gridCols,
-                    isHighlighted && "bg-accent/50",
-                    row.lowStockStatus === "out-of-stock" && "bg-destructive/5"
-                  )}
-                  role="row"
-                  style={{ paddingRight: 16 }}
-                >
-                  {/* Checkbox */}
-                  <div className="flex items-center justify-center">
-                    <Checkbox
-                      aria-label={`Select ${row.item.name}`}
-                      checked={isSelected}
-                      onCheckedChange={() => onToggleItem(row.item.id)}
-                    />
-                  </div>
-
-                  {/* Item name + 4px status edge bar — CMIS-UI-04 §2 */}
-                  <button
-                    className="flex min-w-0 items-center gap-2 text-left"
-                    onClick={(e) => {
-                      const rect = (
-                        e.currentTarget as HTMLElement
-                      ).getBoundingClientRect();
-                      onSelect(row.item.id, rect);
-                    }}
-                    type="button"
-                  >
-                    <span
-                      aria-hidden
-                      className="h-8 w-1 shrink-0 rounded-full"
-                      style={{ backgroundColor: config.edgeColor }}
-                    />
-                    <span className="min-w-0 truncate font-medium text-sm">
-                      {row.item.name}
-                    </span>
-                  </button>
-
-                  {/* SKU — hidden at narrower widths per §6 */}
-                  {showSku ? (
-                    <span className="truncate text-caption" role="cell">
-                      {row.item.sku}
-                    </span>
-                  ) : null}
-
-                  {/* Current Qty with inline bar — CMIS-UI-04 §2 */}
-                  <span role="cell">
-                    <QuantityBar row={row} />
-                  </span>
-
-                  {/* Threshold */}
-                  <span className="text-caption tabular-nums" role="cell">
-                    {row.threshold}
-                  </span>
-
-                  {/* Gap — CMIS-UI-04 §2 primary signal */}
-                  <span role="cell">
-                    <GapDisplay row={row} />
-                  </span>
-
-                  {/* Status badge — CMIS-UI-04 §2.1 */}
-                  <span role="cell">
-                    <StatusBadge row={row} />
-                  </span>
-
-                  {/* Supplier — CMIS-UI-04 §3.2 with lead time hint */}
-                  {showSupplier ? <SupplierCell row={row} /> : null}
-
-                  {/* Actions — always visible */}
-                  <div className="flex items-center justify-end gap-1">
-                    {/* Reorder — CMIS-UI-04 §3.1 primary action */}
-                    <Button
-                      aria-label={`Reorder ${row.item.name}`}
-                      className="press-feedback"
-                      onClick={(e) => {
-                        const rect = (
-                          e.currentTarget as HTMLElement
-                        ).getBoundingClientRect();
-                        onReorder(row, rect);
-                      }}
-                      size="icon-xs"
-                    >
-                      <ShoppingCart className="size-3.5" />
-                    </Button>
-                    {/* Adjust threshold — CMIS-UI-04 §3.1 */}
-                    <Button
-                      aria-label={`Adjust threshold for ${row.item.name}`}
-                      className="press-feedback"
-                      onClick={(e) => {
-                        const rect = (
-                          e.currentTarget as HTMLElement
-                        ).getBoundingClientRect();
-                        onAdjustThreshold(row, rect);
-                      }}
-                      size="icon-xs"
-                      variant="secondary"
-                    >
-                      <Package className="size-3.5" />
-                    </Button>
-                    {/* More menu */}
-                    <DropdownMenu>
-                      <DropdownMenuTrigger className="press-feedback inline-flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground">
-                        <MoreHorizontal className="size-3.5" />
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem
-                          onClick={(e) => {
-                            const rect = (
-                              e.currentTarget as HTMLElement
-                            ).getBoundingClientRect();
-                            onView(row, rect);
-                          }}
-                        >
-                          View details
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
-                </div>
+                <LowStockRowItem
+                  gridCols={gridCols}
+                  isHighlighted={row.item.id === selectedId}
+                  isSelected={selectedIds.has(row.item.id)}
+                  onAdjustThreshold={onAdjustThreshold}
+                  onReorder={onReorder}
+                  onSelect={onSelect}
+                  onToggleItem={onToggleItem}
+                  onView={onView}
+                  row={row}
+                  showSku={showSku}
+                  showSupplier={showSupplier}
+                />
               </div>
             );
           })}

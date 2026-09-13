@@ -1,5 +1,12 @@
 import { AnimatePresence, motion } from "motion/react";
-import * as React from "react";
+import {
+  type ChangeEvent,
+  type CSSProperties,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 
 import { sheetSpring } from "@/lib/motion";
 import type { LowStockRow } from "../types";
@@ -29,9 +36,9 @@ export function AdjustThresholdPopover({
   originRect: DOMRect | null;
   row: LowStockRow | null;
 }) {
-  const [threshold, setThreshold] = React.useState(0);
+  const [threshold, setThreshold] = useState(0);
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (row) {
       setThreshold(row.threshold);
     }
@@ -40,7 +47,7 @@ export function AdjustThresholdPopover({
   const isValid = row !== null && threshold > 0 && threshold !== row.threshold;
 
   // Position popover near origin rect
-  const popoverStyle: React.CSSProperties = React.useMemo(() => {
+  const popoverStyle: CSSProperties = useMemo(() => {
     if (!originRect) {
       return {};
     }
@@ -54,7 +61,15 @@ export function AdjustThresholdPopover({
     };
   }, [originRect]);
 
-  function handleSubmit() {
+  const handleClose = useCallback(() => onOpenChange(false), [onOpenChange]);
+
+  const handleThresholdChange = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) =>
+      setThreshold(Number(event.target.value)),
+    []
+  );
+
+  const handleSubmit = useCallback(() => {
     if (!(row && isValid)) {
       return;
     }
@@ -65,16 +80,18 @@ export function AdjustThresholdPopover({
       oldThreshold: row.threshold,
     });
     onOpenChange(false);
-  }
+  }, [isValid, onConfirm, onOpenChange, row, threshold]);
 
   return (
     <AnimatePresence>
       {open && row ? (
         <>
           {/* Invisible backdrop to close on outside click */}
-          <div
-            className="fixed inset-0 z-50"
-            onClick={() => onOpenChange(false)}
+          <button
+            aria-label="Dismiss threshold editor"
+            className="fixed inset-0 z-50 cursor-default"
+            onClick={handleClose}
+            type="button"
           />
           {/* Popover — CMIS-UI-04 §5: backdrop-filter frosted, scaling from origin */}
           <motion.div
@@ -108,7 +125,7 @@ export function AdjustThresholdPopover({
                   className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-1 focus:ring-ring"
                   id="threshold-input"
                   min={1}
-                  onChange={(e) => setThreshold(Number(e.target.value))}
+                  onChange={handleThresholdChange}
                   type="number"
                   value={threshold}
                 />
@@ -121,7 +138,7 @@ export function AdjustThresholdPopover({
               <div className="flex justify-end gap-2">
                 <button
                   className="press-feedback rounded-md px-3 py-1.5 text-caption text-muted-foreground hover:bg-muted"
-                  onClick={() => onOpenChange(false)}
+                  onClick={handleClose}
                   type="button"
                 >
                   Cancel

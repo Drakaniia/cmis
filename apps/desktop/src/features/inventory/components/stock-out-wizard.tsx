@@ -1,6 +1,12 @@
 import { Button } from "@cmis/ui/components/button";
 import { cn } from "@cmis/ui/lib/utils";
-import * as React from "react";
+import {
+  type ChangeEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import { toast } from "sonner";
 import { expiryLabel } from "../mock";
 import type { InventoryItem } from "../types";
@@ -13,19 +19,20 @@ type Reason =
   | "Transferred"
   | "Other";
 
-export function StockOutWizard({
-  open,
-  onOpenChange,
-  items,
-  initialItemId,
-  originRect,
-  onConfirm,
-}: {
-  open: boolean;
-  onOpenChange: (v: boolean) => void;
-  items: InventoryItem[];
+type Batch = InventoryItem["batches"][number];
+
+interface StockOutDraft {
+  batch: string;
+  notes: string;
+  qty: number;
+  reason: Reason;
+  reasonOther: string;
+  selectedId: string | null;
+}
+
+interface StockOutWizardProps {
   initialItemId?: string | null;
-  originRect?: DOMRect | null;
+  items: InventoryItem[];
   onConfirm: (payload: {
     itemId: string;
     reason: Reason;
@@ -34,25 +41,438 @@ export function StockOutWizard({
     batch: string;
     notes: string;
   }) => void;
-}) {
-  const [step, setStep] = React.useState(1);
-  const [direction, setDirection] = React.useState<1 | -1>(1);
-  const [selectedId, setSelectedId] = React.useState<string | null>(null);
-  const [search, setSearch] = React.useState("");
-  const [reason, setReason] = React.useState<Reason>("Dispensed");
-  const [reasonOther, setReasonOther] = React.useState("");
-  const [qty, setQty] = React.useState("");
-  const [batch, setBatch] = React.useState("");
-  const [notes, setNotes] = React.useState("");
-  const [showExpiryConfirm, setShowExpiryConfirm] = React.useState(false);
-  const [attempted, setAttempted] = React.useState(false);
+  onOpenChange: (v: boolean) => void;
+  open: boolean;
+  originRect?: DOMRect | null;
+}
 
-  const selectedItem = React.useMemo(
+const REASONS: Reason[] = [
+  "Dispensed",
+  "Disposed (expired)",
+  "Damaged",
+  "Transferred",
+  "Other",
+];
+
+function validateStep(
+  s: number,
+  draft: StockOutDraft,
+  available: number | null
+): boolean {
+  if (s === 1) {
+    return draft.selectedId !== null;
+  }
+  if (s === 2) {
+    return draft.reason !== "Other" || draft.reasonOther.trim().length > 0;
+  }
+  if (s === 3) {
+    if (available === null) {
+      return false;
+    }
+    const n = draft.qty;
+    return (
+      Number.isFinite(n) && n >= 1 && n <= available && draft.batch.length > 0
+    );
+  }
+  return true;
+}
+
+/** Step 2 waits for an explicit disposal confirmation before advancing. */
+function canAdvance(
+  step: number,
+  draft: StockOutDraft,
+  available: number | null,
+  expiryConfirmPending: boolean
+): boolean {
+  if (
+    step === 2 &&
+    draft.reason === "Disposed (expired)" &&
+    !expiryConfirmPending
+  ) {
+    return true;
+  }
+  return validateStep(step, draft, available);
+}
+
+function ValidationMessage({ message }: { message: string }) {
+  return <span className="text-caption text-destructive">{message}</span>;
+}
+
+function ExpiryConfirmPanel({
+  onConfirmContinue,
+  onGoBack,
+}: {
+  onConfirmContinue: () => void;
+  onGoBack: () => void;
+}) {
+  return (
+    <div className="rounded-md border border-[var(--warning)]/30 bg-[var(--warning)]/10 px-3 py-3 text-sm">
+      <p className="font-medium">Expired stock — confirm disposal?</p>
+      <p className="text-caption text-muted-foreground">
+        You selected Disposed (expired). Confirm to continue.
+      </p>
+      <div className="mt-2 flex gap-2">
+        <Button onClick={onConfirmContinue} size="sm">
+          Confirm, continue
+        </Button>
+        <Button onClick={onGoBack} size="sm" variant="outline">
+          Go back
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function PickRow({
+  item,
+  selected,
+  onSelect,
+}: {
+  item: InventoryItem;
+  selected: boolean;
+  onSelect: (id: string) => void;
+}) {
+  const handleClick = useCallback(() => onSelect(item.id), [item.id, onSelect]);
+
+  return (
+    <button
+      className={cn(
+        "flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-muted",
+        selected && "bg-accent text-accent-foreground"
+      )}
+      onClick={handleClick}
+      type="button"
+    >
+      <span className="font-medium">{item.name}</span>
+      <span className="text-caption text-muted-foreground">
+        Qty: {item.qty} · {item.sku}
+      </span>
+    </button>
+  );
+}
+
+function StepPick({
+  search,
+  results,
+  selectedId,
+  selectedName,
+  selectedQty,
+  showErrors,
+  onSearchChange,
+  onSelect,
+}: {
+  search: string;
+  results: InventoryItem[];
+  selectedId: string | null;
+  selectedName: string | null;
+  selectedQty: number | null;
+  showErrors: boolean;
+  onSearchChange: (value: string) => void;
+  onSelect: (id: string) => void;
+}) {
+  const handleSearchChange = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) =>
+      onSearchChange(event.target.value),
+    [onSearchChange]
+  );
+
+  return (
+    <div className="space-y-3">
+      <h3 className="font-semibold text-foreground text-sm">
+        Step 1 — Identify
+      </h3>
+      <p className="text-caption text-muted-foreground">
+        Must select existing in-stock item.
+      </p>
+      <input
+        aria-label="Search item"
+        className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-1 focus:ring-ring"
+        onChange={handleSearchChange}
+        placeholder="Search name or SKU…"
+        value={search}
+      />
+      <div className="max-h-[220px] overflow-auto rounded-md border border-border">
+        {results.length === 0 ? (
+          <p className="p-4 text-center text-caption text-muted-foreground">
+            No in-stock items match.
+          </p>
+        ) : (
+          results
+            .slice(0, 20)
+            .map((it) => (
+              <PickRow
+                item={it}
+                key={it.id}
+                onSelect={onSelect}
+                selected={selectedId === it.id}
+              />
+            ))
+        )}
+      </div>
+      {showErrors && selectedId === null ? (
+        <ValidationMessage message="Select an item." />
+      ) : null}
+      {selectedName ? (
+        <p className="rounded-md bg-muted px-3 py-2 text-caption">
+          Selected: <strong>{selectedName}</strong> — Available: {selectedQty}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+function StepReason({
+  reason,
+  reasonOther,
+  showErrors,
+  onReasonChange,
+  onOtherChange,
+}: {
+  reason: Reason;
+  reasonOther: string;
+  showErrors: boolean;
+  onReasonChange: (value: Reason) => void;
+  onOtherChange: (value: string) => void;
+}) {
+  const handleReasonChange = useCallback(
+    (event: ChangeEvent<HTMLSelectElement>) =>
+      onReasonChange(event.target.value as Reason),
+    [onReasonChange]
+  );
+  const handleOtherChange = useCallback(
+    (event: ChangeEvent<HTMLTextAreaElement>) =>
+      onOtherChange(event.target.value),
+    [onOtherChange]
+  );
+
+  return (
+    <div className="space-y-3">
+      <h3 className="font-semibold text-foreground text-sm">Step 2 — Reason</h3>
+      <label className="block font-medium text-caption text-foreground">
+        Reason
+        <select
+          className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-1 focus:ring-ring"
+          onChange={handleReasonChange}
+          value={reason}
+        >
+          {REASONS.map((option) => (
+            <option key={option} value={option}>
+              {option}
+            </option>
+          ))}
+        </select>
+      </label>
+      {reason === "Other" ? (
+        <label className="block font-medium text-caption text-foreground">
+          Specify reason
+          <textarea
+            className={cn(
+              "mt-1 min-h-[64px] w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-1 focus:ring-ring",
+              showErrors && !reasonOther.trim() && "border-destructive"
+            )}
+            onChange={handleOtherChange}
+            placeholder="Describe reason…"
+            value={reasonOther}
+          />
+        </label>
+      ) : null}
+    </div>
+  );
+}
+
+function StepQty({
+  qty,
+  available,
+  batch,
+  batches,
+  showErrors,
+  onQtyChange,
+  onBatchChange,
+}: {
+  qty: string;
+  available: number | null;
+  batch: string;
+  batches: Batch[];
+  showErrors: boolean;
+  onQtyChange: (value: string) => void;
+  onBatchChange: (value: string) => void;
+}) {
+  const qtyInvalid =
+    showErrors &&
+    (qty.length === 0 ||
+      Number(qty) < 1 ||
+      (available !== null && Number(qty) > available));
+  const exceedsStock =
+    available !== null && qty.length > 0 && Number(qty) > available;
+
+  const handleQtyChange = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => onQtyChange(event.target.value),
+    [onQtyChange]
+  );
+  const handleBatchChange = useCallback(
+    (event: ChangeEvent<HTMLSelectElement>) =>
+      onBatchChange(event.target.value),
+    [onBatchChange]
+  );
+
+  return (
+    <div className="space-y-3">
+      <h3 className="font-semibold text-foreground text-sm">
+        Step 3 — Quantity
+      </h3>
+      {available === null ? null : (
+        <p className="text-caption text-muted-foreground">
+          Available: {available}
+        </p>
+      )}
+      <label className="block font-medium text-caption text-foreground">
+        Quantity
+        <input
+          className={cn(
+            "mt-1 w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-1 focus:ring-ring",
+            qtyInvalid && "border-destructive"
+          )}
+          max={available ?? undefined}
+          min={1}
+          onChange={handleQtyChange}
+          placeholder="0"
+          type="number"
+          value={qty}
+        />
+        {exceedsStock ? (
+          <ValidationMessage
+            message={`Cannot exceed available (${available}).`}
+          />
+        ) : null}
+      </label>
+      {batches.length > 1 ? (
+        <label className="block font-medium text-caption text-foreground">
+          Batch (FEFO — earliest expiry first)
+          <select
+            className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-1 focus:ring-ring"
+            onChange={handleBatchChange}
+            value={batch}
+          >
+            {batches.map((b) => (
+              <option key={b.batch} value={b.batch}>
+                {b.batch} — exp {expiryLabel(b.expiry)} · Qty {b.qty}
+              </option>
+            ))}
+          </select>
+          <span className="mt-1 block text-caption text-muted-foreground">
+            Default is earliest-expiring batch with stock.
+          </span>
+        </label>
+      ) : null}
+      {batches.length === 1 ? (
+        <p className="rounded-md bg-muted px-3 py-2 text-caption">
+          Batch: {batches[0].batch} — exp {expiryLabel(batches[0].expiry)}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+function StepNotes({
+  notes,
+  onNotesChange,
+}: {
+  notes: string;
+  onNotesChange: (value: string) => void;
+}) {
+  const handleNotesChange = useCallback(
+    (event: ChangeEvent<HTMLTextAreaElement>) =>
+      onNotesChange(event.target.value),
+    [onNotesChange]
+  );
+
+  return (
+    <div className="space-y-3">
+      <h3 className="font-semibold text-foreground text-sm">Step 4 — Notes</h3>
+      <label className="block font-medium text-caption text-foreground">
+        Notes (optional)
+        <textarea
+          className="mt-1 min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-1 focus:ring-ring"
+          onChange={handleNotesChange}
+          placeholder="Optional context…"
+          value={notes}
+        />
+      </label>
+    </div>
+  );
+}
+
+function StepReview({
+  itemName,
+  reason,
+  reasonOther,
+  qty,
+  batch,
+  notes,
+  insufficient,
+}: {
+  itemName: string | null;
+  reason: Reason;
+  reasonOther: string;
+  qty: string;
+  batch: string;
+  notes: string;
+  insufficient: boolean;
+}) {
+  return (
+    <div className="space-y-3">
+      <h3 className="font-semibold text-foreground text-sm">
+        Step 5 — Review & Confirm
+      </h3>
+      <div className="rounded-lg border border-border bg-card p-3 text-sm">
+        <p className="font-medium">{itemName ?? "—"}</p>
+        <p className="text-caption text-muted-foreground">
+          Reason: {reason} {reasonOther ? `— ${reasonOther}` : ""}
+        </p>
+        <p className="text-caption">
+          Qty: {qty} · Batch: {batch || "—"}
+        </p>
+        {notes ? (
+          <p className="mt-1 text-caption text-muted-foreground">
+            Notes: {notes}
+          </p>
+        ) : null}
+        {insufficient ? (
+          <p className="mt-2 font-medium text-destructive">
+            Blocked: insufficient stock.
+          </p>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+export function StockOutWizard({
+  open,
+  onOpenChange,
+  items,
+  initialItemId,
+  originRect,
+  onConfirm,
+}: StockOutWizardProps) {
+  const [step, setStep] = useState(1);
+  const [direction, setDirection] = useState<1 | -1>(1);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const [reason, setReason] = useState<Reason>("Dispensed");
+  const [reasonOther, setReasonOther] = useState("");
+  const [qty, setQty] = useState("");
+  const [batch, setBatch] = useState("");
+  const [notes, setNotes] = useState("");
+  const [showExpiryConfirm, setShowExpiryConfirm] = useState(false);
+  const [attempted, setAttempted] = useState(false);
+
+  const selectedItem = useMemo(
     () => items.find((i) => i.id === selectedId) ?? null,
     [items, selectedId]
   );
 
-  const sortedBatches = React.useMemo(() => {
+  const sortedBatches = useMemo(() => {
     if (!selectedItem) {
       return [];
     }
@@ -61,7 +481,7 @@ export function StockOutWizard({
     );
   }, [selectedItem]);
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (open) {
       setStep(1);
       setDirection(1);
@@ -92,42 +512,53 @@ export function StockOutWizard({
     }
   }, [open, initialItemId, items]);
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (selectedItem && sortedBatches.length > 0 && !batch) {
       const withQty = sortedBatches.find((b) => b.qty > 0);
       setBatch(withQty ? withQty.batch : sortedBatches[0].batch);
     }
   }, [selectedItem, sortedBatches, batch]);
 
-  function validate(s: number): boolean {
-    if (s === 1) {
-      return !!selectedId;
-    }
-    if (s === 2) {
-      if (!reason) {
-        return false;
-      }
-      if (reason === "Other" && !reasonOther.trim()) {
-        return false;
-      }
-      return true;
-    }
-    if (s === 3) {
-      if (!selectedItem) {
-        return false;
-      }
-      const n = Number(qty);
-      return Number.isFinite(n) && n >= 1 && n <= selectedItem.qty && !!batch;
-    }
-    return true;
-  }
+  const draft = useMemo<StockOutDraft>(
+    () => ({
+      batch,
+      notes: notes.trim(),
+      qty: Number(qty),
+      reason,
+      reasonOther: reasonOther.trim(),
+      selectedId,
+    }),
+    [batch, notes, qty, reason, reasonOther, selectedId]
+  );
 
-  function goNext() {
+  const available = selectedItem?.qty ?? null;
+
+  const submit = useCallback(() => {
+    if (!selectedItem) {
+      return;
+    }
+    if (draft.qty > selectedItem.qty) {
+      toast.error(`Insufficient stock. Only ${selectedItem.qty} available.`);
+      return;
+    }
+    onConfirm({
+      batch: draft.batch,
+      itemId: selectedItem.id,
+      notes: draft.notes,
+      qty: draft.qty,
+      reason: draft.reason,
+      reasonOther: draft.reasonOther || undefined,
+    });
+    toast.success(`Dispensed: ${selectedItem.name} –${qty}`);
+    onOpenChange(false);
+  }, [draft, onConfirm, onOpenChange, qty, selectedItem]);
+
+  const goNext = useCallback(() => {
     if (step === 2 && reason === "Disposed (expired)" && !showExpiryConfirm) {
       setShowExpiryConfirm(true);
       return;
     }
-    if (!validate(step)) {
+    if (!validateStep(step, draft, available)) {
       setAttempted(true);
       return;
     }
@@ -136,28 +567,12 @@ export function StockOutWizard({
     if (step < 5) {
       setDirection(1);
       setStep((s) => s + 1);
-    } else {
-      if (!selectedItem) {
-        return;
-      }
-      if (Number(qty) > selectedItem.qty) {
-        toast.error(`Insufficient stock. Only ${selectedItem.qty} available.`);
-        return;
-      }
-      onConfirm({
-        batch,
-        itemId: selectedItem.id,
-        notes: notes.trim(),
-        qty: Number(qty),
-        reason,
-        reasonOther: reasonOther.trim() || undefined,
-      });
-      toast.success(`Dispensed: ${selectedItem.name} –${qty}`);
-      onOpenChange(false);
+      return;
     }
-  }
+    submit();
+  }, [available, draft, reason, showExpiryConfirm, step, submit]);
 
-  function goBack() {
+  const goBack = useCallback(() => {
     if (showExpiryConfirm) {
       setShowExpiryConfirm(false);
       return;
@@ -167,9 +582,22 @@ export function StockOutWizard({
       setStep((s) => s - 1);
       setAttempted(false);
     }
-  }
+  }, [showExpiryConfirm, step]);
 
-  const filteredForPick = React.useMemo(() => {
+  const handleConfirmExpiry = useCallback(() => {
+    setShowExpiryConfirm(false);
+    setDirection(1);
+    setStep(3);
+  }, []);
+
+  const handleDismissExpiry = useCallback(() => {
+    setShowExpiryConfirm(false);
+  }, []);
+
+  const handleCancel = useCallback(() => onOpenChange(false), [onOpenChange]);
+  const handleNext = useCallback(() => goNext(), [goNext]);
+
+  const filteredForPick = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) {
       return items.filter((i) => i.qty > 0);
@@ -185,16 +613,13 @@ export function StockOutWizard({
     <WizardShell
       backLabel={showExpiryConfirm ? "Cancel" : "Back"}
       canBack={step > 1 || showExpiryConfirm}
-      canNext={
-        validate(step) ||
-        (step === 2 && reason === "Disposed (expired)" && !showExpiryConfirm)
-      }
+      canNext={canAdvance(step, draft, available, showExpiryConfirm)}
       direction={direction}
       dirty={dirty}
       nextLabel={step === 5 ? "Confirm Stock Out" : "Next →"}
       onBack={goBack}
-      onCancel={() => onOpenChange(false)}
-      onNext={goNext}
+      onCancel={handleCancel}
+      onNext={handleNext}
       onOpenChange={onOpenChange}
       open={open}
       originRect={originRect}
@@ -203,225 +628,59 @@ export function StockOutWizard({
       totalSteps={5}
     >
       {showExpiryConfirm ? (
-        <div className="rounded-md border border-[var(--warning)]/30 bg-[var(--warning)]/10 px-3 py-3 text-sm">
-          <p className="font-medium">Expired stock — confirm disposal?</p>
-          <p className="text-caption text-muted-foreground">
-            You selected Disposed (expired). Confirm to continue.
-          </p>
-          <div className="mt-2 flex gap-2">
-            <Button
-              onClick={() => {
-                setShowExpiryConfirm(false);
-                setDirection(1);
-                setStep(3);
-              }}
-              size="sm"
-            >
-              Confirm, continue
-            </Button>
-            <Button
-              onClick={() => setShowExpiryConfirm(false)}
-              size="sm"
-              variant="outline"
-            >
-              Go back
-            </Button>
-          </div>
-        </div>
+        <ExpiryConfirmPanel
+          onConfirmContinue={handleConfirmExpiry}
+          onGoBack={handleDismissExpiry}
+        />
       ) : null}
 
       {step === 1 ? (
-        <div className="space-y-3">
-          <h3 className="font-semibold text-foreground text-sm">
-            Step 1 — Identify
-          </h3>
-          <p className="text-caption text-muted-foreground">
-            Must select existing in-stock item.
-          </p>
-          <input
-            aria-label="Search item"
-            className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-1 focus:ring-ring"
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search name or SKU…"
-            value={search}
-          />
-          <div className="max-h-[220px] overflow-auto rounded-md border border-border">
-            {filteredForPick.length === 0 ? (
-              <p className="p-4 text-center text-caption text-muted-foreground">
-                No in-stock items match.
-              </p>
-            ) : (
-              filteredForPick.slice(0, 20).map((it) => (
-                <button
-                  className={cn(
-                    "flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-muted",
-                    selectedId === it.id && "bg-accent text-accent-foreground"
-                  )}
-                  key={it.id}
-                  onClick={() => setSelectedId(it.id)}
-                  type="button"
-                >
-                  <span className="font-medium">{it.name}</span>
-                  <span className="text-caption text-muted-foreground">
-                    Qty: {it.qty} · {it.sku}
-                  </span>
-                </button>
-              ))
-            )}
-          </div>
-          {attempted && !selectedId ? (
-            <span className="text-caption text-destructive">
-              Select an item.
-            </span>
-          ) : null}
-          {selectedItem ? (
-            <p className="rounded-md bg-muted px-3 py-2 text-caption">
-              Selected: <strong>{selectedItem.name}</strong> — Available:{" "}
-              {selectedItem.qty}
-            </p>
-          ) : null}
-        </div>
+        <StepPick
+          onSearchChange={setSearch}
+          onSelect={setSelectedId}
+          results={filteredForPick}
+          search={search}
+          selectedId={selectedId}
+          selectedName={selectedItem?.name ?? null}
+          selectedQty={available}
+          showErrors={attempted}
+        />
       ) : null}
 
       {step === 2 ? (
-        <div className="space-y-3">
-          <h3 className="font-semibold text-foreground text-sm">
-            Step 2 — Reason
-          </h3>
-          <label className="block font-medium text-caption text-foreground">
-            Reason
-            <select
-              className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-1 focus:ring-ring"
-              onChange={(e) => setReason(e.target.value as Reason)}
-              value={reason}
-            >
-              <option value="Dispensed">Dispensed</option>
-              <option value="Disposed (expired)">Disposed (expired)</option>
-              <option value="Damaged">Damaged</option>
-              <option value="Transferred">Transferred</option>
-              <option value="Other">Other</option>
-            </select>
-          </label>
-          {reason === "Other" ? (
-            <label className="block font-medium text-caption text-foreground">
-              Specify reason
-              <textarea
-                className={cn(
-                  "mt-1 min-h-[64px] w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-1 focus:ring-ring",
-                  attempted && !reasonOther.trim() && "border-destructive"
-                )}
-                onChange={(e) => setReasonOther(e.target.value)}
-                placeholder="Describe reason…"
-                value={reasonOther}
-              />
-            </label>
-          ) : null}
-        </div>
+        <StepReason
+          onOtherChange={setReasonOther}
+          onReasonChange={setReason}
+          reason={reason}
+          reasonOther={reasonOther}
+          showErrors={attempted}
+        />
       ) : null}
 
       {step === 3 ? (
-        <div className="space-y-3">
-          <h3 className="font-semibold text-foreground text-sm">
-            Step 3 — Quantity
-          </h3>
-          {selectedItem ? (
-            <p className="text-caption text-muted-foreground">
-              Available: {selectedItem.qty}
-            </p>
-          ) : null}
-          <label className="block font-medium text-caption text-foreground">
-            Quantity
-            <input
-              className={cn(
-                "mt-1 w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-1 focus:ring-ring",
-                attempted &&
-                  (!qty ||
-                    Number(qty) < 1 ||
-                    (selectedItem && Number(qty) > selectedItem.qty)) &&
-                  "border-destructive"
-              )}
-              max={selectedItem?.qty ?? undefined}
-              min={1}
-              onChange={(e) => setQty(e.target.value)}
-              placeholder="0"
-              type="number"
-              value={qty}
-            />
-            {selectedItem && qty && Number(qty) > selectedItem.qty ? (
-              <span className="mt-1 block text-caption text-destructive">
-                Cannot exceed available ({selectedItem.qty}).
-              </span>
-            ) : null}
-          </label>
-          {sortedBatches.length > 1 ? (
-            <label className="block font-medium text-caption text-foreground">
-              Batch (FEFO — earliest expiry first)
-              <select
-                className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-1 focus:ring-ring"
-                onChange={(e) => setBatch(e.target.value)}
-                value={batch}
-              >
-                {sortedBatches.map((b) => (
-                  <option key={b.batch} value={b.batch}>
-                    {b.batch} — exp {expiryLabel(b.expiry)} · Qty {b.qty}
-                  </option>
-                ))}
-              </select>
-              <span className="mt-1 block text-caption text-muted-foreground">
-                Default is earliest-expiring batch with stock.
-              </span>
-            </label>
-          ) : sortedBatches.length === 1 ? (
-            <p className="rounded-md bg-muted px-3 py-2 text-caption">
-              Batch: {sortedBatches[0].batch} — exp{" "}
-              {expiryLabel(sortedBatches[0].expiry)}
-            </p>
-          ) : null}
-        </div>
+        <StepQty
+          available={available}
+          batch={batch}
+          batches={sortedBatches}
+          onBatchChange={setBatch}
+          onQtyChange={setQty}
+          qty={qty}
+          showErrors={attempted}
+        />
       ) : null}
 
-      {step === 4 ? (
-        <div className="space-y-3">
-          <h3 className="font-semibold text-foreground text-sm">
-            Step 4 — Notes
-          </h3>
-          <label className="block font-medium text-caption text-foreground">
-            Notes (optional)
-            <textarea
-              className="mt-1 min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-1 focus:ring-ring"
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="Optional context…"
-              value={notes}
-            />
-          </label>
-        </div>
-      ) : null}
+      {step === 4 ? <StepNotes notes={notes} onNotesChange={setNotes} /> : null}
 
       {step === 5 ? (
-        <div className="space-y-3">
-          <h3 className="font-semibold text-foreground text-sm">
-            Step 5 — Review & Confirm
-          </h3>
-          <div className="rounded-lg border border-border bg-card p-3 text-sm">
-            <p className="font-medium">{selectedItem?.name ?? "—"}</p>
-            <p className="text-caption text-muted-foreground">
-              Reason: {reason} {reasonOther ? `— ${reasonOther}` : ""}
-            </p>
-            <p className="text-caption">
-              Qty: {qty} · Batch: {batch || "—"}
-            </p>
-            {notes ? (
-              <p className="mt-1 text-caption text-muted-foreground">
-                Notes: {notes}
-              </p>
-            ) : null}
-            {selectedItem && Number(qty) > selectedItem.qty ? (
-              <p className="mt-2 font-medium text-destructive">
-                Blocked: insufficient stock.
-              </p>
-            ) : null}
-          </div>
-        </div>
+        <StepReview
+          batch={batch}
+          insufficient={available !== null && Number(qty) > available}
+          itemName={selectedItem?.name ?? null}
+          notes={notes}
+          qty={qty}
+          reason={reason}
+          reasonOther={reasonOther}
+        />
       ) : null}
     </WizardShell>
   );

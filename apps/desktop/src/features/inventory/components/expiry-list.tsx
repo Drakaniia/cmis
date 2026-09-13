@@ -27,7 +27,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { motion } from "motion/react";
-import * as React from "react";
+import { type MouseEvent, type ReactElement, useCallback, useRef } from "react";
 import { densitySpring } from "@/lib/motion";
 import {
   EXPIRY_STATUS_CONFIG,
@@ -44,6 +44,278 @@ import type { ExpiryRow, SortKey } from "../types";
  * Row height: 44/56 per density toggle.
  */
 
+const SKELETON_ROW_KEYS = Array.from(
+  { length: 8 },
+  (_, index) => `expiry-skeleton-${index}`
+);
+
+function rowBackgroundColor(
+  isHighlighted: boolean,
+  status: ExpiryRow["expiryStatus"]
+): string {
+  if (isHighlighted) {
+    return "oklch(0.945 0 0 / 0.5)";
+  }
+  if (status === "expired") {
+    return "oklch(0.58 0.22 27 / 0.05)";
+  }
+  return "transparent";
+}
+
+function ariaSortFor(
+  sortKey: SortKey,
+  columnKey: SortKey,
+  sortDir: "asc" | "desc"
+): "ascending" | "descending" | "none" {
+  if (sortKey !== columnKey) {
+    return "none";
+  }
+  return sortDir === "asc" ? "ascending" : "descending";
+}
+
+function sortIcon(
+  activeKey: SortKey,
+  dir: "asc" | "desc",
+  key: SortKey
+): ReactElement {
+  if (activeKey !== key) {
+    return <ArrowUpDown aria-hidden className="size-3 text-muted-foreground" />;
+  }
+  return dir === "asc" ? (
+    <ArrowUp aria-hidden className="size-3 text-foreground" />
+  ) : (
+    <ArrowDown aria-hidden className="size-3 text-foreground" />
+  );
+}
+
+function SortHeaderButton({
+  activeKey,
+  columnKey,
+  dir,
+  label,
+  onSort,
+}: {
+  activeKey: SortKey;
+  columnKey: SortKey;
+  dir: "asc" | "desc";
+  label: string;
+  onSort: (key: SortKey) => void;
+}) {
+  const handleSort = useCallback(() => onSort(columnKey), [columnKey, onSort]);
+  return (
+    <button
+      aria-sort={ariaSortFor(activeKey, columnKey, dir)}
+      className="flex items-center gap-1 text-left hover:text-foreground"
+      onClick={handleSort}
+      type="button"
+    >
+      {label}
+      {sortIcon(activeKey, dir, columnKey)}
+    </button>
+  );
+}
+
+function SelectAllCheckbox({
+  allSelected,
+  onToggleAll,
+}: {
+  allSelected: boolean;
+  onToggleAll: () => void;
+}) {
+  const handleChange = useCallback(() => onToggleAll(), [onToggleAll]);
+  return (
+    <Checkbox
+      aria-label="Select all"
+      checked={allSelected}
+      onCheckedChange={handleChange}
+    />
+  );
+}
+
+function RowActions({
+  row,
+  onDispose,
+  onExtend,
+  onView,
+}: {
+  row: ExpiryRow;
+  onDispose: (row: ExpiryRow, originRect: DOMRect | null) => void;
+  onExtend: (row: ExpiryRow, originRect: DOMRect | null) => void;
+  onView: (row: ExpiryRow, originRect: DOMRect | null) => void;
+}) {
+  const handleDispose = useCallback(
+    (event: MouseEvent<HTMLElement>) =>
+      onDispose(row, event.currentTarget.getBoundingClientRect()),
+    [onDispose, row]
+  );
+  const handleExtend = useCallback(
+    (event: MouseEvent<HTMLElement>) =>
+      onExtend(row, event.currentTarget.getBoundingClientRect()),
+    [onExtend, row]
+  );
+  const handleView = useCallback(
+    (event: MouseEvent<HTMLElement>) =>
+      onView(row, event.currentTarget.getBoundingClientRect()),
+    [onView, row]
+  );
+
+  return (
+    <div className="flex items-center justify-end gap-1">
+      <Button
+        aria-label="Dispose"
+        className="press-feedback"
+        onClick={handleDispose}
+        size="icon-xs"
+        variant="ghost"
+      >
+        <Trash2 className="size-3.5" />
+      </Button>
+      {row.expiryStatus === "expired" ||
+      row.expiryStatus === "expiring-soon" ? (
+        <Button
+          aria-label="Extend expiry"
+          className="press-feedback"
+          onClick={handleExtend}
+          size="icon-xs"
+          variant="secondary"
+        >
+          <Clock className="size-3.5" />
+        </Button>
+      ) : null}
+      <DropdownMenu>
+        <DropdownMenuTrigger className="press-feedback inline-flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground">
+          <MoreHorizontal className="size-3.5" />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem onClick={handleView}>View details</DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
+  );
+}
+
+function ExpiryRowItem({
+  gridCols,
+  isHighlighted,
+  isSelected,
+  row,
+  showSku,
+  onDispose,
+  onExtend,
+  onRowRect,
+  onSelect,
+  onToggleBatch,
+  onView,
+}: {
+  gridCols: string;
+  isHighlighted: boolean;
+  isSelected: boolean;
+  row: ExpiryRow;
+  showSku: boolean;
+  onDispose: (row: ExpiryRow, originRect: DOMRect | null) => void;
+  onExtend: (row: ExpiryRow, originRect: DOMRect | null) => void;
+  onRowRect?: (rect: DOMRect | null) => void;
+  onSelect: (id: string, rect: DOMRect | null) => void;
+  onToggleBatch: (key: string) => void;
+  onView: (row: ExpiryRow, originRect: DOMRect | null) => void;
+}) {
+  const config = EXPIRY_STATUS_CONFIG[row.expiryStatus];
+  const batchKey = `${row.item.id}-${row.batch.batch}`;
+
+  const handleToggle = useCallback(
+    () => onToggleBatch(batchKey),
+    [batchKey, onToggleBatch]
+  );
+
+  const handleSelectItem = useCallback(
+    (event: MouseEvent<HTMLElement>) => {
+      const rect = event.currentTarget.getBoundingClientRect();
+      onRowRect?.(rect);
+      onSelect(row.item.id, rect);
+    },
+    [onRowRect, onSelect, row.item.id]
+  );
+
+  return (
+    <motion.div
+      animate={{
+        backgroundColor: rowBackgroundColor(isHighlighted, row.expiryStatus),
+      }}
+      className={cn(
+        "group grid h-full items-center gap-2 border-border/50 border-b px-2",
+        gridCols
+      )}
+      role="row"
+      transition={{ ...densitySpring, duration: 0.2 }}
+    >
+      {/* Checkbox */}
+      <div className="flex items-center justify-center">
+        <Checkbox
+          aria-label={`Select ${row.item.name} batch ${row.batch.batch}`}
+          checked={isSelected}
+          onCheckedChange={handleToggle}
+        />
+      </div>
+
+      {/* Item name + SKU on narrow */}
+      <button
+        className="flex min-w-0 items-center gap-2 text-left"
+        onClick={handleSelectItem}
+        type="button"
+      >
+        {/* 4px status bar — CMIS-UI-03 §2.1 — animated color on filter change */}
+        <motion.span
+          animate={{ backgroundColor: config.barColor }}
+          aria-hidden
+          className="h-8 w-1 shrink-0 rounded-full"
+          transition={{ duration: 0.3 }}
+        />
+        <span className="min-w-0 truncate font-medium text-sm">
+          {row.item.name}
+        </span>
+      </button>
+
+      {/* SKU — hidden at 900–1199 per §6 */}
+      {showSku ? (
+        <span className="truncate text-caption" role="cell">
+          {row.item.sku}
+        </span>
+      ) : null}
+
+      {/* Batch */}
+      <span className="truncate text-caption" role="cell">
+        {row.batch.batch}
+      </span>
+
+      {/* Expiry + relative — CMIS-UI-03 §2 */}
+      <span className="text-caption" role="cell">
+        <span className="block">{expiryLabel(row.batch.expiry)}</span>
+        <span className="text-muted-foreground">
+          {relativeExpiryText(row.daysUntil)}
+        </span>
+      </span>
+
+      {/* Qty */}
+      <span className="text-caption" role="cell">
+        {row.batch.qty}
+      </span>
+
+      {/* Status badge — CMIS-UI-03 §2.1 */}
+      <span role="cell">
+        <StatusBadge row={row} />
+      </span>
+
+      {/* Actions — always visible */}
+      <RowActions
+        onDispose={onDispose}
+        onExtend={onExtend}
+        onView={onView}
+        row={row}
+      />
+    </motion.div>
+  );
+}
+
 function StatusBadge({ row }: { row: ExpiryRow }) {
   const config = EXPIRY_STATUS_CONFIG[row.expiryStatus];
   return (
@@ -55,16 +327,18 @@ function StatusBadge({ row }: { row: ExpiryRow }) {
     >
       {row.expiryStatus === "expired" ? (
         <AlertTriangle aria-hidden className="size-3" />
-      ) : row.expiryStatus === "expiring-soon" ? (
+      ) : null}
+      {row.expiryStatus === "expiring-soon" ? (
         <Clock aria-hidden className="size-3" />
       ) : null}
       {config.label}
+      {row.expiryStatus === "expired" ? (
+        <span className="opacity-70">{relativeExpiryText(row.daysUntil)}</span>
+      ) : null}
       {row.expiryStatus !== "expired" && row.expiryStatus !== "safe" ? (
         <span className="opacity-70">
           ({relativeExpiryText(row.daysUntil)})
         </span>
-      ) : row.expiryStatus === "expired" ? (
-        <span className="opacity-70">{relativeExpiryText(row.daysUntil)}</span>
       ) : null}
     </span>
   );
@@ -110,7 +384,7 @@ export function ExpiryList({
   /** CMIS-UI-03 §6 — false at 900–1199 to hide SKU column */
   showSku?: boolean;
 }) {
-  const parentRef = React.useRef<HTMLDivElement>(null);
+  const parentRef = useRef<HTMLDivElement>(null);
   const rowHeight = density === "compact" ? 44 : 56;
   // CMIS-UI-03 §6 — grid columns adapt when SKU hidden
   const gridCols = showSku
@@ -126,19 +400,6 @@ export function ExpiryList({
     getScrollElement: () => parentRef.current,
     overscan: 8,
   });
-
-  const sortedIcon = (key: SortKey) => {
-    if (sortKey !== key) {
-      return (
-        <ArrowUpDown aria-hidden className="size-3 text-muted-foreground" />
-      );
-    }
-    return sortDir === "asc" ? (
-      <ArrowUp aria-hidden className="size-3 text-foreground" />
-    ) : (
-      <ArrowDown aria-hidden className="size-3 text-foreground" />
-    );
-  };
 
   if (loading) {
     return (
@@ -166,10 +427,10 @@ export function ExpiryList({
           ))}
         </div>
         <div className="flex-1 space-y-1 p-2">
-          {Array.from({ length: 8 }).map((_, i) => (
+          {SKELETON_ROW_KEYS.map((key) => (
             <Skeleton
               className="w-full rounded-md"
-              key={i}
+              key={key}
               style={{ height: rowHeight }}
             />
           ))}
@@ -220,10 +481,9 @@ export function ExpiryList({
       >
         {/* Bulk select checkbox */}
         <div className="flex items-center justify-center">
-          <Checkbox
-            aria-label="Select all"
-            checked={allSelected}
-            onCheckedChange={() => onToggleAll()}
+          <SelectAllCheckbox
+            allSelected={allSelected}
+            onToggleAll={onToggleAll}
           />
         </div>
         {(
@@ -237,23 +497,15 @@ export function ExpiryList({
             { key: "qty" as SortKey, label: "Qty" },
             { key: "status" as SortKey, label: "Status" },
           ] as const
-        ).map((col, i) => (
-          <button
-            aria-sort={
-              sortKey === col.key
-                ? sortDir === "asc"
-                  ? "ascending"
-                  : "descending"
-                : "none"
-            }
-            className="flex items-center gap-1 text-left hover:text-foreground"
-            key={`${col.key}-${i}`}
-            onClick={() => onSort(col.key)}
-            type="button"
-          >
-            {col.label}
-            {sortedIcon(col.key)}
-          </button>
+        ).map((col) => (
+          <SortHeaderButton
+            activeKey={sortKey}
+            columnKey={col.key}
+            dir={sortDir}
+            key={col.key}
+            label={col.label}
+            onSort={onSort}
+          />
         ))}
         <span className="text-right">Actions</span>
       </div>
@@ -273,10 +525,7 @@ export function ExpiryList({
         >
           {virtualizer.getVirtualItems().map((virtualRow) => {
             const row = rows[virtualRow.index];
-            const config = EXPIRY_STATUS_CONFIG[row.expiryStatus];
             const batchKey = `${row.item.id}-${row.batch.batch}`;
-            const isSelected = selectedBatchKeys.has(batchKey);
-            const isHighlighted = row.item.id === selectedId;
 
             return (
               <div
@@ -292,138 +541,19 @@ export function ExpiryList({
                   width: "100%",
                 }}
               >
-                <motion.div
-                  animate={{
-                    backgroundColor: isHighlighted
-                      ? "oklch(0.945 0 0 / 0.5)"
-                      : row.expiryStatus === "expired"
-                        ? "oklch(0.58 0.22 27 / 0.05)"
-                        : "transparent",
-                  }}
-                  className={cn(
-                    "group grid h-full items-center gap-2 border-border/50 border-b px-2",
-                    gridCols
-                  )}
-                  role="row"
-                  transition={{ ...densitySpring, duration: 0.2 }}
-                >
-                  {/* Checkbox */}
-                  <div className="flex items-center justify-center">
-                    <Checkbox
-                      aria-label={`Select ${row.item.name} batch ${row.batch.batch}`}
-                      checked={isSelected}
-                      onCheckedChange={() => onToggleBatch(batchKey)}
-                    />
-                  </div>
-
-                  {/* Item name + SKU on narrow */}
-                  <button
-                    className="flex min-w-0 items-center gap-2 text-left"
-                    onClick={(e) => {
-                      const rect = (
-                        e.currentTarget as HTMLElement
-                      ).getBoundingClientRect();
-                      onRowRect?.(rect);
-                      onSelect(row.item.id, rect);
-                    }}
-                    type="button"
-                  >
-                    {/* 4px status bar — CMIS-UI-03 §2.1 — animated color on filter change */}
-                    <motion.span
-                      animate={{ backgroundColor: config.barColor }}
-                      aria-hidden
-                      className="h-8 w-1 shrink-0 rounded-full"
-                      transition={{ duration: 0.3 }}
-                    />
-                    <span className="min-w-0 truncate font-medium text-sm">
-                      {row.item.name}
-                    </span>
-                  </button>
-
-                  {/* SKU — hidden at 900–1199 per §6 */}
-                  {showSku ? (
-                    <span className="truncate text-caption" role="cell">
-                      {row.item.sku}
-                    </span>
-                  ) : null}
-
-                  {/* Batch */}
-                  <span className="truncate text-caption" role="cell">
-                    {row.batch.batch}
-                  </span>
-
-                  {/* Expiry + relative — CMIS-UI-03 §2 */}
-                  <span className="text-caption" role="cell">
-                    <span className="block">
-                      {expiryLabel(row.batch.expiry)}
-                    </span>
-                    <span className="text-muted-foreground">
-                      {relativeExpiryText(row.daysUntil)}
-                    </span>
-                  </span>
-
-                  {/* Qty */}
-                  <span className="text-caption" role="cell">
-                    {row.batch.qty}
-                  </span>
-
-                  {/* Status badge — CMIS-UI-03 §2.1 */}
-                  <span role="cell">
-                    <StatusBadge row={row} />
-                  </span>
-
-                  {/* Actions — always visible */}
-                  <div className="flex items-center justify-end gap-1">
-                    <Button
-                      aria-label="Dispose"
-                      className="press-feedback"
-                      onClick={(e) => {
-                        const rect = (
-                          e.currentTarget as HTMLElement
-                        ).getBoundingClientRect();
-                        onDispose(row, rect);
-                      }}
-                      size="icon-xs"
-                      variant="ghost"
-                    >
-                      <Trash2 className="size-3.5" />
-                    </Button>
-                    {row.expiryStatus === "expired" ||
-                    row.expiryStatus === "expiring-soon" ? (
-                      <Button
-                        aria-label="Extend expiry"
-                        className="press-feedback"
-                        onClick={(e) => {
-                          const rect = (
-                            e.currentTarget as HTMLElement
-                          ).getBoundingClientRect();
-                          onExtend(row, rect);
-                        }}
-                        size="icon-xs"
-                        variant="secondary"
-                      >
-                        <Clock className="size-3.5" />
-                      </Button>
-                    ) : null}
-                    <DropdownMenu>
-                      <DropdownMenuTrigger className="press-feedback inline-flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground">
-                        <MoreHorizontal className="size-3.5" />
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem
-                          onClick={(e) => {
-                            const rect = (
-                              e.currentTarget as HTMLElement
-                            ).getBoundingClientRect();
-                            onView(row, rect);
-                          }}
-                        >
-                          View details
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
-                </motion.div>
+                <ExpiryRowItem
+                  gridCols={gridCols}
+                  isHighlighted={row.item.id === selectedId}
+                  isSelected={selectedBatchKeys.has(batchKey)}
+                  onDispose={onDispose}
+                  onExtend={onExtend}
+                  onRowRect={onRowRect}
+                  onSelect={onSelect}
+                  onToggleBatch={onToggleBatch}
+                  onView={onView}
+                  row={row}
+                  showSku={showSku}
+                />
               </div>
             );
           })}

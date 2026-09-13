@@ -2,7 +2,7 @@ import { Button } from "@cmis/ui/components/button";
 import { cn } from "@cmis/ui/lib/utils";
 import { X } from "lucide-react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import * as React from "react";
+import { type ReactNode, useCallback, useEffect, useState } from "react";
 
 import {
   materializeEnter,
@@ -10,13 +10,23 @@ import {
   sheetSpring,
 } from "@/lib/motion";
 
+function stepDotClass(active: boolean, done: boolean): string {
+  if (active) {
+    return "w-6 bg-primary";
+  }
+  if (done) {
+    return "w-4 bg-primary/60";
+  }
+  return "w-4 bg-muted";
+}
+
 export function WizardShell({
   open,
   onOpenChange,
   title,
   step,
   totalSteps,
-  originRect,
+  originRect: _originRect,
   onNext,
   onBack,
   onCancel,
@@ -41,15 +51,15 @@ export function WizardShell({
   backLabel?: string;
   canNext?: boolean;
   canBack?: boolean;
-  children: React.ReactNode;
+  children: ReactNode;
   direction?: 1 | -1;
   dirty?: boolean;
 }) {
-  const [confirmDiscard, setConfirmDiscard] = React.useState(false);
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
   const reduceMotion = useReducedMotion();
   const variants = reduceMotion ? materializeEnterReduced : materializeEnter;
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (!open) {
       setConfirmDiscard(false);
       return;
@@ -67,13 +77,21 @@ export function WizardShell({
     return () => window.removeEventListener("keydown", onKey);
   }, [open, onOpenChange, dirty, confirmDiscard]);
 
-  function handleClose() {
+  const handleClose = useCallback(() => {
     if (dirty && !confirmDiscard) {
       setConfirmDiscard(true);
       return;
     }
     onOpenChange(false);
-  }
+  }, [confirmDiscard, dirty, onOpenChange]);
+
+  const handleDiscard = useCallback(() => onOpenChange(false), [onOpenChange]);
+  const handleKeepEditing = useCallback(() => setConfirmDiscard(false), []);
+
+  const stepNumbers = Array.from(
+    { length: totalSteps },
+    (_, index) => index + 1
+  );
 
   return (
     <AnimatePresence>
@@ -114,24 +132,16 @@ export function WizardShell({
                     {title} — Step {step} of {totalSteps}
                   </h2>
                   <div className="mt-1.5 flex items-center gap-1.5">
-                    {Array.from({ length: totalSteps }).map((_, i) => {
-                      const active = i + 1 === step;
-                      const done = i + 1 < step;
-                      return (
-                        <span
-                          className={cn(
-                            "h-1.5 rounded-full",
-                            active
-                              ? "w-6 bg-primary"
-                              : done
-                                ? "w-4 bg-primary/60"
-                                : "w-4 bg-muted"
-                          )}
-                          key={i}
-                          style={{ transition: "width 200ms ease-out" }}
-                        />
-                      );
-                    })}
+                    {stepNumbers.map((stepNumber) => (
+                      <span
+                        className={cn(
+                          "h-1.5 rounded-full",
+                          stepDotClass(stepNumber === step, stepNumber < step)
+                        )}
+                        key={stepNumber}
+                        style={{ transition: "width 200ms ease-out" }}
+                      />
+                    ))}
                   </div>
                 </div>
                 <Button
@@ -186,14 +196,14 @@ export function WizardShell({
                     </p>
                     <div className="mt-2 flex gap-2">
                       <Button
-                        onClick={() => onOpenChange(false)}
+                        onClick={handleDiscard}
                         size="sm"
                         variant="destructive"
                       >
                         Discard
                       </Button>
                       <Button
-                        onClick={() => setConfirmDiscard(false)}
+                        onClick={handleKeepEditing}
                         size="sm"
                         variant="outline"
                       >

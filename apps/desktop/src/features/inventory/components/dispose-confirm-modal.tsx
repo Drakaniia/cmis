@@ -2,7 +2,7 @@ import { Button } from "@cmis/ui/components/button";
 import { cn } from "@cmis/ui/lib/utils";
 import { X } from "lucide-react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import * as React from "react";
+import { type ChangeEvent, useCallback, useEffect, useState } from "react";
 
 import {
   materializeEnter,
@@ -24,7 +24,7 @@ export function DisposeConfirmModal({
   open,
   onOpenChange,
   row,
-  originRect,
+  originRect: _originRect,
   onConfirm,
 }: {
   open: boolean;
@@ -39,14 +39,14 @@ export function DisposeConfirmModal({
     qty: number;
   }) => void;
 }) {
-  const [reason, setReason] = React.useState<DisposeReason>("Expired");
-  const [reasonOther, setReasonOther] = React.useState("");
-  const [qty, setQty] = React.useState("");
-  const [attempted, setAttempted] = React.useState(false);
+  const [reason, setReason] = useState<DisposeReason>("Expired");
+  const [reasonOther, setReasonOther] = useState("");
+  const [qty, setQty] = useState("");
+  const [attempted, setAttempted] = useState(false);
   const reduceMotion = useReducedMotion();
   const variants = reduceMotion ? materializeEnterReduced : materializeEnter;
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (open && row) {
       setReason("Expired");
       setReasonOther("");
@@ -55,7 +55,7 @@ export function DisposeConfirmModal({
     }
   }, [open, row]);
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (!open) {
       return;
     }
@@ -68,15 +68,36 @@ export function DisposeConfirmModal({
     return () => window.removeEventListener("keydown", onKey);
   }, [open, onOpenChange]);
 
-  if (!(open && row)) {
-    return null;
-  }
+  const handleClose = useCallback(() => {
+    onOpenChange(false);
+  }, [onOpenChange]);
 
-  const validQty = Number(qty) === row.batch.qty;
-  const valid = validQty && (reason !== "Other" || reasonOther.trim());
+  const handleQtyChange = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => setQty(event.target.value),
+    []
+  );
 
-  function handleConfirm() {
-    if (!(valid && row)) {
+  const handleReasonChange = useCallback(
+    (event: ChangeEvent<HTMLSelectElement>) =>
+      setReason(event.target.value as DisposeReason),
+    []
+  );
+
+  const handleReasonOtherChange = useCallback(
+    (event: ChangeEvent<HTMLTextAreaElement>) =>
+      setReasonOther(event.target.value),
+    []
+  );
+
+  const handleConfirm = useCallback(() => {
+    if (!row) {
+      setAttempted(true);
+      return;
+    }
+    const validQtyNow = Number(qty) === row.batch.qty;
+    const validNow =
+      validQtyNow && (reason !== "Other" || reasonOther.trim().length > 0);
+    if (!validNow) {
       setAttempted(true);
       return;
     }
@@ -88,7 +109,13 @@ export function DisposeConfirmModal({
       reasonOther: reasonOther.trim(),
     });
     onOpenChange(false);
+  }, [onConfirm, onOpenChange, qty, reason, reasonOther, row]);
+
+  if (!(open && row)) {
+    return null;
   }
+
+  const validQty = Number(qty) === row.batch.qty;
 
   const transformOrigin = "center center";
 
@@ -102,7 +129,7 @@ export function DisposeConfirmModal({
             className="fixed inset-0 z-50 bg-black/32"
             exit={{ opacity: 0 }}
             initial={{ opacity: 0 }}
-            onClick={() => onOpenChange(false)}
+            onClick={handleClose}
             transition={reduceMotion ? { duration: 0 } : { duration: 0.18 }}
           />
           <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6">
@@ -131,7 +158,7 @@ export function DisposeConfirmModal({
                 <Button
                   aria-label="Close"
                   className="press-feedback"
-                  onClick={() => onOpenChange(false)}
+                  onClick={handleClose}
                   size="icon-sm"
                   variant="ghost"
                 >
@@ -161,7 +188,7 @@ export function DisposeConfirmModal({
                     )}
                     max={row.batch.qty}
                     min={1}
-                    onChange={(e) => setQty(e.target.value)}
+                    onChange={handleQtyChange}
                     type="number"
                     value={qty}
                   />
@@ -177,7 +204,7 @@ export function DisposeConfirmModal({
                   Reason
                   <select
                     className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-1 focus:ring-ring"
-                    onChange={(e) => setReason(e.target.value as DisposeReason)}
+                    onChange={handleReasonChange}
                     value={reason}
                   >
                     <option value="Expired">Expired</option>
@@ -194,7 +221,7 @@ export function DisposeConfirmModal({
                         "mt-1 min-h-[64px] w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-1 focus:ring-ring",
                         attempted && !reasonOther.trim() && "border-destructive"
                       )}
-                      onChange={(e) => setReasonOther(e.target.value)}
+                      onChange={handleReasonOtherChange}
                       placeholder="Describe reason…"
                       value={reasonOther}
                     />
@@ -206,7 +233,7 @@ export function DisposeConfirmModal({
               <div className="flex items-center justify-end gap-2 border-border/50 border-t px-4 py-3">
                 <Button
                   className="press-feedback"
-                  onClick={() => onOpenChange(false)}
+                  onClick={handleClose}
                   size="sm"
                   variant="ghost"
                 >

@@ -1,7 +1,14 @@
 import { Button } from "@cmis/ui/components/button";
 import { cn } from "@cmis/ui/lib/utils";
 import { ScanLine, X } from "lucide-react";
-import * as React from "react";
+import {
+  type ChangeEvent,
+  type KeyboardEvent,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 
 export function BarcodeInput({
   value,
@@ -16,30 +23,40 @@ export function BarcodeInput({
   placeholder?: string;
   autoFocus?: boolean;
 }) {
-  const [expanded, setExpanded] = React.useState(false);
-  const inputRef = React.useRef<HTMLInputElement>(null);
+  const [expanded, setExpanded] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (expanded && inputRef.current) {
       inputRef.current.focus();
     }
   }, [expanded]);
 
-  function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
-    if (e.key === "Enter") {
-      const code = (e.target as HTMLInputElement).value.trim();
-      if (code) {
-        onScan(code);
+  const handleKeyDown = useCallback(
+    (event: KeyboardEvent<HTMLInputElement>) => {
+      if (event.key === "Enter") {
+        const code = (event.target as HTMLInputElement).value.trim();
+        if (code) {
+          onScan(code);
+        }
       }
-    }
-  }
+    },
+    [onScan]
+  );
+
+  const handleExpand = useCallback(() => setExpanded(true), []);
+  const handleCollapse = useCallback(() => setExpanded(false), []);
+  const handleChange = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => onChange(event.target.value),
+    [onChange]
+  );
 
   if (!expanded) {
     return (
       <Button
         aria-label="Scan barcode — expand input"
         className="press-feedback shrink-0"
-        onClick={() => setExpanded(true)}
+        onClick={handleExpand}
         size="icon-sm"
         title="Scan barcode or type SKU"
         variant="ghost"
@@ -61,7 +78,7 @@ export function BarcodeInput({
         aria-label="Barcode or SKU"
         autoFocus={autoFocus}
         className="h-7 w-[200px] bg-transparent text-sm outline-none placeholder:text-muted-foreground sm:w-[240px]"
-        onChange={(e) => onChange(e.target.value)}
+        onChange={handleChange}
         onKeyDown={handleKeyDown}
         placeholder={placeholder}
         ref={inputRef}
@@ -70,7 +87,7 @@ export function BarcodeInput({
       <Button
         aria-label="Collapse barcode input"
         className="press-feedback h-6 w-6"
-        onClick={() => setExpanded(false)}
+        onClick={handleCollapse}
         size="icon-sm"
         variant="ghost"
       >

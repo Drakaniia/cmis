@@ -1,7 +1,7 @@
 import { Button } from "@cmis/ui/components/button";
 import { cn } from "@cmis/ui/lib/utils";
 import { Clock, Package, X } from "lucide-react";
-import * as React from "react";
+import { useEffect, useRef } from "react";
 import { daysUntilExpiry, expiryLabel } from "../mock";
 import type { InventoryItem } from "../types";
 
@@ -49,9 +49,9 @@ export function InventoryDetailContent({
   onClose?: () => void;
   autoFocus?: boolean;
 }) {
-  const stockInRef = React.useRef<HTMLButtonElement>(null);
+  const stockInRef = useRef<HTMLButtonElement>(null);
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (autoFocus && item && stockInRef.current) {
       stockInRef.current.focus();
     }
@@ -191,7 +191,7 @@ export function InventoryDetailContent({
                   {item.dispensingHistory.slice(0, 10).map((r, idx) => (
                     <tr
                       className={cn(idx % 2 === 0 ? "bg-card" : "bg-muted/20")}
-                      key={`${r.date}-${idx}`}
+                      key={`${r.date}-${r.batch}-${r.requestor}-${r.qty}`}
                     >
                       <td className="px-2 py-1.5">{r.date}</td>
                       <td className="px-2 py-1.5">{r.qty}</td>

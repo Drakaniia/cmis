@@ -1,4 +1,4 @@
-import * as React from "react";
+import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { useDensity } from "@/hooks/use-density";
@@ -20,14 +20,14 @@ import { ExtendExpiryModal } from "./extend-expiry-modal";
 export function ExpiryPage() {
   const { density } = useDensity();
   const isWideEnough = useMediaQuery900();
-  const [items] = React.useState(mockExpiryInventory);
-  const [activeMonth, setActiveMonth] = React.useState<string | null>(null);
-  const [selectedId, setSelectedId] = React.useState<string | null>(null);
-  const [selectedBatchKeys, setSelectedBatchKeys] = React.useState<Set<string>>(
+  const [items] = useState(mockExpiryInventory);
+  const [activeMonth, setActiveMonth] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedBatchKeys, setSelectedBatchKeys] = useState<Set<string>>(
     new Set()
   );
 
-  const handleClearMonth = React.useCallback(() => {
+  const handleClearMonth = useCallback(() => {
     setActiveMonth(null);
   }, []);
 
@@ -42,36 +42,30 @@ export function ExpiryPage() {
     setSearch,
     setSort,
     setStatus,
-    urgentCount,
   } = useExpiryFilters(items, activeMonth, handleClearMonth);
 
   // Wrap clearFilters to also clear minimap month
-  const clearFilters = React.useCallback(() => {
+  const clearFilters = useCallback(() => {
     hookClearFilters();
     setActiveMonth(null);
   }, [hookClearFilters]);
 
   // Modals
-  const [disposeOpen, setDisposeOpen] = React.useState(false);
-  const [disposeRow, setDisposeRow] = React.useState<ExpiryRow | null>(null);
-  const [disposeOrigin, setDisposeOrigin] = React.useState<DOMRect | null>(
-    null
-  );
+  const [disposeOpen, setDisposeOpen] = useState(false);
+  const [disposeRow, setDisposeRow] = useState<ExpiryRow | null>(null);
+  const [disposeOrigin, setDisposeOrigin] = useState<DOMRect | null>(null);
 
-  const [extendOpen, setExtendOpen] = React.useState(false);
-  const [extendRow, setExtendRow] = React.useState<ExpiryRow | null>(null);
-  const [extendOrigin, setExtendOrigin] = React.useState<DOMRect | null>(null);
+  const [extendOpen, setExtendOpen] = useState(false);
+  const [extendRow, setExtendRow] = useState<ExpiryRow | null>(null);
+  const [extendOrigin, setExtendOrigin] = useState<DOMRect | null>(null);
 
-  const minimapBuckets = React.useMemo(
-    () => buildMinimapBuckets(allRows),
-    [allRows]
-  );
+  const minimapBuckets = useMemo(() => buildMinimapBuckets(allRows), [allRows]);
 
-  function handleSelect(id: string, _rect: DOMRect | null) {
+  const handleSelect = useCallback((id: string, _rect: DOMRect | null) => {
     setSelectedId(id);
-  }
+  }, []);
 
-  function handleToggleBatch(key: string) {
+  const handleToggleBatch = useCallback((key: string) => {
     setSelectedBatchKeys((prev) => {
       const next = new Set(prev);
       if (next.has(key)) {
@@ -81,9 +75,9 @@ export function ExpiryPage() {
       }
       return next;
     });
-  }
+  }, []);
 
-  function handleToggleAll() {
+  const handleToggleAll = useCallback(() => {
     if (selectedBatchKeys.size === filtered.length) {
       setSelectedBatchKeys(new Set());
     } else {
@@ -91,50 +85,70 @@ export function ExpiryPage() {
         new Set(filtered.map((r) => `${r.item.id}-${r.batch.batch}`))
       );
     }
-  }
+  }, [filtered, selectedBatchKeys.size]);
 
-  function handleDispose(row: ExpiryRow, originRect: DOMRect | null) {
-    setDisposeRow(row);
-    setDisposeOrigin(originRect);
-    setDisposeOpen(true);
-  }
+  const handleDispose = useCallback(
+    (row: ExpiryRow, originRect: DOMRect | null) => {
+      setDisposeRow(row);
+      setDisposeOrigin(originRect);
+      setDisposeOpen(true);
+    },
+    []
+  );
 
-  function handleExtend(row: ExpiryRow, originRect: DOMRect | null) {
-    setExtendRow(row);
-    setExtendOrigin(originRect);
-    setExtendOpen(true);
-  }
+  const handleExtend = useCallback(
+    (row: ExpiryRow, originRect: DOMRect | null) => {
+      setExtendRow(row);
+      setExtendOrigin(originRect);
+      setExtendOpen(true);
+    },
+    []
+  );
 
-  function handleView(row: ExpiryRow, _originRect: DOMRect | null) {
-    // Navigate to inventory detail — for now, select the item
-    setSelectedId(row.item.id);
-    toast.info(`Viewing: ${row.item.name} — batch ${row.batch.batch}`);
-  }
+  const handleView = useCallback(
+    (row: ExpiryRow, _originRect: DOMRect | null) => {
+      // Navigate to inventory detail — for now, select the item
+      setSelectedId(row.item.id);
+      toast.info(`Viewing: ${row.item.name} — batch ${row.batch.batch}`);
+    },
+    []
+  );
 
-  function handleDisposeConfirm(payload: {
-    itemId: string;
-    batch: string;
-    reason: DisposeReason;
-    qty: number;
-  }) {
-    toast.success(`Disposed: ${payload.batch} ×${payload.qty}`);
-    setSelectedBatchKeys((prev) => {
-      const next = new Set(prev);
-      next.delete(`${payload.itemId}-${payload.batch}`);
-      return next;
-    });
-  }
+  const handleDisposeConfirm = useCallback(
+    (payload: {
+      itemId: string;
+      batch: string;
+      reason: DisposeReason;
+      qty: number;
+    }) => {
+      toast.success(`Disposed: ${payload.batch} ×${payload.qty}`);
+      setSelectedBatchKeys((prev) => {
+        const next = new Set(prev);
+        next.delete(`${payload.itemId}-${payload.batch}`);
+        return next;
+      });
+    },
+    []
+  );
 
-  function handleExtendConfirm(payload: {
-    itemId: string;
-    batch: string;
-    newExpiry: string;
-    note: string;
-  }) {
-    toast.success(`Expiry extended: ${payload.batch} → ${payload.newExpiry}`);
-  }
+  const handleExtendConfirm = useCallback(
+    (payload: {
+      itemId: string;
+      batch: string;
+      newExpiry: string;
+      note: string;
+    }) => {
+      toast.success(`Expiry extended: ${payload.batch} → ${payload.newExpiry}`);
+    },
+    []
+  );
 
-  const handleSelectBucket = React.useCallback(
+  const handleBulkDispose = useCallback(() => {
+    // bulk dispose — for now just toast
+    toast.info(`Dispose ${selectedBatchKeys.size} selected items`);
+  }, [selectedBatchKeys.size]);
+
+  const handleSelectBucket = useCallback(
     (monthKey: string | null) => {
       setActiveMonth(monthKey);
       // Reset date preset + status so the minimap month filter is primary
@@ -155,10 +169,7 @@ export function ExpiryPage() {
         density={density}
         filters={filters}
         monthBuckets={minimapBuckets}
-        onBulkDispose={() => {
-          /* bulk dispose — for now just toast */
-          toast.info(`Dispose ${selectedBatchKeys.size} selected items`);
-        }}
+        onBulkDispose={handleBulkDispose}
         onClearFilters={clearFilters}
         onDatePresetChange={setDatePreset}
         onRemoveChip={removeChip}

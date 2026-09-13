@@ -1,4 +1,4 @@
-import * as React from "react";
+import { useCallback, useRef, useState } from "react";
 
 const STORAGE_KEY = "panel-ratio";
 const DEFAULT_RATIO = 0.45; // 45% list, 55% detail within 40-60 bounds
@@ -39,29 +39,29 @@ async function writeRatio(value: number) {
 }
 
 export function usePanelRatio() {
-  const [ratio, setRatioState] = React.useState<number>(() => readRatio());
-  const [collapsed, setCollapsed] = React.useState(false);
-  const prevRatioRef = React.useRef(ratio);
+  const [ratio, setRatioState] = useState<number>(() => readRatio());
+  const [collapsed, setCollapsed] = useState(false);
+  const prevRatioRef = useRef(ratio);
 
-  const setRatio = React.useCallback(
+  const setRatio = useCallback(
     (next: number) => {
       const clamped = Math.min(MAX_RATIO, Math.max(MIN_RATIO, next));
       setRatioState(clamped);
       if (!collapsed) {
         prevRatioRef.current = clamped;
       }
-      void writeRatio(clamped);
+      writeRatio(clamped).catch(() => undefined);
     },
     [collapsed]
   );
 
-  const toggleCollapse = React.useCallback(() => {
+  const toggleCollapse = useCallback(() => {
     if (collapsed) {
       const restore = prevRatioRef.current;
       const clamped = Math.min(CLAMP_MAX, Math.max(CLAMP_MIN, restore));
       setRatioState(clamped);
       setCollapsed(false);
-      void writeRatio(clamped);
+      writeRatio(clamped).catch(() => undefined);
     } else {
       prevRatioRef.current = ratio;
       setRatioState(1); // list 100%

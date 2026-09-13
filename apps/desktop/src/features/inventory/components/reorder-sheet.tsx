@@ -1,7 +1,7 @@
 import { Button } from "@cmis/ui/components/button";
 import { cn } from "@cmis/ui/lib/utils";
 import { AnimatePresence, motion } from "motion/react";
-import * as React from "react";
+import { type ChangeEvent, useCallback, useEffect, useState } from "react";
 
 import { sheetSpring } from "@/lib/motion";
 import type { LowStockRow } from "../types";
@@ -17,7 +17,7 @@ export function ReorderSheet({
   open,
   onOpenChange,
   row,
-  originRect,
+  originRect: _originRect,
   onConfirm,
 }: {
   onConfirm: (payload: {
@@ -31,12 +31,12 @@ export function ReorderSheet({
   originRect: DOMRect | null;
   row: LowStockRow | null;
 }) {
-  const [qty, setQty] = React.useState(0);
-  const [supplier, setSupplier] = React.useState("");
-  const [notes, setNotes] = React.useState("");
+  const [qty, setQty] = useState(0);
+  const [supplier, setSupplier] = useState("");
+  const [notes, setNotes] = useState("");
 
   // Sync defaults when row changes
-  React.useEffect(() => {
+  useEffect(() => {
     if (row) {
       setQty(row.suggestedQty);
       setSupplier(row.item.supplier);
@@ -47,7 +47,32 @@ export function ReorderSheet({
   const gap = row ? row.threshold - row.currentQty : 0;
   const isValid = qty >= gap && supplier.trim().length > 0;
 
-  function handleSubmit() {
+  const handleClose = useCallback(() => {
+    onOpenChange(false);
+  }, [onOpenChange]);
+
+  const handleSupplierChange = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => {
+      setSupplier(event.target.value);
+    },
+    []
+  );
+
+  const handleQtyChange = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => {
+      setQty(Number(event.target.value));
+    },
+    []
+  );
+
+  const handleNotesChange = useCallback(
+    (event: ChangeEvent<HTMLTextAreaElement>) => {
+      setNotes(event.target.value);
+    },
+    []
+  );
+
+  const handleSubmit = useCallback(() => {
     if (!(row && isValid)) {
       return;
     }
@@ -58,7 +83,7 @@ export function ReorderSheet({
       supplier,
     });
     onOpenChange(false);
-  }
+  }, [row, isValid, onConfirm, qty, supplier, onOpenChange]);
 
   return (
     <AnimatePresence>
@@ -70,7 +95,7 @@ export function ReorderSheet({
             className="fixed inset-0 z-40 bg-black/40 backdrop-blur-[2px]"
             exit={{ opacity: 0 }}
             initial={{ opacity: 0 }}
-            onClick={() => onOpenChange(false)}
+            onClick={handleClose}
             transition={sheetSpring}
           />
           {/* Sheet — CMIS-UI-04 §5: from bottom, blur+scale */}
@@ -91,7 +116,7 @@ export function ReorderSheet({
                 <button
                   aria-label="Close"
                   className="press-feedback rounded p-1 text-muted-foreground hover:bg-muted"
-                  onClick={() => onOpenChange(false)}
+                  onClick={handleClose}
                   type="button"
                 >
                   ✕
@@ -101,9 +126,9 @@ export function ReorderSheet({
               <div className="space-y-4">
                 {/* Item name */}
                 <div>
-                  <label className="mb-1 block text-caption text-muted-foreground">
+                  <span className="mb-1 block text-caption text-muted-foreground">
                     Item
-                  </label>
+                  </span>
                   <p className="font-medium text-foreground text-sm">
                     {row.item.name}
                     <span className="ml-2 text-muted-foreground">
@@ -156,7 +181,7 @@ export function ReorderSheet({
                   <input
                     className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-1 focus:ring-ring"
                     id="reorder-supplier"
-                    onChange={(e) => setSupplier(e.target.value)}
+                    onChange={handleSupplierChange}
                     value={supplier}
                   />
                 </div>
@@ -176,7 +201,7 @@ export function ReorderSheet({
                     className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-1 focus:ring-ring"
                     id="reorder-qty"
                     min={gap > 0 ? gap : 0}
-                    onChange={(e) => setQty(Number(e.target.value))}
+                    onChange={handleQtyChange}
                     type="number"
                     value={qty}
                   />
@@ -198,7 +223,7 @@ export function ReorderSheet({
                   <textarea
                     className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-1 focus:ring-ring"
                     id="reorder-notes"
-                    onChange={(e) => setNotes(e.target.value)}
+                    onChange={handleNotesChange}
                     rows={2}
                     value={notes}
                   />
@@ -208,7 +233,7 @@ export function ReorderSheet({
                 <div className="flex justify-end gap-2 pt-2">
                   <Button
                     className="press-feedback"
-                    onClick={() => onOpenChange(false)}
+                    onClick={handleClose}
                     type="button"
                     variant="ghost"
                   >

@@ -1,4 +1,4 @@
-import * as React from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { buildLowStockRows } from "../mock-low-stock";
 import type {
   InventoryItem,
@@ -109,31 +109,31 @@ function applyLowStockFilters(
 }
 
 export function useLowStockFilters(items: InventoryItem[]) {
-  const allRows = React.useMemo(() => buildLowStockRows(items), [items]);
+  const allRows = useMemo(() => buildLowStockRows(items), [items]);
 
-  const [filters, setFilters] = React.useState<LowStockFilters>(
+  const [filters, setFilters] = useState<LowStockFilters>(
     DEFAULT_LOW_STOCK_FILTERS
   );
-  const [debouncedSearch, setDebouncedSearch] = React.useState(filters.search);
+  const [debouncedSearch, setDebouncedSearch] = useState(filters.search);
 
   // Debounce search 150ms
-  React.useEffect(() => {
+  useEffect(() => {
     const t = window.setTimeout(() => setDebouncedSearch(filters.search), 150);
     return () => window.clearTimeout(t);
   }, [filters.search]);
 
-  const effectiveFilters = React.useMemo(
+  const effectiveFilters = useMemo(
     () => ({ ...filters, search: debouncedSearch }),
     [filters, debouncedSearch]
   );
 
-  const filtered = React.useMemo(
+  const filtered = useMemo(
     () => applyLowStockFilters(allRows, effectiveFilters),
     [allRows, effectiveFilters]
   );
 
   // CMIS-UI-04 §4 — sidebar badge count (Out + Low)
-  const urgentCount = React.useMemo(
+  const urgentCount = useMemo(
     () =>
       allRows.filter(
         (r) =>
@@ -143,23 +143,23 @@ export function useLowStockFilters(items: InventoryItem[]) {
     [allRows]
   );
 
-  const setSearch = React.useCallback((v: string) => {
+  const setSearch = useCallback((v: string) => {
     setFilters((p) => ({ ...p, search: v }));
   }, []);
 
-  const setCategory = React.useCallback((v: string) => {
+  const setCategory = useCallback((v: string) => {
     setFilters((p) => ({ ...p, category: v }));
   }, []);
 
-  const setSupplier = React.useCallback((v: string) => {
+  const setSupplier = useCallback((v: string) => {
     setFilters((p) => ({ ...p, supplier: v }));
   }, []);
 
-  const setStatus = React.useCallback((v: LowStockFilters["status"]) => {
+  const setStatus = useCallback((v: LowStockFilters["status"]) => {
     setFilters((p) => ({ ...p, status: v }));
   }, []);
 
-  const setSort = React.useCallback((key: LowStockSortKey) => {
+  const setSort = useCallback((key: LowStockSortKey) => {
     setFilters((p) => {
       if (p.sortKey === key) {
         const nextDir: SortDir = p.sortDir === "asc" ? "desc" : "asc";
@@ -169,12 +169,12 @@ export function useLowStockFilters(items: InventoryItem[]) {
     });
   }, []);
 
-  const clearFilters = React.useCallback(() => {
+  const clearFilters = useCallback(() => {
     setFilters(DEFAULT_LOW_STOCK_FILTERS);
     setDebouncedSearch("");
   }, []);
 
-  const activeChips = React.useMemo(() => {
+  const activeChips = useMemo(() => {
     const chips: { key: string; label: string; value: string }[] = [];
     if (filters.supplier !== "All") {
       chips.push({
@@ -212,7 +212,7 @@ export function useLowStockFilters(items: InventoryItem[]) {
     return chips;
   }, [filters]);
 
-  const removeChip = React.useCallback((key: string) => {
+  const removeChip = useCallback((key: string) => {
     setFilters((p) => {
       if (key === "search") {
         return { ...p, search: "" };
@@ -234,11 +234,11 @@ export function useLowStockFilters(items: InventoryItem[]) {
   }, []);
 
   // Distinct suppliers, categories from items
-  const distinctSuppliers = React.useMemo(
+  const distinctSuppliers = useMemo(
     () => [...new Set(items.map((i) => i.supplier))].sort(),
     [items]
   );
-  const distinctCategories = React.useMemo(
+  const distinctCategories = useMemo(
     () => [...new Set(items.map((i) => i.category))].sort(),
     [items]
   );

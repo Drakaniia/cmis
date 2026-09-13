@@ -2,7 +2,7 @@ import { Button } from "@cmis/ui/components/button";
 import { cn } from "@cmis/ui/lib/utils";
 import { X } from "lucide-react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import * as React from "react";
+import { type ChangeEvent, useCallback, useEffect, useState } from "react";
 
 import {
   materializeEnter,
@@ -23,7 +23,7 @@ export function ExtendExpiryModal({
   open,
   onOpenChange,
   row,
-  originRect,
+  originRect: _originRect,
   onConfirm,
 }: {
   open: boolean;
@@ -37,13 +37,13 @@ export function ExtendExpiryModal({
     note: string;
   }) => void;
 }) {
-  const [newExpiry, setNewExpiry] = React.useState("");
-  const [note, setNote] = React.useState("");
-  const [attempted, setAttempted] = React.useState(false);
+  const [newExpiry, setNewExpiry] = useState("");
+  const [note, setNote] = useState("");
+  const [attempted, setAttempted] = useState(false);
   const reduceMotion = useReducedMotion();
   const variants = reduceMotion ? materializeEnterReduced : materializeEnter;
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (open && row) {
       // Default to 90 days from now
       const d = new Date();
@@ -54,7 +54,7 @@ export function ExtendExpiryModal({
     }
   }, [open, row]);
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (!open) {
       return;
     }
@@ -67,13 +67,27 @@ export function ExtendExpiryModal({
     return () => window.removeEventListener("keydown", onKey);
   }, [open, onOpenChange]);
 
-  if (!(open && row)) {
-    return null;
-  }
-
   const valid = newExpiry && note.trim().length > 0;
 
-  function handleConfirm() {
+  const handleClose = useCallback(() => {
+    onOpenChange(false);
+  }, [onOpenChange]);
+
+  const handleExpiryChange = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => {
+      setNewExpiry(event.target.value);
+    },
+    []
+  );
+
+  const handleNoteChange = useCallback(
+    (event: ChangeEvent<HTMLTextAreaElement>) => {
+      setNote(event.target.value);
+    },
+    []
+  );
+
+  const handleConfirm = useCallback(() => {
     if (!(valid && row)) {
       setAttempted(true);
       return;
@@ -85,6 +99,10 @@ export function ExtendExpiryModal({
       note: note.trim(),
     });
     onOpenChange(false);
+  }, [valid, row, onConfirm, newExpiry, note, onOpenChange]);
+
+  if (!(open && row)) {
+    return null;
   }
 
   const transformOrigin = "center center";
@@ -99,7 +117,7 @@ export function ExtendExpiryModal({
             className="fixed inset-0 z-50 bg-black/32"
             exit={{ opacity: 0 }}
             initial={{ opacity: 0 }}
-            onClick={() => onOpenChange(false)}
+            onClick={handleClose}
             transition={reduceMotion ? { duration: 0 } : { duration: 0.18 }}
           />
           <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6">
@@ -128,7 +146,7 @@ export function ExtendExpiryModal({
                 <Button
                   aria-label="Close"
                   className="press-feedback"
-                  onClick={() => onOpenChange(false)}
+                  onClick={handleClose}
                   size="icon-sm"
                   variant="ghost"
                 >
@@ -153,7 +171,7 @@ export function ExtendExpiryModal({
                   <input
                     className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-1 focus:ring-ring"
                     min={new Date().toISOString().slice(0, 10)}
-                    onChange={(e) => setNewExpiry(e.target.value)}
+                    onChange={handleExpiryChange}
                     type="date"
                     value={newExpiry}
                   />
@@ -167,7 +185,7 @@ export function ExtendExpiryModal({
                       "mt-1 min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-1 focus:ring-ring",
                       attempted && !note.trim() && "border-destructive"
                     )}
-                    onChange={(e) => setNote(e.target.value)}
+                    onChange={handleNoteChange}
                     placeholder="Reason for extension…"
                     value={note}
                   />
@@ -183,7 +201,7 @@ export function ExtendExpiryModal({
               <div className="flex items-center justify-end gap-2 border-border/50 border-t px-4 py-3">
                 <Button
                   className="press-feedback"
-                  onClick={() => onOpenChange(false)}
+                  onClick={handleClose}
                   size="sm"
                   variant="ghost"
                 >

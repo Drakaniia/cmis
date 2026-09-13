@@ -1,4 +1,21 @@
-import * as React from "react";
+import { useEffect, useRef } from "react";
+
+/** Barcode burst = 8+ chars within 100ms → treat as a scan. */
+const SCAN_MIN_LENGTH = 8;
+const SCAN_MAX_GAP_MS = 100;
+/** Idle window after which a stalled burst is discarded. */
+const RESET_IDLE_MS = 120;
+
+function isTextField(element: Element | null): boolean {
+  if (!element) {
+    return false;
+  }
+  const tag = element.tagName.toLowerCase();
+  if (tag === "input" || tag === "textarea" || tag === "select") {
+    return true;
+  }
+  return (element as HTMLElement).isContentEditable;
+}
 
 /**
  * Global keyboard wedge listener.
@@ -11,108 +28,101 @@ export function useBarcodeWedge(
   opts: { enabled?: boolean } = {}
 ) {
   const enabled = opts.enabled ?? true;
-  const bufferRef = React.useRef<string>("");
-  const startRef = React.useRef<number>(0);
-  const timerRef = React.useRef<number | null>(null);
-  const onScanRef = React.useRef(onScan);
-  React.useEffect(() => {
+  const bufferRef = useRef<string>("");
+  const startRef = useRef<number>(0);
+  const timerRef = useRef<number | null>(null);
+  const onScanRef = useRef(onScan);
+  useEffect(() => {
     onScanRef.current = onScan;
   }, [onScan]);
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (!enabled) {
       return;
     }
 
-    function isTextField(el: Element | null): boolean {
-      if (!el) {
-        return false;
-      }
-      const tag = el.tagName.toLowerCase();
-      if (tag === "input" || tag === "textarea" || tag === "select") {
-        return true;
-      }
-      if ((el as HTMLElement).isContentEditable) {
-        return true;
-      }
-      return false;
-    }
+    const clearResetTimer = () => {
+      // `clearTimeout(undefined)` is a no-op, so no null guard is needed.
+      window.clearTimeout(timerRef.current ?? undefined);
+      timerRef.current = null;
+    };
 
-    function handleKeyDown(e: KeyboardEvent) {
-      // Ignore modifiers, nav keys, etc.
-      if (e.ctrlKey || e.metaKey || e.altKey) {
+    const resetBuffer = () => {
+      bufferRef.current = "";
+      startRef.current = 0;
+      clearResetTimer();
+    };
+
+    // Wedge scanners usually terminate the burst with Enter.
+    const handleSpecialKey = (event: KeyboardEvent) => {
+      if (event.key !== "Enter") {
         return;
       }
-      // If focused inside a text field, let that field handle typing;
-      // wedge still works when collapsed by checking rapid burst globally,
-      // but we don't hijack focused inputs — spec says global listener with burst detection.
-      // We treat focused inputs as normal typing, not scans.
-      const active = document.activeElement;
-      const inField = isTextField(active);
-      // Special keys
-      if (e.key.length !== 1) {
-        if (e.key === "Enter") {
-          // wedge scanners often send Enter at end
-          const elapsed = Date.now() - startRef.current;
-          const buf = bufferRef.current;
-          if (buf.length >= 8 && elapsed < 100) {
-            e.preventDefault();
-            onScanRef.current(buf);
-          }
-          bufferRef.current = "";
-          startRef.current = 0;
-          if (timerRef.current) {
-            window.clearTimeout(timerRef.current);
-            timerRef.current = null;
-          }
-        }
-        return;
+      const elapsed = Date.now() - startRef.current;
+      const burst = bufferRef.current;
+      if (burst.length >= SCAN_MIN_LENGTH && elapsed < SCAN_MAX_GAP_MS) {
+        event.preventDefault();
+        onScanRef.current(burst);
       }
+      resetBuffer();
+    };
 
-      const now = Date.now();
-      if (!startRef.current || bufferRef.current.length === 0) {
-        startRef.current = now;
-        bufferRef.current = e.key;
-      } else {
-        bufferRef.current += e.key;
-      }
-
-      // If typing in a field, don't trigger scan there — allow normal input
-      // But still detect burst for highlight? Spec says global even when collapsed.
-      // We only auto-trigger if NOT in a focused field to avoid double handling.
-      const elapsed = now - startRef.current;
-
-      if (bufferRef.current.length >= 8 && elapsed < 100 && !inField) {
-        // Looks like scan — trigger
-        const code = bufferRef.current;
+    const scheduleIdleReset = () => {
+      clearResetTimer();
+      timerRef.current = window.setTimeout(() => {
+        // Buffer grew but the burst stalled: typing, not a scan.
         bufferRef.current = "";
         startRef.current = 0;
-        if (timerRef.current) {
-          window.clearTimeout(timerRef.current);
-          timerRef.current = null;
-        }
+        timerRef.current = null;
+      }, RESET_IDLE_MS);
+    };
+
+    const handlePrintableKey = (event: KeyboardEvent, inField: boolean) => {
+      const now = Date.now();
+      // startRef is only ever zeroed together with the buffer, so an empty
+      // buffer is the single source of truth for "a new burst starts here".
+      if (bufferRef.current.length === 0) {
+        startRef.current = now;
+        bufferRef.current = event.key;
+      } else {
+        bufferRef.current += event.key;
+      }
+
+      const elapsed = now - startRef.current;
+      if (
+        bufferRef.current.length >= SCAN_MIN_LENGTH &&
+        elapsed < SCAN_MAX_GAP_MS &&
+        !inField
+      ) {
+        // Looks like a scan — trigger without hijacking the focused field.
+        const code = bufferRef.current;
+        resetBuffer();
         onScanRef.current(code);
         return;
       }
 
-      // Reset buffer after 100ms of idle
-      if (timerRef.current) {
-        window.clearTimeout(timerRef.current);
+      scheduleIdleReset();
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      // Ignore modifiers, nav keys, etc.
+      if (event.ctrlKey || event.metaKey || event.altKey) {
+        return;
       }
-      timerRef.current = window.setTimeout(() => {
-        // If buffer grew large but elapsed was >=100ms, it was typing not scan
-        bufferRef.current = "";
-        startRef.current = 0;
-        timerRef.current = null;
-      }, 120);
-    }
+      // Focused text fields keep normal typing; the burst check below still
+      // runs so the wedge works when BarcodeInput is collapsed (spec §3).
+      const inField = isTextField(document.activeElement);
+      if (event.key.length !== 1) {
+        handleSpecialKey(event);
+        return;
+      }
+      handlePrintableKey(event, inField);
+    };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
-      if (timerRef.current) {
-        window.clearTimeout(timerRef.current);
-      }
+      clearResetTimer();
     };
   }, [enabled]);
 }
