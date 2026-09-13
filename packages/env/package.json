@@ -1,7 +1,25 @@
 {
   "name": "@cmis/env",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "private": true,
+  "description": "Type-safe environment variable schemas for CMIS (T3 Env + Zod)",
+  "keywords": [
+    "cmis",
+    "env",
+    "zod",
+    "t3-env"
+  ],
+  "homepage": "https://github.com/Drakaniia/cmis#readme",
+  "bugs": {
+    "url": "https://github.com/Drakaniia/cmis/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Drakaniia/cmis.git",
+    "directory": "packages/env"
+  },
+  "license": "MIT",
+  "author": "Drakaniia",
   "type": "module",
   "exports": {
     "./server": "./src/server.ts",

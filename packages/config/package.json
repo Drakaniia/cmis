@@ -1,5 +1,27 @@
 {
   "name": "@cmis/config",
-  "version": "0.0.0",
-  "private": true
+  "version": "0.1.0",
+  "private": true,
+  "description": "Shared TypeScript and build configurations for CMIS",
+  "keywords": [
+    "cmis",
+    "config",
+    "typescript",
+    "tooling"
+  ],
+  "homepage": "https://github.com/Drakaniia/cmis#readme",
+  "bugs": {
+    "url": "https://github.com/Drakaniia/cmis/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Drakaniia/cmis.git",
+    "directory": "packages/config"
+  },
+  "license": "MIT",
+  "author": "Drakaniia",
+  "type": "module",
+  "exports": {
+    "./tsconfig.base.json": "./tsconfig.base.json"
+  }
 }
