@@ -56,7 +56,7 @@ function DialogContent({
         {...props}
       >
         {children}
-        {showCloseButton && (
+        {showCloseButton ? (
           <DialogPrimitive.Close
             render={
               <Button
@@ -69,7 +69,7 @@ function DialogContent({
             <X />
             <span className="sr-only">Close</span>
           </DialogPrimitive.Close>
-        )}
+        ) : null}
       </DialogPrimitive.Popup>
     </DialogPortal>
   );
@@ -101,13 +101,13 @@ function DialogFooter({
       {...props}
     >
       {children}
-      {showCloseButton && (
+      {showCloseButton ? (
         <DialogPrimitive.Close
           render={<Button className="press-feedback" variant="outline" />}
         >
           Close
         </DialogPrimitive.Close>
-      )}
+      ) : null}
     </div>
   );
 }
