@@ -1,0 +1,230 @@
+import { Button } from "@cmis/ui/components/button";
+import { cn } from "@cmis/ui/lib/utils";
+import { X } from "lucide-react";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
+import * as React from "react";
+
+import {
+  materializeEnter,
+  materializeEnterReduced,
+  sheetSpring,
+} from "@/lib/motion";
+import { expiryLabel } from "../mock-expiry";
+import type { DisposeReason, ExpiryRow } from "../types";
+
+/**
+ * CMIS-UI-03 §3 — Dispose Confirm Modal
+ * Modal confirm: "Dispose [Qty] × [Item] batch [Batch]?"
+ * + reason (Expired/Damaged/Other) + quantity must match row's qty.
+ * Dim scrim + scale 0.98→1 spring, anchored to row's dispose button (§7 spatial consistency).
+ * Reduced-motion: cross-fade only.
+ */
+
+export function DisposeConfirmModal({
+  open,
+  onOpenChange,
+  row,
+  originRect,
+  onConfirm,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  row: ExpiryRow | null;
+  originRect: DOMRect | null;
+  onConfirm: (payload: {
+    itemId: string;
+    batch: string;
+    reason: DisposeReason;
+    reasonOther: string;
+    qty: number;
+  }) => void;
+}) {
+  const [reason, setReason] = React.useState<DisposeReason>("Expired");
+  const [reasonOther, setReasonOther] = React.useState("");
+  const [qty, setQty] = React.useState("");
+  const [attempted, setAttempted] = React.useState(false);
+  const reduceMotion = useReducedMotion();
+  const variants = reduceMotion ? materializeEnterReduced : materializeEnter;
+
+  React.useEffect(() => {
+    if (open && row) {
+      setReason("Expired");
+      setReasonOther("");
+      setQty(String(row.batch.qty));
+      setAttempted(false);
+    }
+  }, [open, row]);
+
+  React.useEffect(() => {
+    if (!open) {
+      return;
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        onOpenChange(false);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, onOpenChange]);
+
+  if (!(open && row)) {
+    return null;
+  }
+
+  const validQty = Number(qty) === row.batch.qty;
+  const valid = validQty && (reason !== "Other" || reasonOther.trim());
+
+  function handleConfirm() {
+    if (!(valid && row)) {
+      setAttempted(true);
+      return;
+    }
+    onConfirm({
+      batch: row.batch.batch,
+      itemId: row.item.id,
+      qty: row.batch.qty,
+      reason,
+      reasonOther: reasonOther.trim(),
+    });
+    onOpenChange(false);
+  }
+
+  const transformOrigin = "center center";
+
+  return (
+    <AnimatePresence>
+      {open ? (
+        <>
+          <motion.div
+            animate={{ opacity: 1 }}
+            aria-hidden
+            className="fixed inset-0 z-50 bg-black/32"
+            exit={{ opacity: 0 }}
+            initial={{ opacity: 0 }}
+            onClick={() => onOpenChange(false)}
+            transition={reduceMotion ? { duration: 0 } : { duration: 0.18 }}
+          />
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6">
+            <motion.div
+              animate="animate"
+              aria-label="Confirm dispose"
+              aria-modal="true"
+              className="surface-frosted flex w-full max-w-[440px] flex-col overflow-hidden rounded-xl border border-border/50 shadow-xl"
+              exit="exit"
+              initial="initial"
+              role="dialog"
+              style={{
+                transformOrigin,
+                willChange: reduceMotion
+                  ? undefined
+                  : "transform, opacity, filter",
+              }}
+              transition={reduceMotion ? { duration: 0 } : sheetSpring}
+              variants={variants}
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between border-border/50 border-b px-4 py-3">
+                <h2 className="font-semibold text-foreground text-sm">
+                  Dispose Batch
+                </h2>
+                <Button
+                  aria-label="Close"
+                  className="press-feedback"
+                  onClick={() => onOpenChange(false)}
+                  size="icon-sm"
+                  variant="ghost"
+                >
+                  <X className="size-4" />
+                </Button>
+              </div>
+
+              {/* Body */}
+              <div className="space-y-3 p-4">
+                <div className="rounded-md border border-destructive/20 bg-destructive/5 p-3 text-sm">
+                  <p className="font-medium text-destructive">
+                    Dispose {row.batch.qty} × {row.item.name}
+                  </p>
+                  <p className="text-caption text-muted-foreground">
+                    Batch {row.batch.batch} — exp{" "}
+                    {expiryLabel(row.batch.expiry)}
+                  </p>
+                </div>
+
+                {/* Quantity — must match row qty */}
+                <label className="block text-caption text-foreground">
+                  Quantity (must match batch qty: {row.batch.qty})
+                  <input
+                    className={cn(
+                      "mt-1 w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-1 focus:ring-ring",
+                      attempted && !validQty && "border-destructive"
+                    )}
+                    max={row.batch.qty}
+                    min={1}
+                    onChange={(e) => setQty(e.target.value)}
+                    type="number"
+                    value={qty}
+                  />
+                  {attempted && !validQty ? (
+                    <span className="mt-1 block text-destructive">
+                      Quantity must equal {row.batch.qty}.
+                    </span>
+                  ) : null}
+                </label>
+
+                {/* Reason */}
+                <label className="block text-caption text-foreground">
+                  Reason
+                  <select
+                    className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-1 focus:ring-ring"
+                    onChange={(e) => setReason(e.target.value as DisposeReason)}
+                    value={reason}
+                  >
+                    <option value="Expired">Expired</option>
+                    <option value="Damaged">Damaged</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </label>
+
+                {reason === "Other" ? (
+                  <label className="block text-caption text-foreground">
+                    Specify reason
+                    <textarea
+                      className={cn(
+                        "mt-1 min-h-[64px] w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-1 focus:ring-ring",
+                        attempted && !reasonOther.trim() && "border-destructive"
+                      )}
+                      onChange={(e) => setReasonOther(e.target.value)}
+                      placeholder="Describe reason…"
+                      value={reasonOther}
+                    />
+                  </label>
+                ) : null}
+              </div>
+
+              {/* Footer */}
+              <div className="flex items-center justify-end gap-2 border-border/50 border-t px-4 py-3">
+                <Button
+                  className="press-feedback"
+                  onClick={() => onOpenChange(false)}
+                  size="sm"
+                  variant="ghost"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  className="press-feedback"
+                  onClick={handleConfirm}
+                  size="sm"
+                  variant="destructive"
+                >
+                  Confirm Dispose
+                </Button>
+              </div>
+            </motion.div>
+          </div>
+        </>
+      ) : null}
+    </AnimatePresence>
+  );
+}
