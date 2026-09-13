@@ -76,6 +76,32 @@
           }
         }
       }
+    },
+    {
+      // These views use ARIA table/splitter semantics on purpose. Their rows
+      // are virtualized: each row is an absolutely positioned wrapper inside
+      // the scroll container, so it cannot live in a real <table> without
+      // giving up virtualization (and the layout's CSS-grid column widths).
+      // inventory-page's drag handle is a window splitter, where
+      // role="separator" + aria-valuenow is the required pattern and <hr>
+      // cannot carry the value. expiry-timeline-widget's bars are SVG <g>
+      // elements, which have no semantic HTML equivalent.
+      "includes": [
+        "apps/desktop/src/features/admin/reports/components/expiry-timeline-widget.tsx",
+        "apps/desktop/src/features/inventory/components/expiry-list.tsx",
+        "apps/desktop/src/features/inventory/components/inventory-list.tsx",
+        "apps/desktop/src/features/inventory/components/inventory-page.tsx",
+        "apps/desktop/src/features/inventory/components/low-stock-list.tsx"
+      ],
+      "linter": {
+        "rules": {
+          "a11y": {
+            "useAriaPropsSupportedByRole": "off",
+            "useFocusableInteractive": "off",
+            "useSemanticElements": "off"
+          }
+        }
+      }
     }
   ]
 }
