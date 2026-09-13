@@ -10,33 +10,214 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as InventoryRouteImport } from './routes/inventory'
+import { Route as AdminIndexRouteImport } from './routes/admin.index'
+import { Route as AdminAuditRouteImport } from './routes/admin.audit'
+import { Route as AdminDataRouteImport } from './routes/admin.data'
+import { Route as AdminDispensingRouteImport } from './routes/admin.dispensing'
+import { Route as AdminHealthRouteImport } from './routes/admin.health'
+import { Route as AdminInventoryRouteImport } from './routes/admin.inventory'
+import { Route as AdminReportsRouteImport } from './routes/admin.reports'
+import { Route as AdminRequestsRouteImport } from './routes/admin.requests'
+import { Route as AdminSettingsRouteImport } from './routes/admin.settings'
+import { Route as AdminUsersRouteImport } from './routes/admin.users'
+import { Route as AdminInventoryIndexRouteImport } from './routes/admin.inventory.index'
+import { Route as AdminInventoryExpiryRouteImport } from './routes/admin.inventory.expiry'
+import { Route as AdminInventoryLowStockRouteImport } from './routes/admin.inventory.low-stock'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const InventoryRoute = InventoryRouteImport.update({
+  id: '/inventory',
+  path: '/inventory',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminIndexRoute = AdminIndexRouteImport.update({
+  id: '/admin/',
+  path: '/admin/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminAuditRoute = AdminAuditRouteImport.update({
+  id: '/admin/audit',
+  path: '/admin/audit',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminDataRoute = AdminDataRouteImport.update({
+  id: '/admin/data',
+  path: '/admin/data',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminDispensingRoute = AdminDispensingRouteImport.update({
+  id: '/admin/dispensing',
+  path: '/admin/dispensing',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminHealthRoute = AdminHealthRouteImport.update({
+  id: '/admin/health',
+  path: '/admin/health',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminInventoryRoute = AdminInventoryRouteImport.update({
+  id: '/admin/inventory',
+  path: '/admin/inventory',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminReportsRoute = AdminReportsRouteImport.update({
+  id: '/admin/reports',
+  path: '/admin/reports',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminRequestsRoute = AdminRequestsRouteImport.update({
+  id: '/admin/requests',
+  path: '/admin/requests',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminSettingsRoute = AdminSettingsRouteImport.update({
+  id: '/admin/settings',
+  path: '/admin/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminUsersRoute = AdminUsersRouteImport.update({
+  id: '/admin/users',
+  path: '/admin/users',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminInventoryIndexRoute = AdminInventoryIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AdminInventoryRoute,
+} as any)
+const AdminInventoryExpiryRoute = AdminInventoryExpiryRouteImport.update({
+  id: '/expiry',
+  path: '/expiry',
+  getParentRoute: () => AdminInventoryRoute,
+} as any)
+const AdminInventoryLowStockRoute = AdminInventoryLowStockRouteImport.update({
+  id: '/low-stock',
+  path: '/low-stock',
+  getParentRoute: () => AdminInventoryRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/inventory': typeof InventoryRoute
+  '/admin/audit': typeof AdminAuditRoute
+  '/admin/data': typeof AdminDataRoute
+  '/admin/dispensing': typeof AdminDispensingRoute
+  '/admin/health': typeof AdminHealthRoute
+  '/admin/inventory': typeof AdminInventoryRouteWithChildren
+  '/admin/reports': typeof AdminReportsRoute
+  '/admin/requests': typeof AdminRequestsRoute
+  '/admin/settings': typeof AdminSettingsRoute
+  '/admin/users': typeof AdminUsersRoute
+  '/admin/': typeof AdminIndexRoute
+  '/admin/inventory/expiry': typeof AdminInventoryExpiryRoute
+  '/admin/inventory/low-stock': typeof AdminInventoryLowStockRoute
+  '/admin/inventory/': typeof AdminInventoryIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/inventory': typeof InventoryRoute
+  '/admin/audit': typeof AdminAuditRoute
+  '/admin/data': typeof AdminDataRoute
+  '/admin/dispensing': typeof AdminDispensingRoute
+  '/admin/health': typeof AdminHealthRoute
+  '/admin/reports': typeof AdminReportsRoute
+  '/admin/requests': typeof AdminRequestsRoute
+  '/admin/settings': typeof AdminSettingsRoute
+  '/admin/users': typeof AdminUsersRoute
+  '/admin': typeof AdminIndexRoute
+  '/admin/inventory/expiry': typeof AdminInventoryExpiryRoute
+  '/admin/inventory/low-stock': typeof AdminInventoryLowStockRoute
+  '/admin/inventory': typeof AdminInventoryIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/inventory': typeof InventoryRoute
+  '/admin/audit': typeof AdminAuditRoute
+  '/admin/data': typeof AdminDataRoute
+  '/admin/dispensing': typeof AdminDispensingRoute
+  '/admin/health': typeof AdminHealthRoute
+  '/admin/inventory': typeof AdminInventoryRouteWithChildren
+  '/admin/reports': typeof AdminReportsRoute
+  '/admin/requests': typeof AdminRequestsRoute
+  '/admin/settings': typeof AdminSettingsRoute
+  '/admin/users': typeof AdminUsersRoute
+  '/admin/': typeof AdminIndexRoute
+  '/admin/inventory/expiry': typeof AdminInventoryExpiryRoute
+  '/admin/inventory/low-stock': typeof AdminInventoryLowStockRoute
+  '/admin/inventory/': typeof AdminInventoryIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    | '/'
+    | '/inventory'
+    | '/admin/audit'
+    | '/admin/data'
+    | '/admin/dispensing'
+    | '/admin/health'
+    | '/admin/inventory'
+    | '/admin/reports'
+    | '/admin/requests'
+    | '/admin/settings'
+    | '/admin/users'
+    | '/admin/'
+    | '/admin/inventory/expiry'
+    | '/admin/inventory/low-stock'
+    | '/admin/inventory/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to:
+    | '/'
+    | '/inventory'
+    | '/admin/audit'
+    | '/admin/data'
+    | '/admin/dispensing'
+    | '/admin/health'
+    | '/admin/reports'
+    | '/admin/requests'
+    | '/admin/settings'
+    | '/admin/users'
+    | '/admin'
+    | '/admin/inventory/expiry'
+    | '/admin/inventory/low-stock'
+    | '/admin/inventory'
+  id:
+    | '__root__'
+    | '/'
+    | '/inventory'
+    | '/admin/audit'
+    | '/admin/data'
+    | '/admin/dispensing'
+    | '/admin/health'
+    | '/admin/inventory'
+    | '/admin/reports'
+    | '/admin/requests'
+    | '/admin/settings'
+    | '/admin/users'
+    | '/admin/'
+    | '/admin/inventory/expiry'
+    | '/admin/inventory/low-stock'
+    | '/admin/inventory/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  InventoryRoute: typeof InventoryRoute
+  AdminAuditRoute: typeof AdminAuditRoute
+  AdminDataRoute: typeof AdminDataRoute
+  AdminDispensingRoute: typeof AdminDispensingRoute
+  AdminHealthRoute: typeof AdminHealthRoute
+  AdminInventoryRoute: typeof AdminInventoryRouteWithChildren
+  AdminReportsRoute: typeof AdminReportsRoute
+  AdminRequestsRoute: typeof AdminRequestsRoute
+  AdminSettingsRoute: typeof AdminSettingsRoute
+  AdminUsersRoute: typeof AdminUsersRoute
+  AdminIndexRoute: typeof AdminIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -48,11 +229,136 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/inventory': {
+      id: '/inventory'
+      path: '/inventory'
+      fullPath: '/inventory'
+      preLoaderRoute: typeof InventoryRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/': {
+      id: '/admin/'
+      path: '/admin'
+      fullPath: '/admin/'
+      preLoaderRoute: typeof AdminIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/audit': {
+      id: '/admin/audit'
+      path: '/admin/audit'
+      fullPath: '/admin/audit'
+      preLoaderRoute: typeof AdminAuditRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/data': {
+      id: '/admin/data'
+      path: '/admin/data'
+      fullPath: '/admin/data'
+      preLoaderRoute: typeof AdminDataRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/dispensing': {
+      id: '/admin/dispensing'
+      path: '/admin/dispensing'
+      fullPath: '/admin/dispensing'
+      preLoaderRoute: typeof AdminDispensingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/health': {
+      id: '/admin/health'
+      path: '/admin/health'
+      fullPath: '/admin/health'
+      preLoaderRoute: typeof AdminHealthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/inventory': {
+      id: '/admin/inventory'
+      path: '/admin/inventory'
+      fullPath: '/admin/inventory'
+      preLoaderRoute: typeof AdminInventoryRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/reports': {
+      id: '/admin/reports'
+      path: '/admin/reports'
+      fullPath: '/admin/reports'
+      preLoaderRoute: typeof AdminReportsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/requests': {
+      id: '/admin/requests'
+      path: '/admin/requests'
+      fullPath: '/admin/requests'
+      preLoaderRoute: typeof AdminRequestsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/settings': {
+      id: '/admin/settings'
+      path: '/admin/settings'
+      fullPath: '/admin/settings'
+      preLoaderRoute: typeof AdminSettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/users': {
+      id: '/admin/users'
+      path: '/admin/users'
+      fullPath: '/admin/users'
+      preLoaderRoute: typeof AdminUsersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/inventory/': {
+      id: '/admin/inventory/'
+      path: '/'
+      fullPath: '/admin/inventory/'
+      preLoaderRoute: typeof AdminInventoryIndexRouteImport
+      parentRoute: typeof AdminInventoryRoute
+    }
+    '/admin/inventory/expiry': {
+      id: '/admin/inventory/expiry'
+      path: '/expiry'
+      fullPath: '/admin/inventory/expiry'
+      preLoaderRoute: typeof AdminInventoryExpiryRouteImport
+      parentRoute: typeof AdminInventoryRoute
+    }
+    '/admin/inventory/low-stock': {
+      id: '/admin/inventory/low-stock'
+      path: '/low-stock'
+      fullPath: '/admin/inventory/low-stock'
+      preLoaderRoute: typeof AdminInventoryLowStockRouteImport
+      parentRoute: typeof AdminInventoryRoute
+    }
   }
 }
 
+interface AdminInventoryRouteChildren {
+  AdminInventoryExpiryRoute: typeof AdminInventoryExpiryRoute
+  AdminInventoryLowStockRoute: typeof AdminInventoryLowStockRoute
+  AdminInventoryIndexRoute: typeof AdminInventoryIndexRoute
+}
+
+const AdminInventoryRouteChildren: AdminInventoryRouteChildren = {
+  AdminInventoryExpiryRoute: AdminInventoryExpiryRoute,
+  AdminInventoryLowStockRoute: AdminInventoryLowStockRoute,
+  AdminInventoryIndexRoute: AdminInventoryIndexRoute,
+}
+
+const AdminInventoryRouteWithChildren = AdminInventoryRoute._addFileChildren(
+  AdminInventoryRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  InventoryRoute: InventoryRoute,
+  AdminAuditRoute: AdminAuditRoute,
+  AdminDataRoute: AdminDataRoute,
+  AdminDispensingRoute: AdminDispensingRoute,
+  AdminHealthRoute: AdminHealthRoute,
+  AdminInventoryRoute: AdminInventoryRouteWithChildren,
+  AdminReportsRoute: AdminReportsRoute,
+  AdminRequestsRoute: AdminRequestsRoute,
+  AdminSettingsRoute: AdminSettingsRoute,
+  AdminUsersRoute: AdminUsersRoute,
+  AdminIndexRoute: AdminIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
