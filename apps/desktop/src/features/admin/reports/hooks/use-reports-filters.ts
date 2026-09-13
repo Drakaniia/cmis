@@ -1,22 +1,22 @@
-import * as React from "react";
+import { useCallback, useMemo, useState } from "react";
 import type { ReportsFilters, ReportsPreset } from "../types";
 
 export function useReportsFilters(initial?: Partial<ReportsFilters>) {
-  const [filters, setFilters] = React.useState<ReportsFilters>({
+  const [filters, setFilters] = useState<ReportsFilters>({
     category: initial?.category ?? "All",
     customRange: initial?.customRange,
-    preset: (initial?.preset as ReportsPreset) ?? "30d",
+    preset: initial?.preset ?? "30d",
   });
 
-  const setPreset = React.useCallback((preset: ReportsPreset) => {
+  const setPreset = useCallback((preset: ReportsPreset) => {
     setFilters((p) => ({ ...p, preset }));
   }, []);
 
-  const setCategory = React.useCallback((category: string) => {
+  const setCategory = useCallback((category: string) => {
     setFilters((p) => ({ ...p, category }));
   }, []);
 
-  const presetLabel = React.useMemo(() => {
+  const presetLabel = useMemo(() => {
     switch (filters.preset) {
       case "7d":
         return "Last 7 days";

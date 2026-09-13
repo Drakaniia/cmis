@@ -1,6 +1,6 @@
 import { useRouterState } from "@tanstack/react-router";
 import { AnimatePresence, motion } from "motion/react";
-import * as React from "react";
+import { useCallback, useEffect, useState } from "react";
 import { branchCrossfadeMs } from "@/lib/motion";
 import { useSettings } from "../hooks/use-settings";
 import type { SettingsTabId } from "../types";
@@ -36,23 +36,23 @@ function tabFromHash(): SettingsTabId {
  */
 export function SettingsPage() {
   const settings = useSettings();
-  const [tab, setTab] = React.useState<SettingsTabId>(tabFromHash);
+  const [tab, setTab] = useState<SettingsTabId>(tabFromHash);
   const hash = useRouterState({ select: (state) => state.location.hash });
 
   // Deep links (palette, Backup card) land on their tab via the URL hash.
-  React.useEffect(() => {
+  useEffect(() => {
     const id = hash.replace("#", "");
     if (isSettingsTabId(id)) {
       setTab(id);
     }
   }, [hash]);
 
-  function selectTab(id: SettingsTabId) {
+  const selectTab = useCallback((id: SettingsTabId) => {
     setTab(id);
     window.history.replaceState(null, "", `#${id}`);
-  }
+  }, []);
 
-  const meta = SETTINGS_TABS.find((entry) => entry.id === tab);
+  const _meta = SETTINGS_TABS.find((entry) => entry.id === tab);
 
   return (
     <div className="flex h-[calc(100svh-48px)] flex-col overflow-hidden">

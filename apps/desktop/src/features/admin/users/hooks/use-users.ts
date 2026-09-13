@@ -1,4 +1,4 @@
-import * as React from "react";
+import { useCallback, useState } from "react";
 
 import { mockUsers } from "../mock";
 import type { AdminUser, UserDraft, UserRole, UserStatus } from "../types";
@@ -11,9 +11,9 @@ const ACTOR = "A. Lim";
  * records who did it and when; nothing overwrites the previous role.
  */
 export function useUsers(initial: AdminUser[] = mockUsers) {
-  const [users, setUsers] = React.useState<AdminUser[]>(initial);
+  const [users, setUsers] = useState<AdminUser[]>(initial);
 
-  const isEmailTaken = React.useCallback(
+  const isEmailTaken = useCallback(
     (email: string, excludeId?: string) => {
       const target = email.trim().toLowerCase();
       return users.some(
@@ -23,7 +23,7 @@ export function useUsers(initial: AdminUser[] = mockUsers) {
     [users]
   );
 
-  const createUser = React.useCallback((draft: UserDraft) => {
+  const createUser = useCallback((draft: UserDraft) => {
     const at = new Date().toISOString();
     const user: AdminUser = {
       actions7d: [0, 0, 0, 0, 0, 0, 0],
@@ -39,7 +39,7 @@ export function useUsers(initial: AdminUser[] = mockUsers) {
     return user;
   }, []);
 
-  const updateUser = React.useCallback((id: string, draft: UserDraft) => {
+  const updateUser = useCallback((id: string, draft: UserDraft) => {
     const at = new Date().toISOString();
     setUsers((prev) =>
       prev.map((user) => {
@@ -63,7 +63,7 @@ export function useUsers(initial: AdminUser[] = mockUsers) {
     );
   }, []);
 
-  const changeRole = React.useCallback((id: string, role: UserRole) => {
+  const changeRole = useCallback((id: string, role: UserRole) => {
     const at = new Date().toISOString();
     setUsers((prev) =>
       prev.map((user) =>
@@ -81,21 +81,18 @@ export function useUsers(initial: AdminUser[] = mockUsers) {
     );
   }, []);
 
-  const setStatus = React.useCallback((id: string, status: UserStatus) => {
+  const setStatus = useCallback((id: string, status: UserStatus) => {
     setUsers((prev) =>
       prev.map((user) => (user.id === id ? { ...user, status } : user))
     );
   }, []);
 
-  const setStatusMany = React.useCallback(
-    (ids: string[], status: UserStatus) => {
-      const target = new Set(ids);
-      setUsers((prev) =>
-        prev.map((user) => (target.has(user.id) ? { ...user, status } : user))
-      );
-    },
-    []
-  );
+  const setStatusMany = useCallback((ids: string[], status: UserStatus) => {
+    const target = new Set(ids);
+    setUsers((prev) =>
+      prev.map((user) => (target.has(user.id) ? { ...user, status } : user))
+    );
+  }, []);
 
   return {
     changeRole,

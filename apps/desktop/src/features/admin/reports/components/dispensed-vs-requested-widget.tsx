@@ -6,8 +6,24 @@ import { BarChart } from "@/components/charts/bar/bar-chart";
 import { BarXAxis } from "@/components/charts/bar/bar-x-axis";
 import { Grid } from "@/components/charts/grid";
 import { ChartTooltip } from "@/components/charts/tooltip/chart-tooltip";
+import { chartNumber } from "@/lib/chart-number";
 import type { FulfillmentPoint } from "../types";
 import { EmptyWidget, WidgetCard } from "./widget-card";
+
+function fulfillmentTooltipRows(point: Record<string, unknown>) {
+  return [
+    {
+      color: "var(--muted-foreground)",
+      label: "Requested",
+      value: chartNumber(point.requested),
+    },
+    {
+      color: "var(--chart-2)",
+      label: "Dispensed",
+      value: chartNumber(point.dispensed),
+    },
+  ];
+}
 
 export function DispensedVsRequestedWidget({
   data,
@@ -79,20 +95,7 @@ export function DispensedVsRequestedWidget({
           />
           <Bar dataKey="dispensed" fill="var(--chart-2)" lineCap="round" />
           <BarXAxis maxLabels={12} showAllLabels={data.length <= 4} />
-          <ChartTooltip
-            rows={(point) => [
-              {
-                color: "var(--muted-foreground)",
-                label: "Requested",
-                value: (point.requested as number) ?? 0,
-              },
-              {
-                color: "var(--chart-2)",
-                label: "Dispensed",
-                value: (point.dispensed as number) ?? 0,
-              },
-            ]}
-          />
+          <ChartTooltip rows={fulfillmentTooltipRows} />
         </BarChart>
       </motion.div>
 

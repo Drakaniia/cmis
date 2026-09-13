@@ -15,7 +15,7 @@ import {
   UserPlus,
   UserX,
 } from "lucide-react";
-import * as React from "react";
+import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { ConfirmModal } from "../../components/confirm-modal";
@@ -30,6 +30,98 @@ type ConfirmState =
   | { kind: "role"; role: UserRole; user: AdminUser }
   | null;
 
+const ROLE_BADGE: Record<UserRole, string> = {
+  Admin: "border-primary/40 bg-primary/12 text-primary",
+  Staff: "border-border bg-muted text-foreground",
+  Viewer:
+    "border-[var(--chart-2)]/40 bg-[var(--chart-2)]/12 text-[var(--chart-2)]",
+};
+
+function confirmationDescription(confirm: ConfirmState): string {
+  if (confirm?.kind === "role") {
+    return `Change ${confirm.user.name} from ${confirm.user.role} to ${confirm.role}?`;
+  }
+  if (confirm?.kind === "deactivate") {
+    return `Deactivate ${confirm.user.name}? They will be unable to log in.`;
+  }
+  return "";
+}
+
+function UserRow({
+  onEdit,
+  onToggleStatus,
+  user,
+}: {
+  onEdit: (user: AdminUser) => void;
+  onToggleStatus: (user: AdminUser) => void;
+  user: AdminUser;
+}) {
+  const handleEdit = useCallback(() => {
+    onEdit(user);
+  }, [onEdit, user]);
+  const handleToggleStatus = useCallback(() => {
+    onToggleStatus(user);
+  }, [onToggleStatus, user]);
+
+  return (
+    <div className="grid grid-cols-[1.2fr_0.8fr_0.7fr_auto] items-center gap-2 border-border/50 border-b px-3 py-2 last:border-b-0">
+      <span className="min-w-0 truncate">
+        <span className="block truncate font-medium text-foreground text-sm">
+          {user.name}
+        </span>
+        <span className="block truncate text-caption text-muted-foreground">
+          {user.email}
+        </span>
+      </span>
+      <span className="min-w-0">
+        <span
+          className={cn(
+            "inline-flex items-center rounded-full border px-2 py-0.5 font-medium text-caption",
+            ROLE_BADGE[user.role]
+          )}
+        >
+          {user.role}
+        </span>
+      </span>
+      <span className="text-caption text-muted-foreground">
+        {user.status === "active" ? "Active" : "Inactive"}
+      </span>
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          render={
+            <button
+              aria-label={`Actions for ${user.name}`}
+              className="press-feedback rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+              type="button"
+            />
+          }
+        >
+          <MoreHorizontal aria-hidden className="size-4" />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="min-w-[160px]">
+          <DropdownMenuItem onClick={handleEdit}>
+            <Pencil aria-hidden className="size-3.5" />
+            Edit
+          </DropdownMenuItem>
+          <DropdownMenuItem disabled>
+            <KeyRound aria-hidden className="size-3.5" />
+            Reset password
+          </DropdownMenuItem>
+          <DropdownMenuItem disabled>
+            <ScrollText aria-hidden className="size-3.5" />
+            View audit
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={handleToggleStatus} variant="destructive">
+            <UserX aria-hidden className="size-3.5" />
+            {user.status === "active" ? "Deactivate" : "Activate"}
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
+  );
+}
+
 /**
  * Settings tab — User Management.
  * Simplified version of the standalone UsersPage that fits within a tab panel.
@@ -38,36 +130,36 @@ export function UsersTab() {
   const { users, changeRole, createUser, isEmailTaken, setStatus, updateUser } =
     useUsers();
 
-  const [filters, _setFilters] = React.useState(DEFAULT_USER_FILTERS);
-  const [formOpen, setFormOpen] = React.useState(false);
-  const [formUser, setFormUser] = React.useState<AdminUser | null>(null);
-  const [confirm, setConfirm] = React.useState<ConfirmState>(null);
+  const [filters] = useState(DEFAULT_USER_FILTERS);
+  const [formOpen, setFormOpen] = useState(false);
+  const [formUser, setFormUser] = useState<AdminUser | null>(null);
+  const [confirm, setConfirm] = useState<ConfirmState>(null);
 
-  const filtered = React.useMemo(
-    () => filterUsers(users, filters),
-    [users, filters]
-  );
+  const filtered = useMemo(() => filterUsers(users, filters), [users, filters]);
 
-  function openCreate() {
+  const openCreate = useCallback(() => {
     setFormUser(null);
     setFormOpen(true);
-  }
+  }, []);
 
-  function openEdit(user: AdminUser) {
+  const openEdit = useCallback((user: AdminUser) => {
     setFormUser(user);
     setFormOpen(true);
-  }
+  }, []);
 
-  function handleToggleStatus(user: AdminUser) {
-    if (user.status === "active") {
-      setConfirm({ kind: "deactivate", user });
-      return;
-    }
-    setStatus(user.id, "active");
-    toast.success(`${user.name} activated`);
-  }
+  const handleToggleStatus = useCallback(
+    (user: AdminUser) => {
+      if (user.status === "active") {
+        setConfirm({ kind: "deactivate", user });
+        return;
+      }
+      setStatus(user.id, "active");
+      toast.success(`${user.name} activated`);
+    },
+    [setStatus]
+  );
 
-  function handleConfirm() {
+  const handleConfirm = useCallback(() => {
     if (!confirm) {
       return;
     }
@@ -81,26 +173,28 @@ export function UsersTab() {
       toast.success(`${confirm.user.name} deactivated`);
     }
     setConfirm(null);
-  }
+  }, [confirm, changeRole, setStatus]);
 
-  function handleFormConfirm(draft: UserDraft) {
-    if (formUser) {
-      updateUser(formUser.id, draft);
-      toast.success(`${draft.name} updated`);
-    } else {
-      createUser(draft);
-      toast.success(`${draft.name} created`, {
-        description: `${draft.role}`,
-      });
+  const handleConfirmDialogChange = useCallback((open: boolean) => {
+    if (!open) {
+      setConfirm(null);
     }
-  }
+  }, []);
 
-  const ROLE_BADGE: Record<UserRole, string> = {
-    Admin: "border-primary/40 bg-primary/12 text-primary",
-    Staff: "border-border bg-muted text-foreground",
-    Viewer:
-      "border-[var(--chart-2)]/40 bg-[var(--chart-2)]/12 text-[var(--chart-2)]",
-  };
+  const handleFormConfirm = useCallback(
+    (draft: UserDraft) => {
+      if (formUser) {
+        updateUser(formUser.id, draft);
+        toast.success(`${draft.name} updated`);
+      } else {
+        createUser(draft);
+        toast.success(`${draft.name} created`, {
+          description: `${draft.role}`,
+        });
+      }
+    },
+    [formUser, updateUser, createUser]
+  );
 
   return (
     <div className="space-y-4">
@@ -122,67 +216,12 @@ export function UsersTab() {
             <span className="w-8" />
           </div>
           {filtered.map((user) => (
-            <div
-              className="grid grid-cols-[1.2fr_0.8fr_0.7fr_auto] items-center gap-2 border-border/50 border-b px-3 py-2 last:border-b-0"
+            <UserRow
               key={user.id}
-            >
-              <span className="min-w-0 truncate">
-                <span className="block truncate font-medium text-foreground text-sm">
-                  {user.name}
-                </span>
-                <span className="block truncate text-caption text-muted-foreground">
-                  {user.email}
-                </span>
-              </span>
-              <span className="min-w-0">
-                <span
-                  className={cn(
-                    "inline-flex items-center rounded-full border px-2 py-0.5 font-medium text-caption",
-                    ROLE_BADGE[user.role]
-                  )}
-                >
-                  {user.role}
-                </span>
-              </span>
-              <span className="text-caption text-muted-foreground">
-                {user.status === "active" ? "Active" : "Inactive"}
-              </span>
-              <DropdownMenu>
-                <DropdownMenuTrigger
-                  render={
-                    <button
-                      aria-label={`Actions for ${user.name}`}
-                      className="press-feedback rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-                      type="button"
-                    />
-                  }
-                >
-                  <MoreHorizontal aria-hidden className="size-4" />
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="min-w-[160px]">
-                  <DropdownMenuItem onClick={() => openEdit(user)}>
-                    <Pencil aria-hidden className="size-3.5" />
-                    Edit
-                  </DropdownMenuItem>
-                  <DropdownMenuItem disabled>
-                    <KeyRound aria-hidden className="size-3.5" />
-                    Reset password
-                  </DropdownMenuItem>
-                  <DropdownMenuItem disabled>
-                    <ScrollText aria-hidden className="size-3.5" />
-                    View audit
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    onClick={() => handleToggleStatus(user)}
-                    variant="destructive"
-                  >
-                    <UserX aria-hidden className="size-3.5" />
-                    {user.status === "active" ? "Deactivate" : "Activate"}
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
+              onEdit={openEdit}
+              onToggleStatus={handleToggleStatus}
+              user={user}
+            />
           ))}
           {filtered.length === 0 ? (
             <p className="p-6 text-center text-caption text-muted-foreground">
@@ -202,20 +241,10 @@ export function UsersTab() {
 
       <ConfirmModal
         confirmLabel={confirm?.kind === "role" ? "Change role" : "Deactivate"}
-        description={
-          confirm?.kind === "role"
-            ? `Change ${confirm.user.name} from ${confirm.user.role} to ${confirm.role}?`
-            : confirm?.kind === "deactivate"
-              ? `Deactivate ${confirm.user.name}? They will be unable to log in.`
-              : ""
-        }
+        description={confirmationDescription(confirm)}
         destructive
         onConfirm={handleConfirm}
-        onOpenChange={(open) => {
-          if (!open) {
-            setConfirm(null);
-          }
-        }}
+        onOpenChange={handleConfirmDialogChange}
         open={confirm !== null}
         title={confirm?.kind === "role" ? "Change role?" : "Deactivate user?"}
       />

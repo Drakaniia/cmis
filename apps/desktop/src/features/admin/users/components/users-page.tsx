@@ -1,7 +1,7 @@
 import { Button } from "@cmis/ui/components/button";
 import { useNavigate } from "@tanstack/react-router";
 import { UserPlus, UserX } from "lucide-react";
-import * as React from "react";
+import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useMediaQuery1200 } from "@/features/inventory/hooks/use-media-query-1200";
 import { ConfirmModal } from "../../components/confirm-modal";
@@ -42,25 +42,19 @@ export function UsersPage() {
     updateUser,
   } = useUsers();
 
-  const [filters, setFilters] =
-    React.useState<UserFilters>(DEFAULT_USER_FILTERS);
-  const [selectedId, setSelectedId] = React.useState<string | null>(null);
-  const [selectedIds, setSelectedIds] = React.useState<Set<string>>(
-    () => new Set()
-  );
-  const [originRect, setOriginRect] = React.useState<DOMRect | null>(null);
-  const [sheetOpen, setSheetOpen] = React.useState(false);
-  const [formOpen, setFormOpen] = React.useState(false);
-  const [formUser, setFormUser] = React.useState<AdminUser | null>(null);
-  const [confirm, setConfirm] = React.useState<ConfirmState>(null);
+  const [filters, setFilters] = useState<UserFilters>(DEFAULT_USER_FILTERS);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
+  const [originRect, setOriginRect] = useState<DOMRect | null>(null);
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [formOpen, setFormOpen] = useState(false);
+  const [formUser, setFormUser] = useState<AdminUser | null>(null);
+  const [confirm, setConfirm] = useState<ConfirmState>(null);
 
-  const filtered = React.useMemo(
-    () => filterUsers(users, filters),
-    [users, filters]
-  );
+  const filtered = useMemo(() => filterUsers(users, filters), [users, filters]);
   const selectedUser = users.find((user) => user.id === selectedId) ?? null;
 
-  const activeChips = React.useMemo(() => {
+  const activeChips = useMemo(() => {
     const chips: { key: keyof UserFilters; label: string }[] = [];
     if (filters.role !== "All") {
       chips.push({ key: "role", label: `Role: ${filters.role}` });
@@ -71,19 +65,22 @@ export function UsersPage() {
     return chips;
   }, [filters]);
 
-  function patchFilters(patch: Partial<UserFilters>) {
+  const patchFilters = useCallback((patch: Partial<UserFilters>) => {
     setFilters((prev) => ({ ...prev, ...patch }));
-  }
+  }, []);
 
-  function handleSelect(id: string, rect: DOMRect | null) {
-    setSelectedId(id);
-    setOriginRect(rect);
-    if (!isWide) {
-      setSheetOpen(true);
-    }
-  }
+  const handleSelect = useCallback(
+    (id: string, rect: DOMRect | null) => {
+      setSelectedId(id);
+      setOriginRect(rect);
+      if (!isWide) {
+        setSheetOpen(true);
+      }
+    },
+    [isWide]
+  );
 
-  function handleToggleSelect(id: string) {
+  const handleToggleSelect = useCallback((id: string) => {
     setSelectedIds((prev) => {
       const next = new Set(prev);
       if (next.has(id)) {
@@ -93,62 +90,74 @@ export function UsersPage() {
       }
       return next;
     });
-  }
+  }, []);
 
-  function handleToggleSelectAll(checked: boolean) {
-    setSelectedIds(
-      checked ? new Set(filtered.map((user) => user.id)) : new Set()
-    );
-  }
+  const handleToggleSelectAll = useCallback(
+    (checked: boolean) => {
+      setSelectedIds(
+        checked ? new Set(filtered.map((user) => user.id)) : new Set()
+      );
+    },
+    [filtered]
+  );
 
-  function openCreate() {
+  const openCreate = useCallback(() => {
     setFormUser(null);
     setFormOpen(true);
-  }
+  }, []);
 
-  function openEdit(user: AdminUser) {
+  const openEdit = useCallback((user: AdminUser) => {
     setFormUser(user);
     setFormOpen(true);
     setSheetOpen(false);
-  }
+  }, []);
 
-  function handleRequestRole(user: AdminUser, role: UserRole) {
+  const handleRequestRole = useCallback((user: AdminUser, role: UserRole) => {
     if (user.role === role) {
       return;
     }
     setConfirm({ kind: "role", role, user });
-  }
+  }, []);
 
-  function handleToggleStatus(user: AdminUser) {
-    if (user.status === "active") {
-      setConfirm({ kind: "deactivate", user });
-      return;
-    }
-    setStatus(user.id, "active");
-    toast.success(`${user.name} activated`);
-  }
+  const handleToggleStatus = useCallback(
+    (user: AdminUser) => {
+      if (user.status === "active") {
+        setConfirm({ kind: "deactivate", user });
+        return;
+      }
+      setStatus(user.id, "active");
+      toast.success(`${user.name} activated`);
+    },
+    [setStatus]
+  );
 
-  function handleAction(user: AdminUser, action: UserRowAction) {
-    if (action === "edit") {
-      openEdit(user);
-      return;
-    }
-    if (action === "reset-password") {
-      setConfirm({ kind: "reset", user });
-      return;
-    }
-    if (action === "view-audit") {
-      handleViewAudit(user);
-      return;
-    }
-    handleToggleStatus(user);
-  }
+  const handleViewAudit = useCallback(
+    (user: AdminUser) => {
+      navigate({ search: { user: user.name }, to: "/admin/audit" });
+    },
+    [navigate]
+  );
 
-  function handleViewAudit(user: AdminUser) {
-    navigate({ search: { user: user.name }, to: "/admin/audit" });
-  }
+  const handleAction = useCallback(
+    (user: AdminUser, action: UserRowAction) => {
+      if (action === "edit") {
+        openEdit(user);
+        return;
+      }
+      if (action === "reset-password") {
+        setConfirm({ kind: "reset", user });
+        return;
+      }
+      if (action === "view-audit") {
+        handleViewAudit(user);
+        return;
+      }
+      handleToggleStatus(user);
+    },
+    [handleToggleStatus, handleViewAudit, openEdit]
+  );
 
-  function handleConfirm() {
+  const handleConfirm = useCallback(() => {
     if (!confirm) {
       return;
     }
@@ -169,19 +178,47 @@ export function UsersPage() {
     }
     setConfirm(null);
     setSheetOpen(false);
-  }
+  }, [changeRole, confirm, setStatus, setStatusMany]);
 
-  function handleFormConfirm(draft: UserDraft) {
-    if (formUser) {
-      updateUser(formUser.id, draft);
-      toast.success(`${draft.name} updated`);
-    } else {
-      createUser(draft);
-      toast.success(`${draft.name} created`, {
-        description: `${draft.role}`,
-      });
+  const handleFormConfirm = useCallback(
+    (draft: UserDraft) => {
+      if (formUser) {
+        updateUser(formUser.id, draft);
+        toast.success(`${draft.name} updated`);
+      } else {
+        createUser(draft);
+        toast.success(`${draft.name} created`, {
+          description: `${draft.role}`,
+        });
+      }
+    },
+    [createUser, formUser, updateUser]
+  );
+
+  const handleBulkDeactivate = useCallback(() => {
+    setConfirm({ ids: [...selectedIds], kind: "bulk" });
+  }, [selectedIds]);
+
+  const handleClearFilters = useCallback(() => {
+    setFilters(DEFAULT_USER_FILTERS);
+  }, []);
+
+  const handleRemoveChip = useCallback(
+    (key: keyof UserFilters) => {
+      patchFilters(
+        key === "search"
+          ? { search: "" }
+          : ({ [key]: "All" } as Partial<UserFilters>)
+      );
+    },
+    [patchFilters]
+  );
+
+  const handleConfirmOpenChange = useCallback((open: boolean) => {
+    if (!open) {
+      setConfirm(null);
     }
-  }
+  }, []);
 
   const bulkNames = users
     .filter((user) => selectedIds.has(user.id))
@@ -233,7 +270,7 @@ export function UsersPage() {
         {selectedIds.size > 0 ? (
           <Button
             className="press-feedback"
-            onClick={() => setConfirm({ ids: [...selectedIds], kind: "bulk" })}
+            onClick={handleBulkDeactivate}
             size="sm"
             variant="destructive"
           >
@@ -251,14 +288,8 @@ export function UsersPage() {
         activeChips={activeChips}
         filters={filters}
         onChange={patchFilters}
-        onClearFilters={() => setFilters(DEFAULT_USER_FILTERS)}
-        onRemoveChip={(key) =>
-          patchFilters(
-            key === "search"
-              ? { search: "" }
-              : ({ [key]: "All" } as Partial<UserFilters>)
-          )
-        }
+        onClearFilters={handleClearFilters}
+        onRemoveChip={handleRemoveChip}
         resultCount={filtered.length}
         totalCount={users.length}
       />
@@ -311,11 +342,7 @@ export function UsersPage() {
         description={confirmProps?.description}
         destructive={confirmProps?.destructive ?? false}
         onConfirm={handleConfirm}
-        onOpenChange={(open) => {
-          if (!open) {
-            setConfirm(null);
-          }
-        }}
+        onOpenChange={handleConfirmOpenChange}
         open={confirm !== null}
         title={confirmProps?.title ?? ""}
       />

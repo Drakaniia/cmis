@@ -1,7 +1,13 @@
 import { Button } from "@cmis/ui/components/button";
 import { X } from "lucide-react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import * as React from "react";
+import {
+  type ChangeEvent,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 
 import {
   materializeEnter,
@@ -14,6 +20,38 @@ export interface CrudField {
   label: string;
   required?: boolean;
   type?: "number" | "text";
+}
+
+function CrudFieldInput({
+  field,
+  onValueChange,
+  value,
+  valid,
+}: {
+  field: CrudField;
+  onValueChange: (key: string, value: string) => void;
+  valid: boolean;
+  value: string;
+}) {
+  const handleChange = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => {
+      onValueChange(field.key, event.target.value);
+    },
+    [onValueChange, field.key]
+  );
+
+  return (
+    <label className="block text-caption text-foreground">
+      {field.label}
+      <input
+        aria-invalid={!valid}
+        className="mt-1 h-8 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus:border-ring focus:ring-1 focus:ring-ring"
+        onChange={handleChange}
+        type={field.type ?? "text"}
+        value={value}
+      />
+    </label>
+  );
 }
 
 /**
@@ -35,12 +73,12 @@ export function CrudModal({
   open: boolean;
   title: string;
 }) {
-  const [values, setValues] = React.useState(initial);
+  const [values, setValues] = useState(initial);
   // Parents pass a fresh object each render; seed only when the modal opens.
-  const initialRef = React.useRef(initial);
+  const initialRef = useRef(initial);
   initialRef.current = initial;
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (open) {
       setValues(initialRef.current);
     }
@@ -52,6 +90,19 @@ export function CrudModal({
   const reduceMotion = useReducedMotion();
   const variants = reduceMotion ? materializeEnterReduced : materializeEnter;
 
+  const handleClose = useCallback(() => {
+    onOpenChange(false);
+  }, [onOpenChange]);
+
+  const handleValueChange = useCallback((key: string, value: string) => {
+    setValues((prev) => ({ ...prev, [key]: value }));
+  }, []);
+
+  const handleSave = useCallback(() => {
+    onSubmit(values);
+    onOpenChange(false);
+  }, [onSubmit, values, onOpenChange]);
+
   return (
     <AnimatePresence>
       {open ? (
@@ -62,7 +113,7 @@ export function CrudModal({
             className="fixed inset-0 z-50 bg-black/32"
             exit={{ opacity: 0 }}
             initial={{ opacity: 0 }}
-            onClick={() => onOpenChange(false)}
+            onClick={handleClose}
             transition={reduceMotion ? { duration: 0 } : { duration: 0.18 }}
           />
           <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6">
@@ -84,7 +135,7 @@ export function CrudModal({
                 <Button
                   aria-label="Close"
                   className="press-feedback"
-                  onClick={() => onOpenChange(false)}
+                  onClick={handleClose}
                   size="icon-sm"
                   variant="ghost"
                 >
@@ -93,29 +144,22 @@ export function CrudModal({
               </div>
               <div className="space-y-3 p-4">
                 {fields.map((field) => (
-                  <label
-                    className="block text-caption text-foreground"
+                  <CrudFieldInput
+                    field={field}
                     key={field.key}
-                  >
-                    {field.label}
-                    <input
-                      className="mt-1 h-8 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus:border-ring focus:ring-1 focus:ring-ring"
-                      onChange={(event) =>
-                        setValues((prev) => ({
-                          ...prev,
-                          [field.key]: event.target.value,
-                        }))
-                      }
-                      type={field.type ?? "text"}
-                      value={values[field.key] ?? ""}
-                    />
-                  </label>
+                    onValueChange={handleValueChange}
+                    valid={
+                      !field.required ||
+                      (values[field.key]?.trim().length ?? 0) > 0
+                    }
+                    value={values[field.key] ?? ""}
+                  />
                 ))}
               </div>
               <div className="flex justify-end gap-2 border-border/50 border-t px-4 py-3">
                 <Button
                   className="press-feedback"
-                  onClick={() => onOpenChange(false)}
+                  onClick={handleClose}
                   size="sm"
                   variant="ghost"
                 >
@@ -124,10 +168,7 @@ export function CrudModal({
                 <Button
                   className="press-feedback"
                   disabled={!valid}
-                  onClick={() => {
-                    onSubmit(values);
-                    onOpenChange(false);
-                  }}
+                  onClick={handleSave}
                   size="sm"
                 >
                   Save

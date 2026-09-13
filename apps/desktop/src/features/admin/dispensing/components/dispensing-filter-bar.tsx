@@ -8,6 +8,7 @@ import {
   DropdownMenuTrigger,
 } from "@cmis/ui/components/dropdown-menu";
 import { ChevronDown, Filter, Search, X } from "lucide-react";
+import { type ChangeEvent, type KeyboardEvent, useCallback } from "react";
 
 import type { DispensingChipKey } from "../hooks/use-dispensing-filters";
 import type {
@@ -33,6 +34,62 @@ function Chip({ label, onRemove }: { label: string; onRemove: () => void }) {
   );
 }
 
+/** A dropdown item that reports the value it represents. */
+function ValueOption<T extends string>({
+  label,
+  value,
+  onSelect,
+}: {
+  label: string;
+  value: T;
+  onSelect: (value: T) => void;
+}) {
+  const handleSelect = useCallback(() => onSelect(value), [onSelect, value]);
+  return <DropdownMenuItem onClick={handleSelect}>{label}</DropdownMenuItem>;
+}
+
+function StatusOption({
+  active,
+  label,
+  value,
+  onStatusChange,
+}: {
+  active: boolean;
+  label: string;
+  value: "all" | DispensingStatus;
+  onStatusChange: (value: "all" | DispensingStatus) => void;
+}) {
+  const handleSelect = useCallback(
+    () => onStatusChange(value),
+    [onStatusChange, value]
+  );
+  return (
+    <DropdownMenuCheckboxItem
+      checked={active}
+      closeOnClick={false}
+      onClick={handleSelect}
+    >
+      {label}
+    </DropdownMenuCheckboxItem>
+  );
+}
+
+function ChipItem({
+  chipKey,
+  label,
+  onRemoveChip,
+}: {
+  chipKey: DispensingChipKey;
+  label: string;
+  onRemoveChip: (key: DispensingChipKey) => void;
+}) {
+  const handleRemove = useCallback(
+    () => onRemoveChip(chipKey),
+    [chipKey, onRemoveChip]
+  );
+  return <Chip label={label} onRemove={handleRemove} />;
+}
+
 /**
  * CMIS-UI-06 §3 — sticky translucent filter bar with active chips.
  * Filters persist to the URL so an audit sweep survives a refresh or palette
@@ -48,7 +105,6 @@ export function DispensingFilterBar({
   onMedicineChange,
   onPresetChange,
   onRemoveChip,
-  onRequestorChange,
   onSearchChange,
   onStaffChange,
   onStatusChange,
@@ -79,6 +135,26 @@ export function DispensingFilterBar({
     DISPENSING_STATUSES.find((s) => s.value === filters.status)?.label ??
     "Status";
 
+  const handleSearchInput = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) =>
+      onSearchChange(event.target.value),
+    [onSearchChange]
+  );
+
+  const handleSearchKeyDown = useCallback(
+    (event: KeyboardEvent<HTMLInputElement>) => {
+      if (event.key === "Escape" && filters.search) {
+        onSearchChange("");
+      }
+    },
+    [filters.search, onSearchChange]
+  );
+
+  const handleClearSearch = useCallback(
+    () => onSearchChange(""),
+    [onSearchChange]
+  );
+
   return (
     <div className="sticky top-0 z-10 shrink-0 border-border/50 border-b bg-card/95 backdrop-blur-[6px]">
       <div className="flex flex-wrap items-center gap-2 px-3 py-2">
@@ -91,12 +167,8 @@ export function DispensingFilterBar({
           <input
             aria-label="Search dispensing records"
             className="h-8 w-full rounded-md border border-input bg-background pr-8 pl-8 text-sm outline-none focus:border-ring focus:ring-1 focus:ring-ring"
-            onChange={(event) => onSearchChange(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Escape" && filters.search) {
-                onSearchChange("");
-              }
-            }}
+            onChange={handleSearchInput}
+            onKeyDown={handleSearchKeyDown}
             placeholder="Search medicine, batch, staff…"
             value={filters.search}
           />
@@ -104,7 +176,7 @@ export function DispensingFilterBar({
             <button
               aria-label="Clear search"
               className="absolute right-2 rounded p-1 text-muted-foreground hover:bg-muted"
-              onClick={() => onSearchChange("")}
+              onClick={handleClearSearch}
               type="button"
             >
               <X className="size-3.5" />
@@ -127,12 +199,12 @@ export function DispensingFilterBar({
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="min-w-[170px]">
             {DISPENSING_DATE_PRESETS.map((preset) => (
-              <DropdownMenuItem
+              <ValueOption
                 key={preset.value}
-                onClick={() => onPresetChange(preset.value)}
-              >
-                {preset.label}
-              </DropdownMenuItem>
+                label={preset.label}
+                onSelect={onPresetChange}
+                value={preset.value}
+              />
             ))}
           </DropdownMenuContent>
         </DropdownMenu>
@@ -155,14 +227,13 @@ export function DispensingFilterBar({
             <DropdownMenuGroup>
               <DropdownMenuLabel>Filter by status</DropdownMenuLabel>
               {DISPENSING_STATUSES.map((status) => (
-                <DropdownMenuCheckboxItem
-                  checked={filters.status === status.value}
-                  closeOnClick={false}
+                <StatusOption
+                  active={filters.status === status.value}
                   key={status.value}
-                  onClick={() => onStatusChange(status.value)}
-                >
-                  {status.label}
-                </DropdownMenuCheckboxItem>
+                  label={status.label}
+                  onStatusChange={onStatusChange}
+                  value={status.value}
+                />
               ))}
             </DropdownMenuGroup>
           </DropdownMenuContent>
@@ -185,13 +256,18 @@ export function DispensingFilterBar({
             align="start"
             className="max-h-[280px] min-w-[170px]"
           >
-            <DropdownMenuItem onClick={() => onStaffChange("All")}>
-              All staff
-            </DropdownMenuItem>
+            <ValueOption
+              label="All staff"
+              onSelect={onStaffChange}
+              value="All"
+            />
             {staffList.map((name) => (
-              <DropdownMenuItem key={name} onClick={() => onStaffChange(name)}>
-                {name}
-              </DropdownMenuItem>
+              <ValueOption
+                key={name}
+                label={name}
+                onSelect={onStaffChange}
+                value={name}
+              />
             ))}
           </DropdownMenuContent>
         </DropdownMenu>
@@ -213,16 +289,18 @@ export function DispensingFilterBar({
             align="start"
             className="max-h-[280px] min-w-[200px]"
           >
-            <DropdownMenuItem onClick={() => onMedicineChange("All")}>
-              All medicines
-            </DropdownMenuItem>
+            <ValueOption
+              label="All medicines"
+              onSelect={onMedicineChange}
+              value="All"
+            />
             {medicines.map((name) => (
-              <DropdownMenuItem
+              <ValueOption
                 key={name}
-                onClick={() => onMedicineChange(name)}
-              >
-                {name}
-              </DropdownMenuItem>
+                label={name}
+                onSelect={onMedicineChange}
+                value={name}
+              />
             ))}
           </DropdownMenuContent>
         </DropdownMenu>
@@ -241,16 +319,14 @@ export function DispensingFilterBar({
             <ChevronDown aria-hidden className="size-3" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="min-w-[170px]">
-            <DropdownMenuItem onClick={() => onBranchChange("All")}>
-              All
-            </DropdownMenuItem>
+            <ValueOption label="All" onSelect={onBranchChange} value="All" />
             {branches.map((branch) => (
-              <DropdownMenuItem
+              <ValueOption
                 key={branch}
-                onClick={() => onBranchChange(branch)}
-              >
-                {branch}
-              </DropdownMenuItem>
+                label={branch}
+                onSelect={onBranchChange}
+                value={branch}
+              />
             ))}
           </DropdownMenuContent>
         </DropdownMenu>
@@ -264,10 +340,11 @@ export function DispensingFilterBar({
       {activeChips.length > 0 ? (
         <div className="flex flex-wrap items-center gap-1.5 px-3 pb-2">
           {activeChips.map((chip) => (
-            <Chip
+            <ChipItem
+              chipKey={chip.key}
               key={`${chip.key}-${chip.label}`}
               label={chip.label}
-              onRemove={() => onRemoveChip(chip.key)}
+              onRemoveChip={onRemoveChip}
             />
           ))}
           <button

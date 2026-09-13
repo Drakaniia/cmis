@@ -1,7 +1,7 @@
 import { Button } from "@cmis/ui/components/button";
 import { Checkbox } from "@cmis/ui/components/checkbox";
 import { Download } from "lucide-react";
-import * as React from "react";
+import { useCallback, useState } from "react";
 import { toast } from "sonner";
 
 import { invoke } from "@/lib/tauri";
@@ -12,12 +12,65 @@ import { EXPORT_TYPES } from "../types";
 /** Rough row counts that decide whether a progress bar is shown (§4.3). */
 const LARGE_EXPORT_THRESHOLD = 500;
 
+function ExportTypeToggle({
+  checked,
+  count,
+  id,
+  label,
+  onToggle,
+}: {
+  checked: boolean;
+  count: number;
+  id: ExportDataType;
+  label: string;
+  onToggle: (id: ExportDataType) => void;
+}) {
+  const handleCheckedChange = useCallback(() => onToggle(id), [id, onToggle]);
+
+  return (
+    <label className="inline-flex items-center gap-2" htmlFor={`export-${id}`}>
+      <Checkbox
+        checked={checked}
+        id={`export-${id}`}
+        onCheckedChange={handleCheckedChange}
+      />
+      {label}
+      <span className="text-muted-foreground">({count.toLocaleString()})</span>
+    </label>
+  );
+}
+
+function FormatOption({
+  active,
+  onSelect,
+  option,
+}: {
+  active: boolean;
+  onSelect: (format: ExportFormat) => void;
+  option: ExportFormat;
+}) {
+  const handleChange = useCallback(() => onSelect(option), [onSelect, option]);
+
+  return (
+    <label className="inline-flex items-center gap-1.5">
+      <input
+        checked={active}
+        className="accent-primary"
+        name="export-format"
+        onChange={handleChange}
+        type="radio"
+      />
+      {option.toUpperCase()}
+    </label>
+  );
+}
+
 export function ExportCard() {
-  const [selected, setSelected] = React.useState<ExportDataType[]>(
+  const [selected, setSelected] = useState<ExportDataType[]>(
     EXPORT_TYPES.map((type) => type.id)
   );
-  const [format, setFormat] = React.useState<ExportFormat>("csv");
-  const [progress, setProgress] = React.useState<number | null>(null);
+  const [format, setFormat] = useState<ExportFormat>("csv");
+  const [progress, setProgress] = useState<number | null>(null);
 
   const selectedRows = EXPORT_TYPES.filter((type) =>
     selected.includes(type.id)
@@ -25,13 +78,13 @@ export function ExportCard() {
   const isLarge = selectedRows > LARGE_EXPORT_THRESHOLD;
   const disabled = selected.length === 0 || progress !== null;
 
-  function toggle(id: ExportDataType) {
+  const toggle = useCallback((id: ExportDataType) => {
     setSelected((prev) =>
       prev.includes(id) ? prev.filter((value) => value !== id) : [...prev, id]
     );
-  }
+  }, []);
 
-  async function handleDownload() {
+  const handleDownload = useCallback(async () => {
     setProgress(8);
     // Let the progress bar render before the (mock) streaming begins.
     await new Promise((resolve) => setTimeout(resolve, 180));
@@ -60,7 +113,7 @@ export function ExportCard() {
         ? `Export saved to ${savedTo}`
         : `Export ready — cmis-export-${stamp}.${format}`
     );
-  }
+  }, [format, selected]);
 
   return (
     <SettingsCard
@@ -71,17 +124,14 @@ export function ExportCard() {
         <legend className="mb-1.5">Data to include</legend>
         <div className="flex flex-wrap gap-4">
           {EXPORT_TYPES.map((type) => (
-            <label className="inline-flex items-center gap-2" key={type.id}>
-              <Checkbox
-                aria-label={type.label}
-                checked={selected.includes(type.id)}
-                onCheckedChange={() => toggle(type.id)}
-              />
-              {type.label}
-              <span className="text-muted-foreground">
-                ({type.count.toLocaleString()})
-              </span>
-            </label>
+            <ExportTypeToggle
+              checked={selected.includes(type.id)}
+              count={type.count}
+              id={type.id}
+              key={type.id}
+              label={type.label}
+              onToggle={toggle}
+            />
           ))}
         </div>
       </fieldset>
@@ -90,16 +140,12 @@ export function ExportCard() {
         <legend className="mb-1.5">Format</legend>
         <div className="flex gap-4">
           {(["csv", "json"] as const).map((option) => (
-            <label className="inline-flex items-center gap-1.5" key={option}>
-              <input
-                checked={format === option}
-                className="accent-primary"
-                name="export-format"
-                onChange={() => setFormat(option)}
-                type="radio"
-              />
-              {option.toUpperCase()}
-            </label>
+            <FormatOption
+              active={format === option}
+              key={option}
+              onSelect={setFormat}
+              option={option}
+            />
           ))}
         </div>
       </fieldset>

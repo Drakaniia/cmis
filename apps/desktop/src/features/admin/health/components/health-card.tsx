@@ -1,9 +1,35 @@
 import { Button } from "@cmis/ui/components/button";
 import { cn } from "@cmis/ui/lib/utils";
-import type * as React from "react";
+import { type ReactNode, useCallback } from "react";
 
 import { Sparkline, StatusDot } from "../../components/indicators";
 import type { HealthAction, HealthCardData } from "../types";
+
+function HealthActionButton({
+  action,
+  cardId,
+  onAction,
+}: {
+  action: HealthAction;
+  cardId: HealthCardData["id"];
+  onAction: (id: HealthCardData["id"], action: HealthAction) => void;
+}) {
+  const handleClick = useCallback(
+    () => onAction(cardId, action),
+    [action, cardId, onAction]
+  );
+
+  return (
+    <Button
+      className="press-feedback"
+      onClick={handleClick}
+      size="sm"
+      variant="ghost"
+    >
+      {action.label}
+    </Button>
+  );
+}
 
 /**
  * CMIS-UI-09 §5.3 — card anatomy. The action row uses ghost buttons: these are
@@ -17,7 +43,7 @@ export function HealthCard({
   children,
 }: {
   card: HealthCardData;
-  children?: React.ReactNode;
+  children?: ReactNode;
   className?: string;
   dimmed?: boolean;
   onAction: (id: HealthCardData["id"], action: HealthAction) => void;
@@ -60,15 +86,12 @@ export function HealthCard({
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
         {card.actions.map((action) => (
-          <Button
-            className="press-feedback"
+          <HealthActionButton
+            action={action}
+            cardId={card.id}
             key={action.id}
-            onClick={() => onAction(card.id, action)}
-            size="sm"
-            variant="ghost"
-          >
-            {action.label}
-          </Button>
+            onAction={onAction}
+          />
         ))}
       </div>
 

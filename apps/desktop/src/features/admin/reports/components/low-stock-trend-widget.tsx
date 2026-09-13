@@ -6,8 +6,19 @@ import { Grid } from "@/components/charts/grid";
 import { Line } from "@/components/charts/line/line";
 import { LineChart } from "@/components/charts/line/line-chart";
 import { ChartTooltip } from "@/components/charts/tooltip/chart-tooltip";
+import { chartNumber } from "@/lib/chart-number";
 import type { LowStockPoint } from "../types";
 import { EmptyWidget, WidgetCard } from "./widget-card";
+
+function lowStockTooltipRows(point: Record<string, unknown>) {
+  return [
+    {
+      color: "var(--foreground)",
+      label: "Low stock",
+      value: chartNumber(point.count),
+    },
+  ];
+}
 
 export function LowStockTrendWidget({ data }: { data: LowStockPoint[] }) {
   if (data.length === 0) {
@@ -21,8 +32,8 @@ export function LowStockTrendWidget({ data }: { data: LowStockPoint[] }) {
     );
   }
 
+  const [first] = data;
   const last = data.at(-1);
-  const first = data[0];
   if (!(last && first)) {
     return (
       <WidgetCard
@@ -66,15 +77,7 @@ export function LowStockTrendWidget({ data }: { data: LowStockPoint[] }) {
             strokeWidth={2.5}
           />
           <XAxis />
-          <ChartTooltip
-            rows={(point) => [
-              {
-                color: "var(--foreground)",
-                label: "Low stock",
-                value: (point.count as number) ?? 0,
-              },
-            ]}
-          />
+          <ChartTooltip rows={lowStockTooltipRows} />
         </LineChart>
       </motion.div>
 

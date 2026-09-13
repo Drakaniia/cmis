@@ -1,15 +1,31 @@
 "use client";
 
 import { motion } from "motion/react";
-import * as React from "react";
+import { useEffect, useRef } from "react";
 import { Area } from "@/components/charts/area/area";
 import { AreaChart } from "@/components/charts/area/area-chart";
 import { XAxis } from "@/components/charts/axes/x-axis";
 import { useChart } from "@/components/charts/chart-context";
 import { Grid } from "@/components/charts/grid";
 import { ChartTooltip } from "@/components/charts/tooltip/chart-tooltip";
+import { chartNumber } from "@/lib/chart-number";
 import type { StockMovementPoint } from "../types";
 import { EmptyWidget, WidgetCard } from "./widget-card";
+
+function stockMovementTooltipRows(point: Record<string, unknown>) {
+  return [
+    {
+      color: "var(--chart-1)",
+      label: "In",
+      value: chartNumber(point.in),
+    },
+    {
+      color: "var(--chart-2)",
+      label: "Out",
+      value: chartNumber(point.out),
+    },
+  ];
+}
 
 function StockMovementHoverSync({
   data,
@@ -19,9 +35,9 @@ function StockMovementHoverSync({
   onHover?: (point: StockMovementPoint | null) => void;
 }) {
   const { tooltipData } = useChart();
-  const lastIndexRef = React.useRef<number | null>(null);
+  const lastIndexRef = useRef<number | null>(null);
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (!onHover) {
       return;
     }
@@ -122,20 +138,7 @@ export function StockMovementWidget({
             strokeWidth={2}
           />
           <XAxis />
-          <ChartTooltip
-            rows={(point) => [
-              {
-                color: "var(--chart-1)",
-                label: "In",
-                value: (point.in as number) ?? 0,
-              },
-              {
-                color: "var(--chart-2)",
-                label: "Out",
-                value: (point.out as number) ?? 0,
-              },
-            ]}
-          />
+          <ChartTooltip rows={stockMovementTooltipRows} />
           {onHover ? (
             <StockMovementHoverSync data={data} onHover={onHover} />
           ) : null}

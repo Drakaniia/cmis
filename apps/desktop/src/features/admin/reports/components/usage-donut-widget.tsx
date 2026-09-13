@@ -1,12 +1,61 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Ring } from "@/components/charts/ring/ring";
 import { RingCenter } from "@/components/charts/ring/ring-center";
 import { RingChart } from "@/components/charts/ring/ring-chart";
 import type { RingData } from "@/components/charts/ring/ring-context";
 import type { CategoryUsage } from "../types";
 import { EmptyWidget, WidgetCard } from "./widget-card";
+
+function UsageLegendItem({
+  color,
+  hovered,
+  index,
+  label,
+  onHoverChange,
+  pct,
+  value,
+}: {
+  color: string | undefined;
+  hovered: boolean;
+  index: number;
+  label: string;
+  onHoverChange: (index: number | null) => void;
+  pct: number;
+  value: number;
+}) {
+  const handleMouseEnter = useCallback(
+    () => onHoverChange(index),
+    [index, onHoverChange]
+  );
+  const handleMouseLeave = useCallback(
+    () => onHoverChange(null),
+    [onHoverChange]
+  );
+
+  return (
+    // biome-ignore lint/a11y/noNoninteractiveElementInteractions: legend row hover syncs highlight with ring chart
+    <li
+      className={`flex items-center gap-2 rounded-md px-1.5 py-1 text-xs transition-colors ${
+        hovered ? "bg-muted" : "bg-transparent"
+      }`}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+    >
+      <span
+        aria-hidden
+        className="size-2.5 shrink-0 rounded-full"
+        style={{ background: color }}
+      />
+      <span className="min-w-0 flex-1 truncate font-medium">{label}</span>
+      <span className="shrink-0 text-muted-foreground tabular-nums">
+        {pct}%
+      </span>
+      <span className="shrink-0 font-semibold tabular-nums">{value}</span>
+    </li>
+  );
+}
 
 export function UsageDonutWidget({ data }: { data: CategoryUsage[] }) {
   const total = useMemo(() => data.reduce((s, d) => s + d.value, 0), [data]);
@@ -89,35 +138,18 @@ function UsageRingChart({
         {/* Legend — hover syncs with rings via controlled hoveredIndex */}
         <ul className="min-w-0 flex-1 space-y-1.5">
           {ringData.map((d, i) => {
-            const isHovered = hoveredIndex === i;
             const pct = total > 0 ? Math.round((d.value / total) * 100) : 0;
             return (
-              // biome-ignore lint/a11y/noNoninteractiveElementInteractions: legend row hover syncs highlight with ring chart
-              <li
-                className={`flex items-center gap-2 rounded-md px-1.5 py-1 text-xs transition-colors ${
-                  isHovered ? "bg-muted" : "bg-transparent"
-                }`}
+              <UsageLegendItem
+                color={d.color}
+                hovered={hoveredIndex === i}
+                index={i}
                 key={d.label}
-                // biome-ignore lint/performance/noJsxPropsBind: trivial setter for 6 static rows
-                onMouseEnter={() => setHoveredIndex(i)}
-                // biome-ignore lint/performance/noJsxPropsBind: trivial setter
-                onMouseLeave={() => setHoveredIndex(null)}
-              >
-                <span
-                  aria-hidden
-                  className="size-2.5 shrink-0 rounded-full"
-                  style={{ background: d.color }}
-                />
-                <span className="min-w-0 flex-1 truncate font-medium">
-                  {d.label}
-                </span>
-                <span className="shrink-0 text-muted-foreground tabular-nums">
-                  {pct}%
-                </span>
-                <span className="shrink-0 font-semibold tabular-nums">
-                  {d.value}
-                </span>
-              </li>
+                label={d.label}
+                onHoverChange={setHoveredIndex}
+                pct={pct}
+                value={d.value}
+              />
             );
           })}
           {data.length === 1 ? (

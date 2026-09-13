@@ -2,7 +2,13 @@ import { Button } from "@cmis/ui/components/button";
 import { cn } from "@cmis/ui/lib/utils";
 import { X } from "lucide-react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import * as React from "react";
+import {
+  type ChangeEvent,
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useState,
+} from "react";
 
 import {
   materializeEnter,
@@ -28,11 +34,10 @@ export function ConfirmModal({
   typeToConfirm,
   onConfirm,
   children,
-  originRect,
 }: {
-  children?: React.ReactNode;
+  children?: ReactNode;
   confirmLabel?: string;
-  description?: React.ReactNode;
+  description?: ReactNode;
   destructive?: boolean;
   onConfirm: () => void;
   onOpenChange: (open: boolean) => void;
@@ -41,19 +46,19 @@ export function ConfirmModal({
   title: string;
   typeToConfirm?: string;
 }) {
-  const [typed, setTyped] = React.useState("");
-  const [attempted, setAttempted] = React.useState(false);
+  const [typed, setTyped] = useState("");
+  const [attempted, setAttempted] = useState(false);
   const reduceMotion = useReducedMotion();
   const variants = reduceMotion ? materializeEnterReduced : materializeEnter;
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (open) {
       setTyped("");
       setAttempted(false);
     }
   }, [open]);
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (!open) {
       return;
     }
@@ -68,13 +73,24 @@ export function ConfirmModal({
 
   const satisfied = !typeToConfirm || typed.trim() === typeToConfirm;
 
-  function handleConfirm() {
+  const handleConfirm = useCallback(() => {
     if (!satisfied) {
       setAttempted(true);
       return;
     }
     onConfirm();
-  }
+  }, [satisfied, onConfirm]);
+
+  const handleClose = useCallback(() => {
+    onOpenChange(false);
+  }, [onOpenChange]);
+
+  const handleTypedChange = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => {
+      setTyped(event.target.value);
+    },
+    []
+  );
 
   const transformOrigin = "center center";
 
@@ -88,7 +104,7 @@ export function ConfirmModal({
             className="fixed inset-0 z-50 bg-black/32"
             exit={{ opacity: 0 }}
             initial={{ opacity: 0 }}
-            onClick={() => onOpenChange(false)}
+            onClick={handleClose}
             transition={reduceMotion ? { duration: 0 } : { duration: 0.18 }}
           />
           <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6">
@@ -116,7 +132,7 @@ export function ConfirmModal({
                 <Button
                   aria-label="Close"
                   className="press-feedback"
-                  onClick={() => onOpenChange(false)}
+                  onClick={handleClose}
                   size="icon-sm"
                   variant="ghost"
                 >
@@ -142,7 +158,7 @@ export function ConfirmModal({
                         "mt-1 h-8 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus:border-ring focus:ring-1 focus:ring-ring",
                         attempted && !satisfied && "border-destructive"
                       )}
-                      onChange={(event) => setTyped(event.target.value)}
+                      onChange={handleTypedChange}
                       value={typed}
                     />
                     {attempted && !satisfied ? (
@@ -157,7 +173,7 @@ export function ConfirmModal({
               <div className="flex items-center justify-end gap-2 border-border/50 border-t px-4 py-3">
                 <Button
                   className="press-feedback"
-                  onClick={() => onOpenChange(false)}
+                  onClick={handleClose}
                   size="sm"
                   variant="ghost"
                 >

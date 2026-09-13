@@ -1,5 +1,6 @@
 import { Button } from "@cmis/ui/components/button";
 import { useNavigate } from "@tanstack/react-router";
+import { useCallback } from "react";
 import { toast } from "sonner";
 
 import { relativeTime } from "../../format";
@@ -18,21 +19,33 @@ export function HealthPage() {
   const navigate = useNavigate();
   const { cards, online, pendingSyncs, runAction } = useHealth();
 
-  function handleAction(id: HealthCardId, action: HealthAction) {
-    if (action.to) {
-      // Deep-link to the audit log, pre-filtered to the relevant actions (§6).
+  const handleAction = useCallback(
+    (id: HealthCardId, action: HealthAction) => {
+      if (action.to) {
+        // Deep-link to the audit log, pre-filtered to the relevant actions (§6).
+        navigate({
+          search:
+            id === "sync" ? { actions: "sync" } : { preset: "7d", q: "slow" },
+          to: action.to,
+        });
+        return;
+      }
+      const result = runAction(id, action.id);
+      if (result) {
+        toast.success(result.message, { description: result.description });
+      }
+    },
+    [navigate, runAction]
+  );
+
+  const handleViewSyncErrors = useCallback(
+    () =>
       navigate({
-        search:
-          id === "sync" ? { actions: "sync" } : { preset: "7d", q: "slow" },
-        to: action.to,
-      });
-      return;
-    }
-    const result = runAction(id, action.id);
-    if (result) {
-      toast.success(result.message, { description: result.description });
-    }
-  }
+        search: { actions: "sync", preset: "7d" },
+        to: "/admin/audit",
+      }),
+    [navigate]
+  );
 
   return (
     <div className="flex h-[calc(100svh-48px)] flex-col overflow-hidden">
@@ -96,12 +109,7 @@ export function HealthPage() {
                     {pendingSyncs.some((item) => item.error) ? (
                       <Button
                         className="press-feedback mt-2"
-                        onClick={() =>
-                          navigate({
-                            search: { actions: "sync", preset: "7d" },
-                            to: "/admin/audit",
-                          })
-                        }
+                        onClick={handleViewSyncErrors}
                         size="xs"
                         variant="ghost"
                       >

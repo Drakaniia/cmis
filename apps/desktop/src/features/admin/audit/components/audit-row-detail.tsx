@@ -1,5 +1,6 @@
 import { Button } from "@cmis/ui/components/button";
 import { ArrowRight, FileText, Link2 } from "lucide-react";
+import { useCallback } from "react";
 
 import { absoluteDateTime } from "../../format";
 import type { AuditRow } from "../types";
@@ -37,6 +38,16 @@ export function AuditRowDetail({
     ]),
   ];
 
+  const handleRequest = useCallback(
+    () => onRequest(row.requestRef as string),
+    [onRequest, row.requestRef]
+  );
+  const handleViewCorrection = useCallback(
+    () => onViewCorrection(row.correctionId as string),
+    [onViewCorrection, row.correctionId]
+  );
+  const handleCorrect = useCallback(() => onCorrect(row), [onCorrect, row]);
+
   return (
     <div className="border-border/50 border-t bg-muted/30 px-4 py-3 text-caption">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -51,7 +62,7 @@ export function AuditRowDetail({
           {row.requestRef ? (
             <Button
               className="press-feedback"
-              onClick={() => onRequest(row.requestRef as string)}
+              onClick={handleRequest}
               size="xs"
               variant="outline"
             >
@@ -62,7 +73,7 @@ export function AuditRowDetail({
           {row.corrected && row.correctionId ? (
             <Button
               className="press-feedback"
-              onClick={() => onViewCorrection(row.correctionId as string)}
+              onClick={handleViewCorrection}
               size="xs"
               variant="outline"
             >
@@ -73,7 +84,7 @@ export function AuditRowDetail({
           {row.action === "correction" ? null : (
             <Button
               className="press-feedback"
-              onClick={() => onCorrect(row)}
+              onClick={handleCorrect}
               size="xs"
               variant="ghost"
             >

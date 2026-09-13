@@ -1,4 +1,4 @@
-import * as React from "react";
+import { useCallback, useMemo, useState } from "react";
 
 import type {
   DispensingDatePreset,
@@ -26,74 +26,74 @@ export function useDispensingFilters(
   rows: DispensingRow[],
   initial: Partial<DispensingFilters> = {}
 ) {
-  const [filters, setFilters] = React.useState<DispensingFilters>({
+  const [filters, setFilters] = useState<DispensingFilters>({
     ...DEFAULT_DISPENSING_FILTERS,
     ...initial,
   });
 
-  const filtered = React.useMemo(
+  const filtered = useMemo(
     () => filterDispensingRows(rows, filters),
     [rows, filters]
   );
 
-  const staffList = React.useMemo(
+  const staffList = useMemo(
     () => [...new Set(rows.map((row) => row.staff))].sort(),
     [rows]
   );
 
-  const branches = React.useMemo(
+  const branches = useMemo(
     () => [...new Set(rows.map((row) => row.branch))].sort(),
     [rows]
   );
 
-  const medicines = React.useMemo(
+  const medicines = useMemo(
     () => [...new Set(rows.map((row) => row.medicine))].sort(),
     [rows]
   );
 
-  const setSearch = React.useCallback(
+  const setSearch = useCallback(
     (search: string) => setFilters((prev) => ({ ...prev, search })),
     []
   );
 
-  const setRequestor = React.useCallback(
+  const setRequestor = useCallback(
     (requestor: string) => setFilters((prev) => ({ ...prev, requestor })),
     []
   );
 
-  const setStaff = React.useCallback(
+  const setStaff = useCallback(
     (staff: string) => setFilters((prev) => ({ ...prev, staff })),
     []
   );
 
-  const setBranch = React.useCallback(
+  const setBranch = useCallback(
     (branch: string) => setFilters((prev) => ({ ...prev, branch })),
     []
   );
 
-  const setMedicine = React.useCallback(
+  const setMedicine = useCallback(
     (medicine: string) => setFilters((prev) => ({ ...prev, medicine })),
     []
   );
 
-  const setPreset = React.useCallback(
+  const setPreset = useCallback(
     (preset: DispensingDatePreset) =>
       setFilters((prev) => ({ ...prev, preset })),
     []
   );
 
-  const setStatus = React.useCallback(
+  const setStatus = useCallback(
     (status: "all" | DispensingStatus) =>
       setFilters((prev) => ({ ...prev, status })),
     []
   );
 
-  const clearFilters = React.useCallback(
+  const clearFilters = useCallback(
     () => setFilters(DEFAULT_DISPENSING_FILTERS),
     []
   );
 
-  const activeChips = React.useMemo(() => {
+  const activeChips = useMemo(() => {
     const chips: { key: DispensingChipKey; label: string }[] = [];
     if (filters.preset !== "30d") {
       const presetLabel =
@@ -129,7 +129,7 @@ export function useDispensingFilters(
     return chips;
   }, [filters]);
 
-  const removeChip = React.useCallback(
+  const removeChip = useCallback(
     (key: DispensingChipKey) => {
       if (key === "search") {
         setSearch("");

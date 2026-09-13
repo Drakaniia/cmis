@@ -1,5 +1,6 @@
 import { Button } from "@cmis/ui/components/button";
 import { Link2, XCircle } from "lucide-react";
+import { useCallback } from "react";
 
 import { absoluteDateTime } from "../../format";
 import type { DispensingRow } from "../types";
@@ -17,6 +18,10 @@ export function DispensingRowDetail({
   row: DispensingRow;
 }) {
   const isDenied = row.status === "denied";
+  const handleRequest = useCallback(
+    () => onRequest(row.requestLink as string),
+    [onRequest, row.requestLink]
+  );
 
   return (
     <div className="border-border/50 border-t bg-muted/30 px-4 py-3 text-caption">
@@ -32,7 +37,7 @@ export function DispensingRowDetail({
           {row.requestLink ? (
             <Button
               className="press-feedback"
-              onClick={() => onRequest(row.requestLink as string)}
+              onClick={handleRequest}
               size="xs"
               variant="outline"
             >

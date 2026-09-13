@@ -1,6 +1,6 @@
 import { Button } from "@cmis/ui/components/button";
 import { Pencil, Plus, Search, Trash2, X } from "lucide-react";
-import * as React from "react";
+import { type ChangeEvent, useCallback, useState } from "react";
 import { toast } from "sonner";
 
 import { ConfirmModal } from "../../components/confirm-modal";
@@ -19,6 +19,51 @@ const FIELDS: CrudField[] = [
   },
 ];
 
+function SupplierRow({
+  supplier,
+  onEdit,
+  onRequestDelete,
+}: {
+  onEdit: (supplier: Supplier) => void;
+  onRequestDelete: (supplier: Supplier) => void;
+  supplier: Supplier;
+}) {
+  const handleEdit = useCallback(() => {
+    onEdit(supplier);
+  }, [onEdit, supplier]);
+  const handleDelete = useCallback(() => {
+    onRequestDelete(supplier);
+  }, [onRequestDelete, supplier]);
+
+  return (
+    <div className="grid grid-cols-[1.4fr_1.4fr_0.6fr_auto] items-center gap-2 border-border/50 border-b px-3 py-2 last:border-b-0">
+      <span className="truncate font-medium text-sm">{supplier.name}</span>
+      <span className="truncate text-caption text-muted-foreground">
+        {supplier.contact}
+      </span>
+      <span className="text-caption">{supplier.leadTimeDays} days</span>
+      <span className="flex justify-end gap-1">
+        <button
+          aria-label={`Edit ${supplier.name}`}
+          className="press-feedback rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+          onClick={handleEdit}
+          type="button"
+        >
+          <Pencil aria-hidden className="size-3.5" />
+        </button>
+        <button
+          aria-label={`Delete ${supplier.name}`}
+          className="press-feedback rounded-md p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+          onClick={handleDelete}
+          type="button"
+        >
+          <Trash2 aria-hidden className="size-3.5" />
+        </button>
+      </span>
+    </div>
+  );
+}
+
 export function SuppliersTab({
   suppliers,
   onAdd,
@@ -30,12 +75,10 @@ export function SuppliersTab({
   onUpdate: (id: string, patch: Partial<Supplier>) => void;
   suppliers: Supplier[];
 }) {
-  const [search, setSearch] = React.useState("");
-  const [formOpen, setFormOpen] = React.useState(false);
-  const [editing, setEditing] = React.useState<Supplier | null>(null);
-  const [pendingDelete, setPendingDelete] = React.useState<Supplier | null>(
-    null
-  );
+  const [search, setSearch] = useState("");
+  const [formOpen, setFormOpen] = useState(false);
+  const [editing, setEditing] = useState<Supplier | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<Supplier | null>(null);
 
   const query = search.trim().toLowerCase();
   const rows = suppliers.filter(
@@ -44,18 +87,66 @@ export function SuppliersTab({
       supplier.contact.toLowerCase().includes(query)
   );
 
+  const openCreate = useCallback(() => {
+    setEditing(null);
+    setFormOpen(true);
+  }, []);
+
+  const openEdit = useCallback((supplier: Supplier) => {
+    setEditing(supplier);
+    setFormOpen(true);
+  }, []);
+
+  const requestDelete = useCallback((supplier: Supplier) => {
+    setPendingDelete(supplier);
+  }, []);
+
+  const handleSearchChange = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => {
+      setSearch(event.target.value);
+    },
+    []
+  );
+
+  const clearSearch = useCallback(() => setSearch(""), []);
+
+  const handleSubmit = useCallback(
+    (values: Record<string, string>) => {
+      const payload = {
+        contact: values.contact.trim(),
+        leadTimeDays: Number(values.leadTimeDays) || 0,
+        name: values.name.trim(),
+      };
+      if (editing) {
+        onUpdate(editing.id, payload);
+        toast.success("Supplier updated", { description: payload.name });
+      } else {
+        onAdd({ id: `sup-${Date.now()}`, ...payload });
+        toast.success("Supplier added", { description: payload.name });
+      }
+    },
+    [editing, onAdd, onUpdate]
+  );
+
+  const handleConfirmDelete = useCallback(() => {
+    if (pendingDelete) {
+      onRemove(pendingDelete.id);
+      toast.success(`${pendingDelete.name} deleted`);
+    }
+    setPendingDelete(null);
+  }, [pendingDelete, onRemove]);
+
+  const handleDeleteDialogChange = useCallback((open: boolean) => {
+    if (!open) {
+      setPendingDelete(null);
+    }
+  }, []);
+
   return (
     <>
       <SettingsCard
         actions={
-          <Button
-            className="press-feedback"
-            onClick={() => {
-              setEditing(null);
-              setFormOpen(true);
-            }}
-            size="sm"
-          >
+          <Button className="press-feedback" onClick={openCreate} size="sm">
             <Plus aria-hidden className="size-3.5" />
             Add Supplier
           </Button>
@@ -71,7 +162,7 @@ export function SuppliersTab({
           <input
             aria-label="Search suppliers"
             className="h-8 w-full rounded-md border border-input bg-background pr-8 pl-8 text-sm outline-none focus:border-ring focus:ring-1 focus:ring-ring"
-            onChange={(event) => setSearch(event.target.value)}
+            onChange={handleSearchChange}
             placeholder="Search name or contact…"
             value={search}
           />
@@ -79,7 +170,7 @@ export function SuppliersTab({
             <button
               aria-label="Clear search"
               className="absolute right-2 rounded p-1 text-muted-foreground hover:bg-muted"
-              onClick={() => setSearch("")}
+              onClick={clearSearch}
               type="button"
             >
               <X className="size-3.5" />
@@ -95,39 +186,12 @@ export function SuppliersTab({
             <span className="w-16 text-right">Actions</span>
           </div>
           {rows.map((supplier) => (
-            <div
-              className="grid grid-cols-[1.4fr_1.4fr_0.6fr_auto] items-center gap-2 border-border/50 border-b px-3 py-2 last:border-b-0"
+            <SupplierRow
               key={supplier.id}
-            >
-              <span className="truncate font-medium text-sm">
-                {supplier.name}
-              </span>
-              <span className="truncate text-caption text-muted-foreground">
-                {supplier.contact}
-              </span>
-              <span className="text-caption">{supplier.leadTimeDays} days</span>
-              <span className="flex justify-end gap-1">
-                <button
-                  aria-label={`Edit ${supplier.name}`}
-                  className="press-feedback rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-                  onClick={() => {
-                    setEditing(supplier);
-                    setFormOpen(true);
-                  }}
-                  type="button"
-                >
-                  <Pencil aria-hidden className="size-3.5" />
-                </button>
-                <button
-                  aria-label={`Delete ${supplier.name}`}
-                  className="press-feedback rounded-md p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                  onClick={() => setPendingDelete(supplier)}
-                  type="button"
-                >
-                  <Trash2 aria-hidden className="size-3.5" />
-                </button>
-              </span>
-            </div>
+              onEdit={openEdit}
+              onRequestDelete={requestDelete}
+              supplier={supplier}
+            />
           ))}
           {rows.length === 0 ? (
             <p className="px-3 py-4 text-center text-caption text-muted-foreground">
@@ -149,20 +213,7 @@ export function SuppliersTab({
             : { contact: "", leadTimeDays: "3", name: "" }
         }
         onOpenChange={setFormOpen}
-        onSubmit={(values) => {
-          const payload = {
-            contact: values.contact.trim(),
-            leadTimeDays: Number(values.leadTimeDays) || 0,
-            name: values.name.trim(),
-          };
-          if (editing) {
-            onUpdate(editing.id, payload);
-            toast.success("Supplier updated", { description: payload.name });
-          } else {
-            onAdd({ id: `sup-${Date.now()}`, ...payload });
-            toast.success("Supplier added", { description: payload.name });
-          }
-        }}
+        onSubmit={handleSubmit}
         open={formOpen}
         title={editing ? `Edit ${editing.name}` : "Add supplier"}
       />
@@ -171,18 +222,8 @@ export function SuppliersTab({
         confirmLabel="Delete supplier"
         description={`Delete ${pendingDelete?.name}? Existing stock keeps its recorded supplier.`}
         destructive
-        onConfirm={() => {
-          if (pendingDelete) {
-            onRemove(pendingDelete.id);
-            toast.success(`${pendingDelete.name} deleted`);
-          }
-          setPendingDelete(null);
-        }}
-        onOpenChange={(open) => {
-          if (!open) {
-            setPendingDelete(null);
-          }
-        }}
+        onConfirm={handleConfirmDelete}
+        onOpenChange={handleDeleteDialogChange}
         open={pendingDelete !== null}
         title="Delete supplier?"
       />

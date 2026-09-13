@@ -1,6 +1,7 @@
 import { Button } from "@cmis/ui/components/button";
 import { cn } from "@cmis/ui/lib/utils";
 import { Pencil, ScrollText } from "lucide-react";
+import { useCallback } from "react";
 
 import { MiniHistogram, StatusDot } from "../../components/indicators";
 import { absoluteDateTime, relativeTime } from "../../format";
@@ -21,6 +22,18 @@ export function UserDetailContent({
   onViewAudit: (user: AdminUser) => void;
   user: AdminUser | null;
 }) {
+  const handleViewAudit = useCallback(() => {
+    if (user) {
+      onViewAudit(user);
+    }
+  }, [onViewAudit, user]);
+
+  const handleEdit = useCallback(() => {
+    if (user && onEdit) {
+      onEdit(user);
+    }
+  }, [onEdit, user]);
+
   if (!user) {
     return (
       <div className="flex flex-1 items-center justify-center p-6 text-center">
@@ -130,7 +143,7 @@ export function UserDetailContent({
       <div className="flex shrink-0 items-center gap-2 border-border/50 border-t p-3">
         <Button
           className="press-feedback"
-          onClick={() => onViewAudit(user)}
+          onClick={handleViewAudit}
           size="sm"
           variant="outline"
         >
@@ -140,7 +153,7 @@ export function UserDetailContent({
         {onEdit ? (
           <Button
             className="press-feedback ml-auto"
-            onClick={() => onEdit(user)}
+            onClick={handleEdit}
             size="sm"
           >
             <Pencil aria-hidden className="size-3.5" />

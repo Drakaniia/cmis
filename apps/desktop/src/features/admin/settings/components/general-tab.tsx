@@ -1,9 +1,38 @@
 import { Button } from "@cmis/ui/components/button";
-import * as React from "react";
+import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import type { GeneralSettings } from "../types";
 import { SettingsCard } from "./settings-card";
+
+function FormatOption<T extends string>({
+  current,
+  format,
+  name,
+  onSelect,
+}: {
+  current: T;
+  format: T;
+  name: string;
+  onSelect: (format: T) => void;
+}) {
+  const handleChange = useCallback(() => {
+    onSelect(format);
+  }, [onSelect, format]);
+
+  return (
+    <label className="inline-flex items-center gap-1.5">
+      <input
+        checked={current === format}
+        className="accent-primary"
+        name={name}
+        onChange={handleChange}
+        type="radio"
+      />
+      {format}
+    </label>
+  );
+}
 
 export function GeneralTab({
   general,
@@ -12,15 +41,36 @@ export function GeneralTab({
   general: GeneralSettings;
   onChange: (patch: Partial<GeneralSettings>) => void;
 }) {
-  const [draft, setDraft] = React.useState(general);
+  const [draft, setDraft] = useState(general);
 
-  React.useEffect(() => {
+  useEffect(() => {
     setDraft(general);
   }, [general]);
 
   const dirty =
     draft.dateFormat !== general.dateFormat ||
     draft.timeFormat !== general.timeFormat;
+
+  const handleDateFormatSelect = useCallback(
+    (format: GeneralSettings["dateFormat"]) => {
+      setDraft((prev) => ({ ...prev, dateFormat: format }));
+    },
+    []
+  );
+
+  const handleTimeFormatSelect = useCallback(
+    (format: GeneralSettings["timeFormat"]) => {
+      setDraft((prev) => ({ ...prev, timeFormat: format }));
+    },
+    []
+  );
+
+  const handleSave = useCallback(() => {
+    onChange(draft);
+    toast.success("Settings saved", {
+      description: "General · audited",
+    });
+  }, [onChange, draft]);
 
   return (
     <div className="space-y-4">
@@ -47,21 +97,13 @@ export function GeneralTab({
             <legend>Date format</legend>
             <div className="mt-1 flex gap-3">
               {(["MM/DD/YYYY", "DD/MM/YYYY"] as const).map((format) => (
-                <label
-                  className="inline-flex items-center gap-1.5"
+                <FormatOption
+                  current={draft.dateFormat}
+                  format={format}
                   key={format}
-                >
-                  <input
-                    checked={draft.dateFormat === format}
-                    className="accent-primary"
-                    name="date-format"
-                    onChange={() =>
-                      setDraft((prev) => ({ ...prev, dateFormat: format }))
-                    }
-                    type="radio"
-                  />
-                  {format}
-                </label>
+                  name="date-format"
+                  onSelect={handleDateFormatSelect}
+                />
               ))}
             </div>
           </fieldset>
@@ -70,21 +112,13 @@ export function GeneralTab({
             <legend>Time format</legend>
             <div className="mt-1 flex gap-3">
               {(["12-hour", "24-hour"] as const).map((format) => (
-                <label
-                  className="inline-flex items-center gap-1.5"
+                <FormatOption
+                  current={draft.timeFormat}
+                  format={format}
                   key={format}
-                >
-                  <input
-                    checked={draft.timeFormat === format}
-                    className="accent-primary"
-                    name="time-format"
-                    onChange={() =>
-                      setDraft((prev) => ({ ...prev, timeFormat: format }))
-                    }
-                    type="radio"
-                  />
-                  {format}
-                </label>
+                  name="time-format"
+                  onSelect={handleTimeFormatSelect}
+                />
               ))}
             </div>
           </fieldset>
@@ -95,12 +129,7 @@ export function GeneralTab({
         <Button
           className="press-feedback"
           disabled={!dirty}
-          onClick={() => {
-            onChange(draft);
-            toast.success("Settings saved", {
-              description: "General · audited",
-            });
-          }}
+          onClick={handleSave}
           size="sm"
         >
           Save changes

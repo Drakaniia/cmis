@@ -1,4 +1,4 @@
-import * as React from "react";
+import { useCallback, useMemo, useState } from "react";
 
 import type {
   AuditActionType,
@@ -22,37 +22,37 @@ export function useAuditFilters(
   rows: AuditRow[],
   initial: Partial<AuditFilters> = {}
 ) {
-  const [filters, setFilters] = React.useState<AuditFilters>({
+  const [filters, setFilters] = useState<AuditFilters>({
     ...DEFAULT_AUDIT_FILTERS,
     ...initial,
   });
 
-  const filtered = React.useMemo(
+  const filtered = useMemo(
     () => filterAuditRows(rows, filters),
     [rows, filters]
   );
 
-  const users = React.useMemo(
+  const users = useMemo(
     () => [...new Set(rows.map((row) => row.user))].sort(),
     [rows]
   );
 
-  const setSearch = React.useCallback(
+  const setSearch = useCallback(
     (search: string) => setFilters((prev) => ({ ...prev, search })),
     []
   );
 
-  const setUser = React.useCallback(
+  const setUser = useCallback(
     (user: string) => setFilters((prev) => ({ ...prev, user })),
     []
   );
 
-  const setPreset = React.useCallback(
+  const setPreset = useCallback(
     (preset: AuditDatePreset) => setFilters((prev) => ({ ...prev, preset })),
     []
   );
 
-  const toggleAction = React.useCallback((action: AuditActionType) => {
+  const toggleAction = useCallback((action: AuditActionType) => {
     setFilters((prev) => ({
       ...prev,
       actions: prev.actions.includes(action)
@@ -61,12 +61,9 @@ export function useAuditFilters(
     }));
   }, []);
 
-  const clearFilters = React.useCallback(
-    () => setFilters(DEFAULT_AUDIT_FILTERS),
-    []
-  );
+  const clearFilters = useCallback(() => setFilters(DEFAULT_AUDIT_FILTERS), []);
 
-  const activeChips = React.useMemo(() => {
+  const activeChips = useMemo(() => {
     const chips: { key: AuditChipKey; label: string }[] = [];
     if (filters.preset !== "30d") {
       chips.push({
@@ -86,7 +83,7 @@ export function useAuditFilters(
     return chips;
   }, [filters]);
 
-  const removeChip = React.useCallback(
+  const removeChip = useCallback(
     (key: AuditChipKey, label?: string) => {
       if (key === "search") {
         setSearch("");

@@ -8,9 +8,29 @@ import {
 } from "@cmis/ui/components/dropdown-menu";
 import { cn } from "@cmis/ui/lib/utils";
 import { Check, ChevronDown } from "lucide-react";
+import { useCallback } from "react";
 
 import type { AdminUser, UserRole } from "../types";
 import { ROLE_BADGE_CLASS, USER_ROLES } from "../types";
+
+function RoleMenuItem({
+  active,
+  onSelect,
+  role,
+}: {
+  active: boolean;
+  onSelect: (role: UserRole) => void;
+  role: UserRole;
+}) {
+  const handleClick = useCallback(() => onSelect(role), [onSelect, role]);
+
+  return (
+    <DropdownMenuItem onClick={handleClick}>
+      {role}
+      {active ? <Check aria-hidden className="ml-auto size-3.5" /> : null}
+    </DropdownMenuItem>
+  );
+}
 
 /**
  * CMIS-UI-09 §1.3 — Role is an editable badge. The dropdown is anchored to the
@@ -44,12 +64,12 @@ export function RoleBadgeMenu({
         <DropdownMenuGroup>
           <DropdownMenuLabel>Change role</DropdownMenuLabel>
           {USER_ROLES.map((role) => (
-            <DropdownMenuItem key={role} onClick={() => onRequestRole(role)}>
-              {role}
-              {user.role === role ? (
-                <Check aria-hidden className="ml-auto size-3.5" />
-              ) : null}
-            </DropdownMenuItem>
+            <RoleMenuItem
+              active={user.role === role}
+              key={role}
+              onSelect={onRequestRole}
+              role={role}
+            />
           ))}
         </DropdownMenuGroup>
       </DropdownMenuContent>

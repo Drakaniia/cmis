@@ -1,6 +1,6 @@
 import { Button } from "@cmis/ui/components/button";
 import { Download } from "lucide-react";
-import * as React from "react";
+import { useCallback, useState } from "react";
 import { toast } from "sonner";
 
 import { downloadAuditCsv } from "../export-audit";
@@ -21,11 +21,9 @@ const ACTOR = "A. Lim";
  * that appends rather than overwrites, and export exactly what's on screen.
  */
 export function AuditPage() {
-  const [rows, setRows] = React.useState<AuditRow[]>(mockAuditRows);
-  const [expandedId, setExpandedId] = React.useState<string | null>(null);
-  const [correctionRow, setCorrectionRow] = React.useState<AuditRow | null>(
-    null
-  );
+  const [rows, setRows] = useState<AuditRow[]>(mockAuditRows);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [correctionRow, setCorrectionRow] = useState<AuditRow | null>(null);
 
   const {
     activeChips,
@@ -40,53 +38,70 @@ export function AuditPage() {
     users,
   } = useAuditFilters(rows);
 
-  function handleExport() {
+  const handleExport = useCallback(() => {
     const stamp = new Date().toISOString().slice(0, 10);
     downloadAuditCsv(filtered, `cmis-audit-${stamp}.csv`);
     toast.success(`Exported ${filtered.length} entries`, {
       description: `cmis-audit-${stamp}.csv`,
     });
-  }
+  }, [filtered]);
 
-  function handleViewCorrection(correctionId: string) {
-    setSearch(correctionId);
-    setExpandedId(correctionId);
-  }
+  const handleViewCorrection = useCallback(
+    (correctionId: string) => {
+      setSearch(correctionId);
+      setExpandedId(correctionId);
+    },
+    [setSearch]
+  );
 
-  function handleCorrectionSubmit(payload: {
-    corrected: Record<string, string>;
-    reason: string;
-  }) {
-    if (!correctionRow) {
-      return;
+  const handleNoopRequest = useCallback(() => {
+    /* noop */
+  }, []);
+
+  const handleCorrectionSubmit = useCallback(
+    (payload: { corrected: Record<string, string>; reason: string }) => {
+      if (!correctionRow) {
+        return;
+      }
+      const at = new Date().toISOString();
+      const correction: AuditRow = {
+        action: "correction",
+        after: payload.corrected,
+        at,
+        before: { ...correctionRow.after },
+        branch: correctionRow.branch,
+        correctionOf: correctionRow.id,
+        detail: `Correction of [${correctionRow.id}] by ${ACTOR}: ${payload.reason}`,
+        id: `AUD-${String(Date.now()).slice(-6)}`,
+        reason: payload.reason,
+        user: ACTOR,
+      };
+      setRows((prev) => [
+        correction,
+        ...prev.map((row) =>
+          row.id === correctionRow.id
+            ? { ...row, corrected: true, correctionId: correction.id }
+            : row
+        ),
+      ]);
+      setExpandedId(correction.id);
+      setCorrectionRow(null);
+      toast.success("Correction appended", {
+        description: `Original ${correctionRow.id} stays intact.`,
+      });
+    },
+    [correctionRow]
+  );
+
+  const handleToggleExpand = useCallback((id: string) => {
+    setExpandedId((prev) => (prev === id ? null : id));
+  }, []);
+
+  const handleCorrectionOpenChange = useCallback((open: boolean) => {
+    if (!open) {
+      setCorrectionRow(null);
     }
-    const at = new Date().toISOString();
-    const correction: AuditRow = {
-      action: "correction",
-      after: payload.corrected,
-      at,
-      before: { ...correctionRow.after },
-      branch: correctionRow.branch,
-      correctionOf: correctionRow.id,
-      detail: `Correction of [${correctionRow.id}] by ${ACTOR}: ${payload.reason}`,
-      id: `AUD-${String(Date.now()).slice(-6)}`,
-      reason: payload.reason,
-      user: ACTOR,
-    };
-    setRows((prev) => [
-      correction,
-      ...prev.map((row) =>
-        row.id === correctionRow.id
-          ? { ...row, corrected: true, correctionId: correction.id }
-          : row
-      ),
-    ]);
-    setExpandedId(correction.id);
-    setCorrectionRow(null);
-    toast.success("Correction appended", {
-      description: `Original ${correctionRow.id} stays intact.`,
-    });
-  }
+  }, []);
 
   return (
     <div className="flex h-[calc(100svh-48px)] flex-col overflow-hidden">
@@ -119,21 +134,15 @@ export function AuditPage() {
         <AuditTable
           expandedId={expandedId}
           onCorrect={setCorrectionRow}
-          onRequest={() => {}}
-          onToggleExpand={(id) =>
-            setExpandedId((prev) => (prev === id ? null : id))
-          }
+          onRequest={handleNoopRequest}
+          onToggleExpand={handleToggleExpand}
           onViewCorrection={handleViewCorrection}
           rows={filtered}
         />
       </div>
 
       <CorrectionModal
-        onOpenChange={(open) => {
-          if (!open) {
-            setCorrectionRow(null);
-          }
-        }}
+        onOpenChange={handleCorrectionOpenChange}
         onSubmit={handleCorrectionSubmit}
         open={correctionRow !== null}
         row={correctionRow}

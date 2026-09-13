@@ -2,7 +2,13 @@ import { Button } from "@cmis/ui/components/button";
 import { cn } from "@cmis/ui/lib/utils";
 import { AlertTriangle, FileUp, Upload } from "lucide-react";
 import { motion } from "motion/react";
-import * as React from "react";
+import {
+  type ChangeEvent,
+  type DragEvent,
+  useCallback,
+  useRef,
+  useState,
+} from "react";
 import { toast } from "sonner";
 
 import { dragSpring } from "@/lib/motion";
@@ -19,27 +25,62 @@ import type { ImportDiff } from "../types";
  * is a deliberate, high-stakes action (§4.4 Utility).
  */
 export function ImportCard() {
-  const inputRef = React.useRef<HTMLInputElement>(null);
-  const [dragOver, setDragOver] = React.useState(false);
-  const [diff, setDiff] = React.useState<ImportDiff | null>(null);
-  const [confirmOpen, setConfirmOpen] = React.useState(false);
-  const [progress, setProgress] = React.useState<number | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [dragOver, setDragOver] = useState(false);
+  const [diff, setDiff] = useState<ImportDiff | null>(null);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [progress, setProgress] = useState<number | null>(null);
 
-  async function readFile(file: File) {
+  const readFile = useCallback(async (file: File) => {
     const content = await file.text();
     setDiff(parseImportDiff(file.name, content));
-  }
+  }, []);
 
-  function handleDrop(event: React.DragEvent<HTMLDivElement>) {
+  const queueRead = useCallback(
+    (file: File) => {
+      readFile(file).then(
+        () => undefined,
+        () => undefined
+      );
+    },
+    [readFile]
+  );
+
+  const handleDragLeave = useCallback(() => setDragOver(false), []);
+
+  const handleDragOver = useCallback((event: DragEvent<HTMLDivElement>) => {
     event.preventDefault();
-    setDragOver(false);
-    const file = event.dataTransfer.files?.[0];
-    if (file) {
-      void readFile(file);
-    }
-  }
+    setDragOver(true);
+  }, []);
 
-  async function handleConfirm() {
+  const handleDrop = useCallback(
+    (event: DragEvent<HTMLDivElement>) => {
+      event.preventDefault();
+      setDragOver(false);
+      const file = event.dataTransfer.files?.[0];
+      if (file) {
+        queueRead(file);
+      }
+    },
+    [queueRead]
+  );
+
+  const handleBrowse = useCallback(() => {
+    inputRef.current?.click();
+  }, []);
+
+  const handleFileChange = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0];
+      if (file) {
+        queueRead(file);
+      }
+      event.target.value = "";
+    },
+    [queueRead]
+  );
+
+  const handleConfirm = useCallback(async () => {
     setConfirmOpen(false);
     setProgress(12);
     await new Promise((resolve) => setTimeout(resolve, 220));
@@ -54,7 +95,10 @@ export function ImportCard() {
       });
     }
     setDiff(null);
-  }
+  }, [diff]);
+
+  const handleDiscard = useCallback(() => setDiff(null), []);
+  const handleRequestConfirm = useCallback(() => setConfirmOpen(true), []);
 
   const totalChanges = diff
     ? diff.counts.inserts + diff.counts.updates + diff.counts.deletes
@@ -71,11 +115,8 @@ export function ImportCard() {
           "rounded-lg border-2 border-dashed p-6 text-center transition-colors",
           dragOver ? "border-primary bg-primary/5" : "border-border bg-muted/20"
         )}
-        onDragLeave={() => setDragOver(false)}
-        onDragOver={(event) => {
-          event.preventDefault();
-          setDragOver(true);
-        }}
+        onDragLeave={handleDragLeave}
+        onDragOver={handleDragOver}
         onDrop={handleDrop}
         transition={dragSpring}
       >
@@ -88,7 +129,7 @@ export function ImportCard() {
         </p>
         <Button
           className="press-feedback mt-3"
-          onClick={() => inputRef.current?.click()}
+          onClick={handleBrowse}
           size="sm"
           variant="outline"
         >
@@ -98,13 +139,7 @@ export function ImportCard() {
         <input
           accept=".csv,.json,.db"
           className="hidden"
-          onChange={(event) => {
-            const file = event.target.files?.[0];
-            if (file) {
-              void readFile(file);
-            }
-            event.target.value = "";
-          }}
+          onChange={handleFileChange}
           ref={inputRef}
           type="file"
         />
@@ -190,7 +225,7 @@ export function ImportCard() {
             <div className="flex gap-2">
               <Button
                 className="press-feedback"
-                onClick={() => setDiff(null)}
+                onClick={handleDiscard}
                 size="sm"
                 variant="ghost"
               >
@@ -199,7 +234,7 @@ export function ImportCard() {
               <Button
                 className="press-feedback"
                 disabled={progress !== null}
-                onClick={() => setConfirmOpen(true)}
+                onClick={handleRequestConfirm}
                 size="sm"
                 variant="destructive"
               >

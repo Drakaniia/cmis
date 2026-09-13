@@ -1,11 +1,47 @@
 import { Button } from "@cmis/ui/components/button";
 import { Link } from "@tanstack/react-router";
 import { DatabaseBackup, HardDriveDownload } from "lucide-react";
+import { useCallback } from "react";
 import { toast } from "sonner";
 
 import { absoluteDateTime } from "../../format";
 import type { BackupSettings } from "../types";
 import { SettingsCard } from "./settings-card";
+
+const SCHEDULE_LABELS: Record<BackupSettings["schedule"], string> = {
+  daily: "Daily",
+  off: "Off",
+  weekly: "Weekly",
+};
+
+const SCHEDULE_OPTIONS = ["off", "daily", "weekly"] as const;
+
+function ScheduleOption({
+  onSelect,
+  option,
+  selected,
+}: {
+  onSelect: (schedule: BackupSettings["schedule"]) => void;
+  option: BackupSettings["schedule"];
+  selected: boolean;
+}) {
+  const handleChange = useCallback(() => {
+    onSelect(option);
+  }, [onSelect, option]);
+
+  return (
+    <label className="inline-flex items-center gap-1.5 text-caption text-foreground">
+      <input
+        checked={selected}
+        className="accent-primary"
+        name="backup-schedule"
+        onChange={handleChange}
+        type="radio"
+      />
+      {SCHEDULE_LABELS[option]}
+    </label>
+  );
+}
 
 export function BackupTab({
   backup,
@@ -16,20 +52,25 @@ export function BackupTab({
   onSetSchedule: (schedule: BackupSettings["schedule"]) => void;
   onTrigger: () => void;
 }) {
+  const handleTrigger = useCallback(() => {
+    onTrigger();
+    toast.success("Backup complete", {
+      description: absoluteDateTime(new Date().toISOString()),
+    });
+  }, [onTrigger]);
+
+  const handleScheduleSelect = useCallback(
+    (schedule: BackupSettings["schedule"]) => {
+      onSetSchedule(schedule);
+    },
+    [onSetSchedule]
+  );
+
   return (
     <div className="space-y-4">
       <SettingsCard
         actions={
-          <Button
-            className="press-feedback"
-            onClick={() => {
-              onTrigger();
-              toast.success("Backup complete", {
-                description: absoluteDateTime(new Date().toISOString()),
-              });
-            }}
-            size="sm"
-          >
+          <Button className="press-feedback" onClick={handleTrigger} size="sm">
             <DatabaseBackup aria-hidden className="size-3.5" />
             Trigger Backup Now
           </Button>
@@ -68,24 +109,13 @@ export function BackupTab({
         title="Auto-schedule"
       >
         <div className="flex flex-wrap gap-3">
-          {(["off", "daily", "weekly"] as const).map((option) => (
-            <label
-              className="inline-flex items-center gap-1.5 text-caption text-foreground"
+          {SCHEDULE_OPTIONS.map((option) => (
+            <ScheduleOption
               key={option}
-            >
-              <input
-                checked={backup.schedule === option}
-                className="accent-primary"
-                name="backup-schedule"
-                onChange={() => onSetSchedule(option)}
-                type="radio"
-              />
-              {option === "off"
-                ? "Off"
-                : option === "daily"
-                  ? "Daily"
-                  : "Weekly"}
-            </label>
+              onSelect={handleScheduleSelect}
+              option={option}
+              selected={backup.schedule === option}
+            />
           ))}
         </div>
       </SettingsCard>

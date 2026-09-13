@@ -5,7 +5,13 @@ import {
   useReducedMotion,
   useTransform,
 } from "motion/react";
-import * as React from "react";
+import {
+  type PointerEvent,
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useRef,
+} from "react";
 
 import {
   materializeEnter,
@@ -26,10 +32,9 @@ export function AdminSheet({
   open,
   onOpenChange,
   label,
-  originRect,
   children,
 }: {
-  children: React.ReactNode;
+  children: ReactNode;
   label: string;
   onOpenChange: (open: boolean) => void;
   open: boolean;
@@ -39,59 +44,65 @@ export function AdminSheet({
   const variants = reduceMotion ? materializeEnterReduced : materializeEnter;
   const y = useMotionValue(0);
   const opacity = useTransform(y, [0, 120], [1, 0.6]);
-  const startYRef = React.useRef<number | null>(null);
-  const historyRef = React.useRef<{ t: number; y: number }[]>([]);
+  const startYRef = useRef<number | null>(null);
+  const historyRef = useRef<{ t: number; y: number }[]>([]);
 
-  function handlePointerDown(event: React.PointerEvent) {
+  const handlePointerDown = useCallback((event: PointerEvent) => {
     (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
     startYRef.current = event.clientY;
     historyRef.current = [];
-  }
+  }, []);
 
-  function handlePointerMove(event: React.PointerEvent) {
-    if (startYRef.current === null) {
-      return;
-    }
-    const delta = event.clientY - startYRef.current;
-    if (delta < 0) {
-      // Resist upward overscroll — Apple §9 rubber-banding.
-      y.set(rubberband(delta, 400));
-      return;
-    }
-    historyRef.current.push({ t: Date.now(), y: delta });
-    if (historyRef.current.length > 8) {
-      historyRef.current.shift();
-    }
-    y.set(delta);
-  }
-
-  function handlePointerUp(event: React.PointerEvent) {
-    if (startYRef.current === null) {
-      return;
-    }
-    const delta = event.clientY - startYRef.current;
-    startYRef.current = null;
-
-    const history = historyRef.current;
-    let releaseVelocity = 0;
-    if (history.length >= 2) {
-      const last = history.at(-1);
-      const prev = history[Math.max(0, history.length - 3)];
-      if (last && prev) {
-        const dt = Math.max(1, last.t - prev.t);
-        releaseVelocity = ((last.y - prev.y) / dt) * 1000;
+  const handlePointerMove = useCallback(
+    (event: PointerEvent) => {
+      if (startYRef.current === null) {
+        return;
       }
-    }
+      const delta = event.clientY - startYRef.current;
+      if (delta < 0) {
+        // Resist upward overscroll — Apple §9 rubber-banding.
+        y.set(rubberband(delta, 400));
+        return;
+      }
+      historyRef.current.push({ t: Date.now(), y: delta });
+      if (historyRef.current.length > 8) {
+        historyRef.current.shift();
+      }
+      y.set(delta);
+    },
+    [y]
+  );
 
-    // Apple §6: decide from where the gesture is going, not where it stopped.
-    const projected = delta + project(releaseVelocity);
-    if (projected > 80 || releaseVelocity > 200) {
-      onOpenChange(false);
-    }
-    y.set(0);
-  }
+  const handlePointerUp = useCallback(
+    (event: PointerEvent) => {
+      if (startYRef.current === null) {
+        return;
+      }
+      const delta = event.clientY - startYRef.current;
+      startYRef.current = null;
 
-  React.useEffect(() => {
+      const history = historyRef.current;
+      let releaseVelocity = 0;
+      if (history.length >= 2) {
+        const last = history.at(-1);
+        const prev = history[Math.max(0, history.length - 3)];
+        if (last && prev) {
+          const dt = Math.max(1, last.t - prev.t);
+          releaseVelocity = ((last.y - prev.y) / dt) * 1000;
+        }
+      }
+
+      // Apple §6: decide from where the gesture is going, not where it stopped.
+      const projected = delta + project(releaseVelocity);
+      if (projected > 80 || releaseVelocity > 200) {
+        onOpenChange(false);
+      }
+      y.set(0);
+    },
+    [onOpenChange, y]
+  );
+
+  useEffect(() => {
     if (!open) {
       y.set(0);
       return;

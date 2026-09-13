@@ -1,3 +1,4 @@
+import { useCallback } from "react";
 import { toast } from "sonner";
 
 import { relativeTime } from "../../format";
@@ -13,12 +14,15 @@ import { SettingsCard } from "./settings-card";
 export function HealthTab() {
   const { cards, online, pendingSyncs, runAction } = useHealth();
 
-  function handleAction(id: HealthCardId, action: HealthAction) {
-    const result = runAction(id, action.id);
-    if (result) {
-      toast.success(result.message, { description: result.description });
-    }
-  }
+  const handleAction = useCallback(
+    (id: HealthCardId, action: HealthAction) => {
+      const result = runAction(id, action.id);
+      if (result) {
+        toast.success(result.message, { description: result.description });
+      }
+    },
+    [runAction]
+  );
 
   return (
     <div className="space-y-4">

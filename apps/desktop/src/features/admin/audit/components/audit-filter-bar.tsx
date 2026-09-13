@@ -8,6 +8,7 @@ import {
   DropdownMenuTrigger,
 } from "@cmis/ui/components/dropdown-menu";
 import { ChevronDown, Filter, Search, X } from "lucide-react";
+import { type ChangeEvent, type KeyboardEvent, useCallback } from "react";
 
 import type { AuditChipKey } from "../hooks/use-audit-filters";
 import type { AuditActionType, AuditDatePreset, AuditFilters } from "../types";
@@ -31,6 +32,60 @@ function Chip({ label, onRemove }: { label: string; onRemove: () => void }) {
       </button>
     </span>
   );
+}
+
+/** A dropdown item that reports the value it represents. */
+function ValueOption<T extends string>({
+  label,
+  value,
+  onSelect,
+}: {
+  label: string;
+  value: T;
+  onSelect: (value: T) => void;
+}) {
+  const handleSelect = useCallback(() => onSelect(value), [onSelect, value]);
+  return <DropdownMenuItem onClick={handleSelect}>{label}</DropdownMenuItem>;
+}
+
+function ActionOption({
+  action,
+  checked,
+  onToggleAction,
+}: {
+  action: AuditActionType;
+  checked: boolean;
+  onToggleAction: (action: AuditActionType) => void;
+}) {
+  const handleToggle = useCallback(
+    () => onToggleAction(action),
+    [action, onToggleAction]
+  );
+  return (
+    <DropdownMenuCheckboxItem
+      checked={checked}
+      closeOnClick={false}
+      onClick={handleToggle}
+    >
+      {auditCategoryOf(action).label}
+    </DropdownMenuCheckboxItem>
+  );
+}
+
+function ChipItem({
+  chipKey,
+  label,
+  onRemoveChip,
+}: {
+  chipKey: AuditChipKey;
+  label: string;
+  onRemoveChip: (key: AuditChipKey, label?: string) => void;
+}) {
+  const handleRemove = useCallback(
+    () => onRemoveChip(chipKey, label),
+    [chipKey, label, onRemoveChip]
+  );
+  return <Chip label={label} onRemove={handleRemove} />;
 }
 
 /**
@@ -65,6 +120,26 @@ export function AuditFilterBar({
       ?.label ?? "Range";
   const actionCount = filters.actions.length;
 
+  const handleSearchInput = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) =>
+      onSearchChange(event.target.value),
+    [onSearchChange]
+  );
+
+  const handleSearchKeyDown = useCallback(
+    (event: KeyboardEvent<HTMLInputElement>) => {
+      if (event.key === "Escape" && filters.search) {
+        onSearchChange("");
+      }
+    },
+    [filters.search, onSearchChange]
+  );
+
+  const handleClearSearch = useCallback(
+    () => onSearchChange(""),
+    [onSearchChange]
+  );
+
   return (
     <div className="sticky top-0 z-10 shrink-0 border-border/50 border-b bg-card/95 backdrop-blur-[6px]">
       <div className="flex flex-wrap items-center gap-2 px-3 py-2">
@@ -76,12 +151,8 @@ export function AuditFilterBar({
           <input
             aria-label="Search audit details, user or action"
             className="h-8 w-full rounded-md border border-input bg-background pr-8 pl-8 text-sm outline-none focus:border-ring focus:ring-1 focus:ring-ring"
-            onChange={(event) => onSearchChange(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Escape" && filters.search) {
-                onSearchChange("");
-              }
-            }}
+            onChange={handleSearchInput}
+            onKeyDown={handleSearchKeyDown}
             placeholder="Search details, user, action…"
             value={filters.search}
           />
@@ -89,7 +160,7 @@ export function AuditFilterBar({
             <button
               aria-label="Clear search"
               className="absolute right-2 rounded p-1 text-muted-foreground hover:bg-muted"
-              onClick={() => onSearchChange("")}
+              onClick={handleClearSearch}
               type="button"
             >
               <X className="size-3.5" />
@@ -111,12 +182,12 @@ export function AuditFilterBar({
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="min-w-[170px]">
             {AUDIT_DATE_PRESETS.map((preset) => (
-              <DropdownMenuItem
+              <ValueOption
                 key={preset.value}
-                onClick={() => onPresetChange(preset.value)}
-              >
-                {preset.label}
-              </DropdownMenuItem>
+                label={preset.label}
+                onSelect={onPresetChange}
+                value={preset.value}
+              />
             ))}
           </DropdownMenuContent>
         </DropdownMenu>
@@ -137,13 +208,18 @@ export function AuditFilterBar({
             align="start"
             className="max-h-[280px] min-w-[190px]"
           >
-            <DropdownMenuItem onClick={() => onUserChange("All")}>
-              All users
-            </DropdownMenuItem>
+            <ValueOption
+              label="All users"
+              onSelect={onUserChange}
+              value="All"
+            />
             {users.map((user) => (
-              <DropdownMenuItem key={user} onClick={() => onUserChange(user)}>
-                {user}
-              </DropdownMenuItem>
+              <ValueOption
+                key={user}
+                label={user}
+                onSelect={onUserChange}
+                value={user}
+              />
             ))}
           </DropdownMenuContent>
         </DropdownMenu>
@@ -165,14 +241,12 @@ export function AuditFilterBar({
             <DropdownMenuGroup>
               <DropdownMenuLabel>Filter by action</DropdownMenuLabel>
               {AUDIT_ACTION_TYPES.map((action) => (
-                <DropdownMenuCheckboxItem
+                <ActionOption
+                  action={action}
                   checked={filters.actions.includes(action)}
-                  closeOnClick={false}
                   key={action}
-                  onClick={() => onToggleAction(action)}
-                >
-                  {auditCategoryOf(action).label}
-                </DropdownMenuCheckboxItem>
+                  onToggleAction={onToggleAction}
+                />
               ))}
             </DropdownMenuGroup>
           </DropdownMenuContent>
@@ -182,14 +256,14 @@ export function AuditFilterBar({
           {resultCount} entries
         </span>
       </div>
-
       {activeChips.length > 0 ? (
         <div className="flex flex-wrap items-center gap-1.5 px-3 pb-2">
           {activeChips.map((chip) => (
-            <Chip
+            <ChipItem
+              chipKey={chip.key}
               key={`${chip.key}-${chip.label}`}
               label={chip.label}
-              onRemove={() => onRemoveChip(chip.key, chip.label)}
+              onRemoveChip={onRemoveChip}
             />
           ))}
           <button

@@ -1,7 +1,7 @@
 import { Button } from "@cmis/ui/components/button";
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import { Download } from "lucide-react";
-import * as React from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import type { DispensingSearch } from "../dispensing-search";
@@ -31,12 +31,12 @@ export function DispensingPage({
 }) {
   const navigate = useNavigate();
   const search: DispensingSearch = useSearch({ from: routePath });
-  const [rows] = React.useState<DispensingRow[]>(mockDispensingRows);
-  const [expandedId, setExpandedId] = React.useState<string | null>(null);
-  const [sortKey, setSortKey] = React.useState<SortKey>("dispensedAt");
-  const [sortDir, setSortDir] = React.useState<SortDir>("desc");
+  const [rows] = useState<DispensingRow[]>(mockDispensingRows);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [sortKey, setSortKey] = useState<SortKey>("dispensedAt");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
 
-  const [initialFilters] = React.useState(() => filtersFromSearch(search));
+  const [initialFilters] = useState(() => filtersFromSearch(search));
   const {
     activeChips,
     branches,
@@ -56,7 +56,7 @@ export function DispensingPage({
   } = useDispensingFilters(rows, initialFilters);
 
   // Deep-linked filters seed state; later edits flow back to the URL.
-  React.useEffect(() => {
+  useEffect(() => {
     const next = searchFromFilters(filters);
     if (!dispensingSearchEquals(next, search)) {
       navigate({ replace: true, search: next, to: routePath });
@@ -64,7 +64,7 @@ export function DispensingPage({
   }, [filters, navigate, search, routePath]);
 
   // Sort the filtered rows
-  const sorted = React.useMemo(() => {
+  const sorted = useMemo(() => {
     const copy = [...filtered];
     copy.sort((a, b) => {
       let cmp = 0;
@@ -89,6 +89,9 @@ export function DispensingPage({
         case "staff":
           cmp = a.staff.localeCompare(b.staff);
           break;
+        default: {
+          cmp = 0;
+        }
       }
       // Secondary sort by medicine asc on date ties
       if (cmp === 0 && sortKey !== "medicine") {
@@ -99,29 +102,39 @@ export function DispensingPage({
     return copy;
   }, [filtered, sortKey, sortDir]);
 
-  function handleSort(key: SortKey) {
-    if (sortKey === key) {
-      setSortDir((prev) => (prev === "asc" ? "desc" : "asc"));
-    } else {
-      setSortKey(key);
-      setSortDir(key === "dispensedAt" ? "desc" : "asc");
-    }
-  }
+  const handleSort = useCallback(
+    (key: SortKey) => {
+      if (sortKey === key) {
+        setSortDir((prev) => (prev === "asc" ? "desc" : "asc"));
+      } else {
+        setSortKey(key);
+        setSortDir(key === "dispensedAt" ? "desc" : "asc");
+      }
+    },
+    [sortKey]
+  );
 
-  function handleExport() {
+  const handleExport = useCallback(() => {
     const stamp = new Date().toISOString().slice(0, 10);
     downloadDispensingCsv(sorted, `cmis-dispensing-${stamp}.csv`);
     toast.success(`Exported ${sorted.length} records`, {
       description: `cmis-dispensing-${stamp}.csv`,
     });
-  }
+  }, [sorted]);
 
-  function handleRequest(requestRef: string) {
-    navigate({
-      search: { q: requestRef },
-      to: `${routePath.replace("/dispensing", "/requests")}`,
-    });
-  }
+  const handleRequest = useCallback(
+    (requestRef: string) => {
+      navigate({
+        search: { q: requestRef },
+        to: `${routePath.replace("/dispensing", "/requests")}`,
+      });
+    },
+    [navigate, routePath]
+  );
+
+  const handleToggleExpand = useCallback((id: string) => {
+    setExpandedId((prev) => (prev === id ? null : id));
+  }, []);
 
   return (
     <div className="flex h-[calc(100svh-48px)] flex-col overflow-hidden">
@@ -162,9 +175,7 @@ export function DispensingPage({
           onClearFilters={clearFilters}
           onRequest={handleRequest}
           onSort={handleSort}
-          onToggleExpand={(id) =>
-            setExpandedId((prev) => (prev === id ? null : id))
-          }
+          onToggleExpand={handleToggleExpand}
           rows={sorted}
           sortDir={sortDir}
           sortKey={sortKey}

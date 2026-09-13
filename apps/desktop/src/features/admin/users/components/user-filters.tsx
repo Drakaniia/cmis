@@ -5,9 +5,52 @@ import {
   DropdownMenuTrigger,
 } from "@cmis/ui/components/dropdown-menu";
 import { ChevronDown, Search, X } from "lucide-react";
+import { type ChangeEvent, useCallback } from "react";
 
 import type { UserFilters } from "../types";
 import { USER_ROLES } from "../types";
+
+/** A dropdown item that reports the value it represents. */
+function ValueOption({
+  label,
+  value,
+  onSelect,
+}: {
+  label: string;
+  value: string;
+  onSelect: (value: string) => void;
+}) {
+  const handleSelect = useCallback(() => onSelect(value), [onSelect, value]);
+  return <DropdownMenuItem onClick={handleSelect}>{label}</DropdownMenuItem>;
+}
+
+function ChipItem({
+  chipKey,
+  label,
+  onRemoveChip,
+}: {
+  chipKey: keyof UserFilters;
+  label: string;
+  onRemoveChip: (key: keyof UserFilters) => void;
+}) {
+  const handleRemove = useCallback(
+    () => onRemoveChip(chipKey),
+    [chipKey, onRemoveChip]
+  );
+  return (
+    <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-accent px-2.5 py-1 font-medium text-accent-foreground text-xs">
+      {label}
+      <button
+        aria-label={`Remove ${label}`}
+        className="rounded-full p-0.5 hover:bg-black/10 dark:hover:bg-white/10"
+        onClick={handleRemove}
+        type="button"
+      >
+        <X className="size-3" />
+      </button>
+    </span>
+  );
+}
 
 function FilterMenu({
   label,
@@ -20,6 +63,8 @@ function FilterMenu({
   options: readonly string[];
   value: string;
 }) {
+  const triggerLabel = value === "All" ? label : value;
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -30,17 +75,22 @@ function FilterMenu({
           />
         }
       >
-        {value === "All" ? label : value}
+        {triggerLabel}
         <ChevronDown aria-hidden className="size-3" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="min-w-[160px]">
-        <DropdownMenuItem onClick={() => onChange("All")}>
-          All {label.toLowerCase()}
-        </DropdownMenuItem>
+        <ValueOption
+          label={`All ${label.toLowerCase()}`}
+          onSelect={onChange}
+          value="All"
+        />
         {options.map((option) => (
-          <DropdownMenuItem key={option} onClick={() => onChange(option)}>
-            {option}
-          </DropdownMenuItem>
+          <ValueOption
+            key={option}
+            label={option}
+            onSelect={onChange}
+            value={option}
+          />
         ))}
       </DropdownMenuContent>
     </DropdownMenu>
@@ -68,6 +118,27 @@ export function UserFiltersBar({
   resultCount: number;
   totalCount: number;
 }) {
+  const handleSearchInput = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) =>
+      onChange({ search: event.target.value }),
+    [onChange]
+  );
+
+  const handleClearSearch = useCallback(
+    () => onChange({ search: "" }),
+    [onChange]
+  );
+
+  const handleRoleChange = useCallback(
+    (value: string) => onChange({ role: value }),
+    [onChange]
+  );
+
+  const handleStatusChange = useCallback(
+    (value: string) => onChange({ status: value }),
+    [onChange]
+  );
+
   return (
     <div className="shrink-0 border-border/50 border-b bg-card/95 backdrop-blur-[6px]">
       <div className="flex flex-wrap items-center gap-2 px-3 py-2">
@@ -79,7 +150,7 @@ export function UserFiltersBar({
           <input
             aria-label="Search users by name or email"
             className="h-8 w-full rounded-md border border-input bg-background pr-8 pl-8 text-sm outline-none focus:border-ring focus:ring-1 focus:ring-ring"
-            onChange={(event) => onChange({ search: event.target.value })}
+            onChange={handleSearchInput}
             placeholder="Search name or email…"
             value={filters.search}
           />
@@ -87,7 +158,7 @@ export function UserFiltersBar({
             <button
               aria-label="Clear search"
               className="absolute right-2 rounded p-1 text-muted-foreground hover:bg-muted"
-              onClick={() => onChange({ search: "" })}
+              onClick={handleClearSearch}
               type="button"
             >
               <X className="size-3.5" />
@@ -97,13 +168,13 @@ export function UserFiltersBar({
 
         <FilterMenu
           label="Role"
-          onChange={(value) => onChange({ role: value })}
+          onChange={handleRoleChange}
           options={USER_ROLES}
           value={filters.role}
         />
         <FilterMenu
           label="Status"
-          onChange={(value) => onChange({ status: value })}
+          onChange={handleStatusChange}
           options={["active", "inactive"]}
           value={filters.status}
         />
@@ -116,20 +187,12 @@ export function UserFiltersBar({
       {activeChips.length > 0 ? (
         <div className="flex flex-wrap items-center gap-1.5 px-3 pb-2">
           {activeChips.map((chip) => (
-            <span
-              className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-accent px-2.5 py-1 font-medium text-accent-foreground text-xs"
+            <ChipItem
+              chipKey={chip.key}
               key={chip.key}
-            >
-              {chip.label}
-              <button
-                aria-label={`Remove ${chip.label}`}
-                className="rounded-full p-0.5 hover:bg-black/10 dark:hover:bg-white/10"
-                onClick={() => onRemoveChip(chip.key)}
-                type="button"
-              >
-                <X className="size-3" />
-              </button>
-            </span>
+              label={chip.label}
+              onRemoveChip={onRemoveChip}
+            />
           ))}
           <button
             className="whitespace-nowrap text-caption text-primary hover:underline"

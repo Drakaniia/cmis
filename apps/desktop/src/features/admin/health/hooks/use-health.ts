@@ -1,4 +1,4 @@
-import * as React from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { mockHealthCards, mockPendingSyncs } from "../mock";
 import type { HealthCardData, HealthCardId, PendingSync } from "../types";
@@ -16,14 +16,13 @@ export function useHealth(
   initialCards: HealthCardData[] = mockHealthCards,
   initialSyncs: PendingSync[] = mockPendingSyncs
 ) {
-  const [cards, setCards] = React.useState<HealthCardData[]>(initialCards);
-  const [pendingSyncs, setPendingSyncs] =
-    React.useState<PendingSync[]>(initialSyncs);
-  const [online, setOnline] = React.useState(
+  const [cards, setCards] = useState<HealthCardData[]>(initialCards);
+  const [pendingSyncs, setPendingSyncs] = useState<PendingSync[]>(initialSyncs);
+  const [online, setOnline] = useState(
     typeof navigator === "undefined" ? true : navigator.onLine
   );
 
-  React.useEffect(() => {
+  useEffect(() => {
     const onOnline = () => setOnline(true);
     const onOffline = () => setOnline(false);
     window.addEventListener("online", onOnline);
@@ -34,7 +33,7 @@ export function useHealth(
     };
   }, []);
 
-  const patchCard = React.useCallback(
+  const patchCard = useCallback(
     (id: HealthCardId, patch: Partial<HealthCardData>) => {
       setCards((prev) =>
         prev.map((card) => (card.id === id ? { ...card, ...patch } : card))
@@ -43,7 +42,7 @@ export function useHealth(
     []
   );
 
-  const runAction = React.useCallback(
+  const runAction = useCallback(
     (_id: HealthCardId, actionId: string): HealthActionResult | null => {
       if (actionId === "vacuum") {
         patchCard("database", {

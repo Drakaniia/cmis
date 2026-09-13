@@ -9,7 +9,7 @@ import { Skeleton } from "@cmis/ui/components/skeleton";
 import { cn } from "@cmis/ui/lib/utils";
 import { ArrowDown, ArrowUp, ArrowUpDown, Copy } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
-import type * as React from "react";
+import { type KeyboardEvent, type MouseEvent, useCallback } from "react";
 import { toast } from "sonner";
 
 import { materializeEnter } from "@/lib/motion";
@@ -18,17 +18,256 @@ import { auditTimestamp } from "../../format";
 import type { DispensingRow } from "../types";
 import { DispensingRowDetail } from "./dispensing-row-detail";
 
-type SortKey =
+export type SortKey =
   | "dispensedAt"
   | "medicine"
   | "batch"
   | "qty"
   | "requestor"
   | "staff";
-type SortDir = "asc" | "desc";
+export type SortDir = "asc" | "desc";
 
 const GRID =
   "grid-cols-[minmax(140px,1.1fr)_minmax(160px,1.5fr)_minmax(100px,1fr)_minmax(50px,0.5fr)_minmax(140px,1.3fr)_minmax(110px,1fr)_minmax(80px,0.8fr)]";
+
+const SORT_COLUMNS: { align: "left" | "right"; key: SortKey; label: string }[] =
+  [
+    { align: "left", key: "dispensedAt", label: "Date" },
+    { align: "left", key: "medicine", label: "Medicine" },
+    { align: "left", key: "batch", label: "Batch" },
+    { align: "right", key: "qty", label: "Qty" },
+    { align: "left", key: "requestor", label: "Requestor" },
+    { align: "left", key: "staff", label: "Staff" },
+  ];
+
+const SKELETON_COLUMNS = [
+  "date",
+  "medicine",
+  "batch",
+  "qty",
+  "requestor",
+  "staff",
+  "request",
+];
+
+const COLUMN_COUNT = 7;
+
+const SKELETON_ROWS = [
+  "row-1",
+  "row-2",
+  "row-3",
+  "row-4",
+  "row-5",
+  "row-6",
+  "row-7",
+  "row-8",
+];
+
+function ariaSortFor(
+  activeKey: SortKey,
+  dir: SortDir,
+  key: SortKey
+): "ascending" | "descending" | "none" {
+  if (activeKey !== key) {
+    return "none";
+  }
+  return dir === "asc" ? "ascending" : "descending";
+}
+
+function sortIcon(activeKey: SortKey, dir: SortDir, key: SortKey) {
+  if (activeKey !== key) {
+    return <ArrowUpDown aria-hidden className="size-3 text-muted-foreground" />;
+  }
+  return dir === "asc" ? (
+    <ArrowUp aria-hidden className="size-3 text-foreground" />
+  ) : (
+    <ArrowDown aria-hidden className="size-3 text-foreground" />
+  );
+}
+
+function SortHeaderButton({
+  activeKey,
+  align,
+  columnKey,
+  dir,
+  label,
+  onSort,
+}: {
+  activeKey: SortKey;
+  align: "left" | "right";
+  columnKey: SortKey;
+  dir: SortDir;
+  label: string;
+  onSort: (key: SortKey) => void;
+}) {
+  const handleSort = useCallback(() => onSort(columnKey), [columnKey, onSort]);
+  return (
+    <button
+      className={cn(
+        "flex items-center gap-1 hover:text-foreground",
+        align === "right" ? "justify-end text-right" : "text-left"
+      )}
+      onClick={handleSort}
+      type="button"
+    >
+      {label}
+      {sortIcon(activeKey, dir, columnKey)}
+    </button>
+  );
+}
+
+function DispensingTableRow({
+  expanded,
+  row,
+  onRequest,
+  onToggleExpand,
+}: {
+  expanded: boolean;
+  row: DispensingRow;
+  onRequest: (requestRef: string) => void;
+  onToggleExpand: (id: string) => void;
+}) {
+  const { requestLink } = row;
+  const isDenied = row.status === "denied";
+
+  const handleRowClick = useCallback(
+    (event: MouseEvent<HTMLTableRowElement>) => {
+      const target = event.target as HTMLElement;
+      if (target.closest("button, a, input")) {
+        return;
+      }
+      onToggleExpand(row.id);
+    },
+    [onToggleExpand, row.id]
+  );
+
+  const handleRowKeyDown = useCallback(
+    (event: KeyboardEvent<HTMLTableRowElement>) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        onToggleExpand(row.id);
+      }
+    },
+    [onToggleExpand, row.id]
+  );
+
+  const handleCopyBatch = useCallback(
+    (event: MouseEvent<HTMLButtonElement>) => {
+      event.stopPropagation();
+      navigator.clipboard.writeText(row.batch).then(() => {
+        toast.success(`Copied ${row.batch}`);
+      });
+    },
+    [row.batch]
+  );
+
+  const handleRequest = useCallback(
+    (event: MouseEvent<HTMLButtonElement>) => {
+      event.stopPropagation();
+      onRequest(row.requestLink as string);
+    },
+    [onRequest, row.requestLink]
+  );
+
+  return (
+    <>
+      <tr
+        aria-expanded={expanded}
+        className={cn(
+          "grid cursor-pointer items-center gap-2 border-border/50 border-b px-3 py-2 text-sm transition-colors hover:bg-muted/50",
+          GRID,
+          expanded && "bg-muted/40",
+          isDenied && "bg-destructive/5 hover:bg-destructive/8"
+        )}
+        onClick={handleRowClick}
+        onKeyDown={handleRowKeyDown}
+        tabIndex={0}
+      >
+        <td className="whitespace-nowrap font-mono text-caption">
+          {auditTimestamp(row.dispensedAt)}
+        </td>
+
+        <td className="min-w-0">
+          <span
+            className={cn(
+              "block truncate font-medium",
+              isDenied && "text-destructive/80"
+            )}
+          >
+            {row.medicine}
+          </span>
+          <span className="block text-caption text-muted-foreground">
+            {row.medicineSku}
+            {isDenied ? (
+              <span className="ml-1.5 rounded-full bg-destructive/12 px-1.5 py-0.5 text-[10px] text-destructive">
+                Denied
+              </span>
+            ) : null}
+          </span>
+        </td>
+
+        <td className="min-w-0">
+          <button
+            className="group/batch inline-flex items-center gap-1 rounded px-1 py-0.5 font-mono text-caption hover:bg-muted"
+            onClick={handleCopyBatch}
+            title="Click to copy"
+            type="button"
+          >
+            {row.batch}
+            <Copy
+              aria-hidden
+              className="size-3 opacity-0 transition-opacity group-hover/batch:opacity-100"
+            />
+          </button>
+        </td>
+
+        <td className="text-right tabular-nums">{row.qty}</td>
+
+        <td className="min-w-0">
+          <span className="block truncate">{row.requestor}</span>
+          <span className="block text-caption text-muted-foreground">
+            {row.requestorId}
+          </span>
+        </td>
+
+        <td className="truncate text-caption text-muted-foreground">
+          {row.staff}
+        </td>
+
+        <td className="min-w-0">
+          {requestLink ? (
+            <button
+              className="press-feedback truncate font-medium text-primary text-xs hover:underline"
+              onClick={handleRequest}
+              type="button"
+            >
+              {requestLink} →
+            </button>
+          ) : (
+            <span className="text-muted-foreground">—</span>
+          )}
+        </td>
+      </tr>
+
+      {/* Expanded detail — CMIS materializeEnter for consistency with sheets/modals */}
+      <AnimatePresence initial={false}>
+        {expanded ? (
+          <motion.tr
+            animate={materializeEnter.animate}
+            className="border-border/50 border-b"
+            exit={materializeEnter.exit}
+            initial={materializeEnter.initial}
+            transition={{ bounce: 0, duration: 0.2, type: "spring" }}
+          >
+            <td className="p-0" colSpan={COLUMN_COUNT}>
+              <DispensingRowDetail onRequest={onRequest} row={row} />
+            </td>
+          </motion.tr>
+        ) : null}
+      </AnimatePresence>
+    </>
+  );
+}
 
 /**
  * CMIS-UI-06 §2 — 7-column dispensing table.
@@ -63,33 +302,6 @@ export function DispensingTable({
   totalUnfiltered: number;
   onClearFilters?: () => void;
 }) {
-  function handleRowClick(event: React.MouseEvent<HTMLDivElement>, id: string) {
-    const target = event.target as HTMLElement;
-    if (target.closest("button, a, input")) {
-      return;
-    }
-    onToggleExpand(id);
-  }
-
-  function handleCopyBatch(batch: string) {
-    navigator.clipboard.writeText(batch).then(() => {
-      toast.success(`Copied ${batch}`);
-    });
-  }
-
-  function sortedIcon(key: SortKey) {
-    if (sortKey !== key) {
-      return (
-        <ArrowUpDown aria-hidden className="size-3 text-muted-foreground" />
-      );
-    }
-    return sortDir === "asc" ? (
-      <ArrowUp aria-hidden className="size-3 text-foreground" />
-    ) : (
-      <ArrowDown aria-hidden className="size-3 text-foreground" />
-    );
-  }
-
   if (loading) {
     return (
       <div className="flex h-full flex-col overflow-hidden">
@@ -98,28 +310,19 @@ export function DispensingTable({
             "sticky top-0 z-[1] grid shrink-0 items-center gap-2 border-border/50 border-b bg-muted/60 px-3 py-1.5",
             GRID
           )}
-          role="row"
         >
-          {[
-            "Date",
-            "Medicine",
-            "Batch",
-            "Qty",
-            "Requestor",
-            "Staff",
-            "Request",
-          ].map((label) => (
+          {SKELETON_COLUMNS.map((column) => (
             <Skeleton
               className="h-3.5 w-full max-w-[80px] rounded"
-              key={label}
+              key={column}
             />
           ))}
         </div>
         <div className="flex-1 space-y-1 p-3">
-          {Array.from({ length: 8 }).map((_, i) => (
+          {SKELETON_ROWS.map((row) => (
             <Skeleton
               className="w-full rounded-md"
-              key={i}
+              key={row}
               style={{ height: 48 }}
             />
           ))}
@@ -162,229 +365,51 @@ export function DispensingTable({
 
   return (
     <div className="overflow-hidden">
-      {/* Header */}
-      <div
-        className={cn(
-          "sticky top-0 z-[1] grid items-center gap-2 border-border/50 border-b bg-muted/70 px-3 py-1.5 font-medium text-caption text-muted-foreground backdrop-blur-[6px]",
-          GRID
-        )}
-        role="row"
-      >
-        <button
-          aria-sort={
-            sortKey === "dispensedAt"
-              ? sortDir === "asc"
-                ? "ascending"
-                : "descending"
-              : "none"
-          }
-          className="flex items-center gap-1 text-left hover:text-foreground"
-          onClick={() => onSort("dispensedAt")}
-          type="button"
-        >
-          Date
-          {sortedIcon("dispensedAt")}
-        </button>
-        <button
-          aria-sort={
-            sortKey === "medicine"
-              ? sortDir === "asc"
-                ? "ascending"
-                : "descending"
-              : "none"
-          }
-          className="flex items-center gap-1 text-left hover:text-foreground"
-          onClick={() => onSort("medicine")}
-          type="button"
-        >
-          Medicine
-          {sortedIcon("medicine")}
-        </button>
-        <button
-          aria-sort={
-            sortKey === "batch"
-              ? sortDir === "asc"
-                ? "ascending"
-                : "descending"
-              : "none"
-          }
-          className="flex items-center gap-1 text-left hover:text-foreground"
-          onClick={() => onSort("batch")}
-          type="button"
-        >
-          Batch
-          {sortedIcon("batch")}
-        </button>
-        <button
-          aria-sort={
-            sortKey === "qty"
-              ? sortDir === "asc"
-                ? "ascending"
-                : "descending"
-              : "none"
-          }
-          className="flex items-center gap-1 text-right hover:text-foreground"
-          onClick={() => onSort("qty")}
-          type="button"
-        >
-          Qty
-          {sortedIcon("qty")}
-        </button>
-        <button
-          aria-sort={
-            sortKey === "requestor"
-              ? sortDir === "asc"
-                ? "ascending"
-                : "descending"
-              : "none"
-          }
-          className="flex items-center gap-1 text-left hover:text-foreground"
-          onClick={() => onSort("requestor")}
-          type="button"
-        >
-          Requestor
-          {sortedIcon("requestor")}
-        </button>
-        <button
-          aria-sort={
-            sortKey === "staff"
-              ? sortDir === "asc"
-                ? "ascending"
-                : "descending"
-              : "none"
-          }
-          className="flex items-center gap-1 text-left hover:text-foreground"
-          onClick={() => onSort("staff")}
-          type="button"
-        >
-          Staff
-          {sortedIcon("staff")}
-        </button>
-        <span className="text-left">Request</span>
-      </div>
-
-      {/* Rows */}
-      {rows.map((row) => {
-        const expanded = expandedId === row.id;
-        const isDenied = row.status === "denied";
-        return (
-          <div className="border-border/50 border-b" key={row.id}>
-            <div
-              aria-expanded={expanded}
-              className={cn(
-                "grid cursor-pointer items-center gap-2 px-3 py-2 text-sm transition-colors hover:bg-muted/50",
-                GRID,
-                expanded && "bg-muted/40",
-                isDenied && "bg-destructive/5 hover:bg-destructive/8"
-              )}
-              onClick={(event) => handleRowClick(event, row.id)}
-              role="row"
-            >
-              {/* Date */}
-              <span
-                className="whitespace-nowrap font-mono text-caption"
-                role="cell"
-              >
-                {auditTimestamp(row.dispensedAt)}
-              </span>
-
-              {/* Medicine + SKU caption */}
-              <span className="min-w-0" role="cell">
-                <span
-                  className={cn(
-                    "block truncate font-medium",
-                    isDenied && "text-destructive/80"
-                  )}
-                >
-                  {row.medicine}
-                </span>
-                <span className="block text-caption text-muted-foreground">
-                  {row.medicineSku}
-                  {isDenied ? (
-                    <span className="ml-1.5 rounded-full bg-destructive/12 px-1.5 py-0.5 text-[10px] text-destructive">
-                      Denied
-                    </span>
-                  ) : null}
-                </span>
-              </span>
-
-              {/* Batch — copy on click */}
-              <span className="min-w-0" role="cell">
-                <button
-                  className="group/batch inline-flex items-center gap-1 rounded px-1 py-0.5 font-mono text-caption hover:bg-muted"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    handleCopyBatch(row.batch);
-                  }}
-                  title="Click to copy"
-                  type="button"
-                >
-                  {row.batch}
-                  <Copy
-                    aria-hidden
-                    className="size-3 opacity-0 transition-opacity group-hover/batch:opacity-100"
-                  />
-                </button>
-              </span>
-
-              {/* Qty — right-aligned */}
-              <span className="text-right tabular-nums" role="cell">
-                {row.qty}
-              </span>
-
-              {/* Requestor + ID */}
-              <span className="min-w-0" role="cell">
-                <span className="block truncate">{row.requestor}</span>
-                <span className="block text-caption text-muted-foreground">
-                  {row.requestorId}
-                </span>
-              </span>
-
-              {/* Staff */}
-              <span
-                className="truncate text-caption text-muted-foreground"
-                role="cell"
-              >
-                {row.staff}
-              </span>
-
-              {/* Request Link */}
-              <span className="min-w-0" role="cell">
-                {row.requestLink ? (
-                  <button
-                    className="press-feedback truncate font-medium text-primary text-xs hover:underline"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      onRequest(row.requestLink as string);
-                    }}
-                    type="button"
-                  >
-                    {row.requestLink} →
-                  </button>
-                ) : (
-                  <span className="text-muted-foreground">—</span>
+      <table className="block w-full border-collapse">
+        <thead className="block">
+          <tr
+            className={cn(
+              "sticky top-0 z-[1] grid items-center gap-2 border-border/50 border-b bg-muted/70 px-3 py-1.5 font-medium text-caption text-muted-foreground backdrop-blur-[6px]",
+              GRID
+            )}
+          >
+            {SORT_COLUMNS.map((column) => (
+              <th
+                aria-sort={ariaSortFor(sortKey, sortDir, column.key)}
+                className={cn(
+                  "font-medium",
+                  column.align === "right" ? "text-right" : "text-left"
                 )}
-              </span>
-            </div>
-
-            {/* Expanded detail — CMIS materializeEnter for consistency with sheets/modals */}
-            <AnimatePresence initial={false}>
-              {expanded ? (
-                <motion.div
-                  animate={materializeEnter.animate}
-                  exit={materializeEnter.exit}
-                  initial={materializeEnter.initial}
-                  transition={{ bounce: 0, duration: 0.2, type: "spring" }}
-                >
-                  <DispensingRowDetail onRequest={onRequest} row={row} />
-                </motion.div>
-              ) : null}
-            </AnimatePresence>
-          </div>
-        );
-      })}
+                key={column.key}
+                scope="col"
+              >
+                <SortHeaderButton
+                  activeKey={sortKey}
+                  align={column.align}
+                  columnKey={column.key}
+                  dir={sortDir}
+                  label={column.label}
+                  onSort={onSort}
+                />
+              </th>
+            ))}
+            <th className="text-left font-medium" scope="col">
+              Request
+            </th>
+          </tr>
+        </thead>
+        <tbody className="block">
+          {rows.map((row) => (
+            <DispensingTableRow
+              expanded={expandedId === row.id}
+              key={row.id}
+              onRequest={onRequest}
+              onToggleExpand={onToggleExpand}
+              row={row}
+            />
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
-
-export type { SortDir, SortKey };

@@ -1,4 +1,4 @@
-import * as React from "react";
+import { useCallback, useState } from "react";
 
 import { mockSettings } from "../mock";
 import type {
@@ -14,16 +14,16 @@ import type {
  * records "Settings changed: [section] by [Admin]" (§2.3 persistence).
  */
 export function useSettings(initial: SettingsState = mockSettings) {
-  const [state, setState] = React.useState<SettingsState>(initial);
+  const [state, setState] = useState<SettingsState>(initial);
 
-  const updateGeneral = React.useCallback(
+  const updateGeneral = useCallback(
     (patch: Partial<SettingsState["general"]>) => {
       setState((prev) => ({ ...prev, general: { ...prev.general, ...patch } }));
     },
     []
   );
 
-  const setAlerts = React.useCallback(
+  const setAlerts = useCallback(
     (
       patch: Partial<{
         expiryWindowDays: ExpiryWindowDays;
@@ -35,7 +35,7 @@ export function useSettings(initial: SettingsState = mockSettings) {
     []
   );
 
-  const setOverride = React.useCallback((id: string, value: number | null) => {
+  const setOverride = useCallback((id: string, value: number | null) => {
     setState((prev) => ({
       ...prev,
       alerts: {
@@ -47,56 +47,50 @@ export function useSettings(initial: SettingsState = mockSettings) {
     }));
   }, []);
 
-  const addSupplier = React.useCallback((supplier: Supplier) => {
+  const addSupplier = useCallback((supplier: Supplier) => {
     setState((prev) => ({ ...prev, suppliers: [...prev.suppliers, supplier] }));
   }, []);
 
-  const updateSupplier = React.useCallback(
-    (id: string, patch: Partial<Supplier>) => {
-      setState((prev) => ({
-        ...prev,
-        suppliers: prev.suppliers.map((supplier) =>
-          supplier.id === id ? { ...supplier, ...patch } : supplier
-        ),
-      }));
-    },
-    []
-  );
+  const updateSupplier = useCallback((id: string, patch: Partial<Supplier>) => {
+    setState((prev) => ({
+      ...prev,
+      suppliers: prev.suppliers.map((supplier) =>
+        supplier.id === id ? { ...supplier, ...patch } : supplier
+      ),
+    }));
+  }, []);
 
-  const removeSupplier = React.useCallback((id: string) => {
+  const removeSupplier = useCallback((id: string) => {
     setState((prev) => ({
       ...prev,
       suppliers: prev.suppliers.filter((supplier) => supplier.id !== id),
     }));
   }, []);
 
-  const addCategory = React.useCallback((category: Category) => {
+  const addCategory = useCallback((category: Category) => {
     setState((prev) => ({
       ...prev,
       categories: [...prev.categories, category],
     }));
   }, []);
 
-  const updateCategory = React.useCallback(
-    (id: string, patch: Partial<Category>) => {
-      setState((prev) => ({
-        ...prev,
-        categories: prev.categories.map((category) =>
-          category.id === id ? { ...category, ...patch } : category
-        ),
-      }));
-    },
-    []
-  );
+  const updateCategory = useCallback((id: string, patch: Partial<Category>) => {
+    setState((prev) => ({
+      ...prev,
+      categories: prev.categories.map((category) =>
+        category.id === id ? { ...category, ...patch } : category
+      ),
+    }));
+  }, []);
 
-  const removeCategory = React.useCallback((id: string) => {
+  const removeCategory = useCallback((id: string) => {
     setState((prev) => ({
       ...prev,
       categories: prev.categories.filter((category) => category.id !== id),
     }));
   }, []);
 
-  const triggerBackup = React.useCallback(() => {
+  const triggerBackup = useCallback(() => {
     const at = new Date().toISOString();
     setState((prev) => ({
       ...prev,
@@ -105,7 +99,7 @@ export function useSettings(initial: SettingsState = mockSettings) {
     return at;
   }, []);
 
-  const setBackupSchedule = React.useCallback(
+  const setBackupSchedule = useCallback(
     (schedule: SettingsState["backup"]["schedule"]) => {
       setState((prev) => ({ ...prev, backup: { ...prev.backup, schedule } }));
     },

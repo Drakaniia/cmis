@@ -2,7 +2,13 @@ import { Button } from "@cmis/ui/components/button";
 import { cn } from "@cmis/ui/lib/utils";
 import { X } from "lucide-react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import * as React from "react";
+import {
+  type ChangeEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 
 import {
   materializeEnter,
@@ -16,6 +22,40 @@ function asText(value: unknown): string {
     return "";
   }
   return typeof value === "object" ? JSON.stringify(value) : String(value);
+}
+
+function CorrectionField({
+  before,
+  fieldKey,
+  onValueChange,
+  value,
+}: {
+  before: string;
+  fieldKey: string;
+  onValueChange: (key: string, value: string) => void;
+  value: string;
+}) {
+  const handleChange = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => {
+      onValueChange(fieldKey, event.target.value);
+    },
+    [onValueChange, fieldKey]
+  );
+
+  return (
+    <div className="grid grid-cols-[0.8fr_1fr_1fr] items-center gap-2">
+      <span className="truncate text-caption text-foreground">{fieldKey}</span>
+      <span className="truncate rounded-md border border-border/60 bg-muted/40 px-2 py-1 font-mono text-caption text-muted-foreground">
+        {before}
+      </span>
+      <input
+        aria-label={`Corrected ${fieldKey}`}
+        className="h-7 rounded-md border border-input bg-background px-2 text-sm outline-none focus:border-ring focus:ring-1 focus:ring-ring"
+        onChange={handleChange}
+        value={value}
+      />
+    </div>
+  );
 }
 
 /**
@@ -37,7 +77,7 @@ export function CorrectionModal({
   open: boolean;
   row: AuditRow | null;
 }) {
-  const keys = React.useMemo(
+  const keys = useMemo(
     () =>
       row
         ? [
@@ -49,13 +89,13 @@ export function CorrectionModal({
         : [],
     [row]
   );
-  const [values, setValues] = React.useState<Record<string, string>>({});
-  const [reason, setReason] = React.useState("");
-  const [attempted, setAttempted] = React.useState(false);
+  const [values, setValues] = useState<Record<string, string>>({});
+  const [reason, setReason] = useState("");
+  const [attempted, setAttempted] = useState(false);
   const reduceMotion = useReducedMotion();
   const variants = reduceMotion ? materializeEnterReduced : materializeEnter;
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (open && row && keys.length > 0) {
       setValues(
         Object.fromEntries(keys.map((key) => [key, asText(row.after?.[key])]))
@@ -65,7 +105,7 @@ export function CorrectionModal({
     }
   }, [open, row, keys]);
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (!open) {
       return;
     }
@@ -80,6 +120,30 @@ export function CorrectionModal({
 
   const valid = reason.trim().length > 0;
 
+  const handleClose = useCallback(() => {
+    onOpenChange(false);
+  }, [onOpenChange]);
+
+  const handleValueChange = useCallback((key: string, value: string) => {
+    setValues((prev) => ({ ...prev, [key]: value }));
+  }, []);
+
+  const handleReasonChange = useCallback(
+    (event: ChangeEvent<HTMLTextAreaElement>) => {
+      setReason(event.target.value);
+    },
+    []
+  );
+
+  const handleSubmit = useCallback(() => {
+    if (!valid) {
+      setAttempted(true);
+      return;
+    }
+    onSubmit({ corrected: values, reason: reason.trim() });
+    onOpenChange(false);
+  }, [valid, onSubmit, values, reason, onOpenChange]);
+
   return (
     <AnimatePresence>
       {open && row ? (
@@ -90,7 +154,7 @@ export function CorrectionModal({
             className="fixed inset-0 z-50 bg-black/32"
             exit={{ opacity: 0 }}
             initial={{ opacity: 0 }}
-            onClick={() => onOpenChange(false)}
+            onClick={handleClose}
             transition={reduceMotion ? { duration: 0 } : { duration: 0.18 }}
           />
           <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6">
@@ -117,7 +181,7 @@ export function CorrectionModal({
                 <Button
                   aria-label="Close"
                   className="press-feedback"
-                  onClick={() => onOpenChange(false)}
+                  onClick={handleClose}
                   size="icon-sm"
                   variant="ghost"
                 >
@@ -134,28 +198,13 @@ export function CorrectionModal({
                 ) : null}
 
                 {keys.map((key) => (
-                  <div
-                    className="grid grid-cols-[0.8fr_1fr_1fr] items-center gap-2"
+                  <CorrectionField
+                    before={asText(row.before?.[key])}
+                    fieldKey={key}
                     key={key}
-                  >
-                    <span className="truncate text-caption text-foreground">
-                      {key}
-                    </span>
-                    <span className="truncate rounded-md border border-border/60 bg-muted/40 px-2 py-1 font-mono text-caption text-muted-foreground">
-                      {asText(row.before?.[key])}
-                    </span>
-                    <input
-                      aria-label={`Corrected ${key}`}
-                      className="h-7 rounded-md border border-input bg-background px-2 text-sm outline-none focus:border-ring focus:ring-1 focus:ring-ring"
-                      onChange={(event) =>
-                        setValues((prev) => ({
-                          ...prev,
-                          [key]: event.target.value,
-                        }))
-                      }
-                      value={values[key] ?? ""}
-                    />
-                  </div>
+                    onValueChange={handleValueChange}
+                    value={values[key] ?? ""}
+                  />
                 ))}
 
                 <label className="block text-caption text-foreground">
@@ -165,7 +214,7 @@ export function CorrectionModal({
                       "mt-1 min-h-[72px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-1 focus:ring-ring",
                       attempted && !valid && "border-destructive"
                     )}
-                    onChange={(event) => setReason(event.target.value)}
+                    onChange={handleReasonChange}
                     placeholder="Why is this correction being made?"
                     value={reason}
                   />
@@ -180,7 +229,7 @@ export function CorrectionModal({
               <div className="flex items-center justify-end gap-2 border-border/50 border-t px-4 py-3">
                 <Button
                   className="press-feedback"
-                  onClick={() => onOpenChange(false)}
+                  onClick={handleClose}
                   size="sm"
                   variant="ghost"
                 >
@@ -188,14 +237,7 @@ export function CorrectionModal({
                 </Button>
                 <Button
                   className="press-feedback"
-                  onClick={() => {
-                    if (!valid) {
-                      setAttempted(true);
-                      return;
-                    }
-                    onSubmit({ corrected: values, reason: reason.trim() });
-                    onOpenChange(false);
-                  }}
+                  onClick={handleSubmit}
                   size="sm"
                 >
                   Append correction

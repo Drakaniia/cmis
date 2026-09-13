@@ -1,6 +1,7 @@
 "use client";
 
 import { motion, useReducedMotion } from "motion/react";
+import { useCallback } from "react";
 import { toast } from "sonner";
 import { downloadReportsCsv } from "../export-reports";
 import { useReportsFilters } from "../hooks/use-reports-filters";
@@ -46,7 +47,7 @@ export function ReportsPage() {
 
   const hasData = movement.length > 0;
 
-  function handleExportCsv() {
+  const handleExportCsv = useCallback(() => {
     const stamp = new Date().toISOString().slice(0, 10);
     downloadReportsCsv(
       {
@@ -64,9 +65,18 @@ export function ReportsPage() {
     toast.success("Reports CSV exported", {
       description: `cmis-reports-${filters.preset}-${stamp}.csv`,
     });
-  }
+  }, [
+    expiry,
+    filters.category,
+    filters.preset,
+    fulfillment,
+    lowStock,
+    movement,
+    top,
+    usage,
+  ]);
 
-  function handleExportPdf() {
+  const handleExportPdf = useCallback(() => {
     // PDF generation is presentation-grade (cover + chart images).
     // Keep as client-print placeholder — respects Agency: no fake download.
     toast.message("PDF export", {
@@ -76,7 +86,7 @@ export function ReportsPage() {
     if (typeof window !== "undefined") {
       window.print();
     }
-  }
+  }, []);
 
   return (
     <div className="flex h-[calc(100svh-48px)] flex-col overflow-hidden">
