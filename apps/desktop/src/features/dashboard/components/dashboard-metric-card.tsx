@@ -28,6 +28,24 @@ export interface DashboardMetricCardProps {
   value: string;
 }
 
+const TREND_ICONS: Record<TrendType, IconType> = {
+  down: ArrowDown,
+  neutral: Minus,
+  up: ArrowUp,
+};
+
+const TREND_COLOR_CLASSES: Record<TrendType, string> = {
+  down: "text-red-600 dark:text-red-400",
+  neutral: "text-muted-foreground",
+  up: "text-green-600 dark:text-green-400",
+};
+
+const TREND_LABELS: Record<TrendType, string> = {
+  down: "decrease",
+  neutral: "change",
+  up: "increase",
+};
+
 /**
  * A professional, animated metric card for admin dashboards.
  * Displays a key value, title, icon, and trend indicator with motion hover effects.
@@ -40,14 +58,8 @@ const DashboardMetricCard: React.FC<DashboardMetricCardProps> = ({
   trendType = "neutral",
   className,
 }) => {
-  const TrendIcon =
-    trendType === "up" ? ArrowUp : trendType === "down" ? ArrowDown : Minus;
-  const trendColorClass =
-    trendType === "up"
-      ? "text-green-600 dark:text-green-400"
-      : trendType === "down"
-        ? "text-red-600 dark:text-red-400"
-        : "text-muted-foreground";
+  const TrendIcon = TREND_ICONS[trendType];
+  const trendColorClass = TREND_COLOR_CLASSES[trendType];
 
   return (
     <div className={cn("cursor-pointer rounded-lg", className)}>
@@ -56,16 +68,16 @@ const DashboardMetricCard: React.FC<DashboardMetricCardProps> = ({
           <CardTitle className="font-medium text-muted-foreground text-sm">
             {title}
           </CardTitle>
-          {IconComponent && (
+          {IconComponent ? (
             <IconComponent
               aria-hidden="true"
               className="h-4 w-4 text-muted-foreground"
             />
-          )}
+          ) : null}
         </CardHeader>
         <CardContent>
           <div className="mb-2 font-bold text-2xl text-foreground">{value}</div>
-          {trendChange && (
+          {trendChange ? (
             <p
               className={cn(
                 "flex items-center font-medium text-xs",
@@ -73,14 +85,9 @@ const DashboardMetricCard: React.FC<DashboardMetricCardProps> = ({
               )}
             >
               <TrendIcon aria-hidden="true" className="mr-1 h-3 w-3" />
-              {trendChange}{" "}
-              {trendType === "up"
-                ? "increase"
-                : trendType === "down"
-                  ? "decrease"
-                  : "change"}
+              {trendChange} {TREND_LABELS[trendType]}
             </p>
-          )}
+          ) : null}
         </CardContent>
       </Card>
     </div>

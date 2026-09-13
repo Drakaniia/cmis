@@ -6,7 +6,7 @@
  * Wraps the AdminSheet pattern from features/admin/components/sheet.tsx.
  */
 
-import * as React from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { AdminSheet } from "@/features/admin/components/sheet";
 
@@ -21,13 +21,16 @@ export function StockSheet({
   open: boolean;
   originRect: DOMRect | null;
 }) {
-  const [tab, setTab] = React.useState(initialTab);
+  const [tab, setTab] = useState(initialTab);
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (open) {
       setTab(initialTab);
     }
   }, [initialTab, open]);
+
+  const handleStockInTab = useCallback(() => setTab("stock-in"), []);
+  const handleScanTab = useCallback(() => setTab("scan"), []);
 
   return (
     <AdminSheet
@@ -45,7 +48,7 @@ export function StockSheet({
                 ? "bg-card text-foreground shadow-sm"
                 : "text-muted-foreground hover:text-foreground"
             }`}
-            onClick={() => setTab("stock-in")}
+            onClick={handleStockInTab}
             type="button"
           >
             Stock In
@@ -57,7 +60,7 @@ export function StockSheet({
                 ? "bg-card text-foreground shadow-sm"
                 : "text-muted-foreground hover:text-foreground"
             }`}
-            onClick={() => setTab("scan")}
+            onClick={handleScanTab}
             type="button"
           >
             Scan Barcode

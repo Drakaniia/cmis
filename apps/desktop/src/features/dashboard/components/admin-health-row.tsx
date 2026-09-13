@@ -11,6 +11,7 @@
 
 import { Activity } from "lucide-react";
 import { motion } from "motion/react";
+import { useCallback } from "react";
 
 import { densitySpring } from "@/lib/motion";
 import type {
@@ -63,6 +64,11 @@ export function AdminHealthRow({
   links: Record<DashboardLinkKey, string>;
   stockAdjustments: StockAdjustmentsData;
 }) {
+  const handleAuditClick = useCallback(
+    () => window.location.assign(links.audit),
+    [links.audit]
+  );
+
   return (
     <motion.div
       className="grid gap-4 sm:gap-5 lg:grid-cols-3"
@@ -95,7 +101,7 @@ export function AdminHealthRow({
           className="h-full"
           icon={<Activity aria-hidden="true" className="h-4 w-4" />}
           mainValue={`${hourly.reduce((s, h) => s + h.requests + h.dispensed, 0)} events`}
-          onActionClick={() => window.location.assign(links.audit)}
+          onActionClick={handleAuditClick}
           title="Activity, last 24h"
         />
       </motion.div>

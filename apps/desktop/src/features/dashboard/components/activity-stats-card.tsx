@@ -34,6 +34,16 @@ export interface ActivityStatsCardProps
   title: string;
 }
 
+function changeColorClass(changeValue: number): string {
+  if (changeValue > 0) {
+    return "text-green-600 dark:text-green-400";
+  }
+  if (changeValue < 0) {
+    return "text-red-600 dark:text-red-400";
+  }
+  return "text-muted-foreground";
+}
+
 function ActivityStatsCard({
   className,
   title,
@@ -48,12 +58,7 @@ function ActivityStatsCard({
   ...props
 }: ActivityStatsCardProps) {
   const ChangeIndicator = changeValue > 0 ? ArrowUpRight : ArrowDownRight;
-  const changeColor =
-    changeValue > 0
-      ? "text-green-600 dark:text-green-400"
-      : changeValue < 0
-        ? "text-red-600 dark:text-red-400"
-        : "text-muted-foreground";
+  const changeColor = changeColorClass(changeValue);
 
   const containerVariants = {
     hidden: { opacity: 0 },
@@ -88,7 +93,7 @@ function ActivityStatsCard({
             {title}
           </CardTitle>
         </div>
-        {onActionClick && (
+        {onActionClick ? (
           <button
             aria-label="View details"
             className="flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
@@ -97,7 +102,7 @@ function ActivityStatsCard({
           >
             <ArrowRight className="size-4" />
           </button>
-        )}
+        ) : null}
       </CardHeader>
       <CardContent>
         <div className="mb-2 font-bold text-2xl text-foreground">
