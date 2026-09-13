@@ -8,7 +8,14 @@
  * used by features/requests/persistence.ts).
  */
 
-import * as React from "react";
+import {
+  createContext,
+  type ReactNode,
+  useCallback,
+  useContext,
+  useMemo,
+  useState,
+} from "react";
 
 export type Density = "compact" | "comfortable";
 
@@ -17,7 +24,7 @@ interface DensityContextValue {
   setDensity: (density: Density) => void;
 }
 
-const DensityContext = React.createContext<DensityContextValue | null>(null);
+const DensityContext = createContext<DensityContextValue | null>(null);
 
 const STORAGE_KEY = "cmis:density";
 const DEFAULT_DENSITY: Density = "comfortable";
@@ -53,18 +60,15 @@ async function persistDensity(value: Density): Promise<void> {
   }
 }
 
-export function DensityProvider({ children }: { children: React.ReactNode }) {
-  const [density, setDensityState] = React.useState<Density>(readStoredDensity);
+export function DensityProvider({ children }: { children: ReactNode }) {
+  const [density, setDensityState] = useState<Density>(readStoredDensity);
 
-  const setDensity = React.useCallback((value: Density) => {
-    setDensityState(value);
-    persistDensity(value);
+  const setDensity = useCallback((nextDensity: Density) => {
+    setDensityState(nextDensity);
+    persistDensity(nextDensity);
   }, []);
 
-  const value = React.useMemo(
-    () => ({ density, setDensity }),
-    [density, setDensity]
-  );
+  const value = useMemo(() => ({ density, setDensity }), [density, setDensity]);
 
   return (
     <DensityContext.Provider value={value}>{children}</DensityContext.Provider>
@@ -76,10 +80,15 @@ export function DensityProvider({ children }: { children: React.ReactNode }) {
  * Must be used inside a <DensityProvider>.
  */
 export function useDensity(): DensityContextValue {
-  const context = React.useContext(DensityContext);
+  const context = useContext(DensityContext);
   if (!context) {
     // Graceful fallback for pages rendered outside the provider (tests, SSR).
-    return { density: DEFAULT_DENSITY, setDensity: () => {} };
+    return {
+      density: DEFAULT_DENSITY,
+      setDensity: () => {
+        /* noop */
+      },
+    };
   }
   return context;
 }
