@@ -58,8 +58,8 @@ export function useAnimatedSeriesPath({
         innerWidth,
         renderData,
         xAccessor,
-        xDomainMax: xScaleDomain[1]?.getTime?.() ?? 0,
-        xDomainMin: xScaleDomain[0]?.getTime?.() ?? 0,
+        xDomainMax: xScaleDomain[1].getTime() ?? 0,
+        xDomainMin: xScaleDomain[0].getTime() ?? 0,
       }),
     [renderData, xAccessor, dataKey, innerWidth, xScaleDomain]
   );
@@ -73,6 +73,7 @@ export function useAnimatedSeriesPath({
   const prevTransitionSignatureRef = useRef(transitionSignature);
 
   useEffect(() => {
+    // biome-ignore lint/suspicious/noUnnecessaryConditions: animatingRef.current toggles between true/false at runtime
     if (!animatingRef.current) {
       displayedPointsRef.current = targetPoints;
     }

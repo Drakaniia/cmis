@@ -176,7 +176,153 @@ function AnimatedBar({
   );
 }
 
-const BarInner = memo(function BarInner({
+interface BarPosition {
+  barHeight: number;
+  barW: number;
+  x: number;
+  y: number;
+}
+
+function computeHorizontalBarPosition({
+  bandPos,
+  barWidth,
+  dataKey,
+  groupGap,
+  isLastSeries,
+  seriesCount,
+  seriesIndex,
+  stacked,
+  stackGap,
+  stackOffsets,
+  value,
+  scale,
+}: {
+  bandPos: number;
+  barWidth: number;
+  dataKey: string;
+  groupGap: number;
+  isLastSeries: boolean;
+  seriesCount: number;
+  seriesIndex: number;
+  stacked: boolean;
+  stackGap: number;
+  stackOffsets?: Map<number, Map<string, number>>;
+  value: number;
+  scale: (value: number) => number | undefined;
+}): BarPosition {
+  const valuePos = scale(value) ?? 0;
+  let barW = valuePos;
+  const barHeight = barWidth;
+  let x = 0;
+
+  if (stacked && stackOffsets) {
+    const offset = stackOffsets.get(seriesIndex)?.get(dataKey) ?? 0;
+    x = scale(offset) ?? 0;
+    barW = valuePos - x;
+    const gapOffset = seriesIndex * stackGap;
+    x += gapOffset;
+    if (!isLastSeries && stackGap > 0) {
+      barW = Math.max(0, barW - stackGap);
+    }
+  }
+
+  const y = stacked
+    ? bandPos
+    : bandPos + seriesIndex * (barWidth + (seriesCount > 1 ? groupGap : 0));
+
+  return { barHeight, barW, x, y };
+}
+
+function computeVerticalBarPosition({
+  bandPos,
+  barScale,
+  bandWidth,
+  barWidth,
+  barXAccessor,
+  d,
+  dataKey,
+  groupGap,
+  innerHeight,
+  innerWidth,
+  isLastSeries,
+  minBarHeight,
+  perspective,
+  seriesCount,
+  seriesIndex,
+  stacked,
+  stackGap,
+  stackOffsets,
+  value,
+  scale,
+}: {
+  bandPos: number;
+  barScale: ScaleBand<string>;
+  bandWidth: number;
+  barWidth: number;
+  barXAccessor: (d: Record<string, unknown>) => string;
+  d: Record<string, unknown>;
+  dataKey: string;
+  groupGap: number;
+  innerHeight: number;
+  innerWidth: number;
+  isLastSeries: boolean;
+  minBarHeight: number;
+  perspective: boolean;
+  seriesCount: number;
+  seriesIndex: number;
+  stacked: boolean;
+  stackGap: number;
+  stackOffsets?: Map<number, Map<string, number>>;
+  value: number;
+  scale: (value: number) => number | undefined;
+}): BarPosition {
+  const valuePos = scale(value) ?? 0;
+  let barHeight = innerHeight - valuePos;
+  const barW = barWidth;
+  let y = valuePos;
+
+  if (stacked && stackOffsets) {
+    const offset = stackOffsets.get(seriesIndex)?.get(dataKey) ?? 0;
+    const offsetY = scale(offset) ?? innerHeight;
+    const gapOffset = seriesIndex * stackGap;
+    y = offsetY - barHeight - gapOffset;
+    if (!isLastSeries && stackGap > 0) {
+      barHeight = Math.max(0, barHeight - stackGap);
+    }
+  }
+
+  const x = stacked
+    ? bandPos
+    : bandPos + seriesIndex * (barWidth + (seriesCount > 1 ? groupGap : 0));
+
+  let isFloored = false;
+  if (!stacked && minBarHeight > 0 && value >= 0 && barHeight < minBarHeight) {
+    const baselineY = scale(0) ?? innerHeight;
+    barHeight = minBarHeight;
+    y = baselineY - minBarHeight;
+    isFloored = true;
+  }
+
+  if (perspective && value > 0 && !isFloored && (!stacked || isLastSeries)) {
+    const baselineY = scale(0) ?? innerHeight;
+    const rise = barDepthPerspectiveRise(
+      barScale,
+      bandWidth,
+      barXAccessor,
+      innerWidth,
+      d,
+      y,
+      baselineY
+    );
+    const trim = Math.min(rise, Math.max(0, barHeight - 1));
+    y += trim;
+    barHeight -= trim;
+  }
+
+  return { barHeight, barW, x, y };
+}
+
+const BarInner = memo(function BarInnerImpl({
   dataKey,
   yAxisId,
   fill = chartCssVars.linePrimary,
@@ -202,12 +348,13 @@ const BarInner = memo(function BarInner({
     hoveredBarIndex,
     lines,
     orientation,
-    stacked,
+    stacked: stackedRaw,
     stackOffsets,
     animationDuration,
     enterTransition,
     revealEpoch = 0,
   } = useChart();
+  const stacked = stackedRaw ?? false;
 
   // Calculate stagger delay automatically if not provided
   // Total animation duration is ~1200ms, with 40% for stagger spread and 60% for bar animation
@@ -277,110 +424,45 @@ const BarInner = memo(function BarInner({
         const categoryValue = barXAccessor(d);
         const bandPos = barScale(categoryValue) ?? 0;
 
-        let x: number;
-        let y: number;
-        let barHeight: number;
-        let barW: number;
-
-        const scale = isHorizontal ? chartYScale : valueScale;
-
-        if (isHorizontal) {
-          // Horizontal bars: category on y-axis, value on x-axis
-          const valuePos = scale(value) ?? 0;
-          barW = valuePos; // Width is the value position (grows from left)
-          barHeight = barWidth;
-
-          if (stacked && stackOffsets) {
-            const offset = stackOffsets.get(i)?.get(dataKey) ?? 0;
-            x = scale(offset) ?? 0;
-            barW = valuePos - x;
-            // Apply stack gap for horizontal: shift right and reduce width
-            const gapOffset = seriesIndex * stackGap;
-            x += gapOffset;
-            if (!isLastSeries && stackGap > 0) {
-              barW = Math.max(0, barW - stackGap);
-            }
-          } else {
-            x = 0;
-            // For grouped bars, offset y position
-            const effectiveGroupGap = seriesCount > 1 ? groupGap : 0;
-            y = bandPos + seriesIndex * (barWidth + effectiveGroupGap);
-          }
-          y = stacked
-            ? bandPos
-            : bandPos +
-              seriesIndex * (barWidth + (seriesCount > 1 ? groupGap : 0));
-        } else {
-          // Vertical bars: category on x-axis, value on y-axis
-          const valuePos = scale(value) ?? 0;
-          barHeight = innerHeight - valuePos;
-          barW = barWidth;
-
-          if (stacked && stackOffsets) {
-            const offset = stackOffsets.get(i)?.get(dataKey) ?? 0;
-            const offsetY = scale(offset) ?? innerHeight;
-            // Apply stack gap: shift up and reduce height
-            const gapOffset = seriesIndex * stackGap;
-            y = offsetY - barHeight - gapOffset;
-            // Reduce height slightly for non-last bars to create visual gap
-            if (!isLastSeries && stackGap > 0) {
-              barHeight = Math.max(0, barHeight - stackGap);
-            }
-          } else {
-            y = valuePos;
-            // For grouped bars, offset x position
-            const effectiveGroupGap = seriesCount > 1 ? groupGap : 0;
-            x = bandPos + seriesIndex * (barWidth + effectiveGroupGap);
-          }
-          x = stacked
-            ? bandPos
-            : bandPos +
-              seriesIndex * (barWidth + (seriesCount > 1 ? groupGap : 0));
-
-          // Minimum visible height — floor short/zero non-stacked bars so a
-          // zero-value data point still reads as a tiny bar instead of
-          // vanishing. Grows up from the baseline. Floored bars skip the
-          // perspective trim (sub-pixel on a 3px bar; keeps the front aligned
-          // with bar-depth, which also skips trim for floored bars).
-          let isFloored = false;
-          if (
-            !stacked &&
-            minBarHeight > 0 &&
-            value >= 0 &&
-            barHeight < minBarHeight
-          ) {
-            const baselineY = scale(0) ?? innerHeight;
-            barHeight = minBarHeight;
-            y = baselineY - minBarHeight;
-            isFloored = true;
-          }
-
-          // Perspective trim — shrink the topmost positive bar's front-face
-          // top down by its perspective rise so it meets `<BarDepthBack>`'s
-          // lid back edge. Stacked: only the last (topmost) series; grouped or
-          // single: every positive bar. Clamped to `barHeight - 1` so very
-          // short bars keep a positive height (matches bar-depth's clamp).
-          if (
-            perspective &&
-            value > 0 &&
-            !isFloored &&
-            (!stacked || isLastSeries)
-          ) {
-            const baselineY = scale(0) ?? innerHeight;
-            const rise = barDepthPerspectiveRise(
-              barScale,
+        const pos = isHorizontal
+          ? computeHorizontalBarPosition({
+              bandPos,
+              barWidth,
+              dataKey,
+              groupGap,
+              isLastSeries,
+              scale: chartYScale,
+              seriesCount,
+              seriesIndex,
+              stacked,
+              stackGap,
+              stackOffsets,
+              value,
+            })
+          : computeVerticalBarPosition({
+              bandPos,
               bandWidth,
+              barScale,
+              barWidth,
               barXAccessor,
-              innerWidth,
               d,
-              y,
-              baselineY
-            );
-            const trim = Math.min(rise, Math.max(0, barHeight - 1));
-            y += trim;
-            barHeight -= trim;
-          }
-        }
+              dataKey,
+              groupGap,
+              innerHeight,
+              innerWidth,
+              isLastSeries,
+              minBarHeight,
+              perspective,
+              scale: valueScale,
+              seriesCount,
+              seriesIndex,
+              stacked,
+              stackGap,
+              stackOffsets,
+              value,
+            });
+
+        const { x, y, barHeight, barW } = pos;
 
         const isFaded =
           (hoveredBarIndex !== null && hoveredBarIndex !== i) || isLegendDimmed;
@@ -462,5 +544,3 @@ export function Bar(props: BarProps) {
 }
 
 Bar.displayName = "Bar";
-
-export default Bar;

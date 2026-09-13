@@ -115,10 +115,11 @@ function TooltipBoxInner({
   }
 
   useLayoutEffect(() => {
-    if (!tooltipRef.current) {
+    const el = tooltipRef.current;
+    // biome-ignore lint/suspicious/noUnnecessaryConditions: TS types allow null here
+    if (!el) {
       return;
     }
-    const el = tooltipRef.current;
     const w = el.offsetWidth;
     const h = el.offsetHeight;
     if (w > 0) {
@@ -231,5 +232,3 @@ function TooltipBoxInner({
 }
 
 TooltipBox.displayName = "TooltipBox";
-
-export default TooltipBox;

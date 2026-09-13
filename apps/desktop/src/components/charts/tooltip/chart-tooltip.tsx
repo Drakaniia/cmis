@@ -95,7 +95,7 @@ interface ChartTooltipInnerProps extends ChartTooltipProps {
   container: HTMLElement;
 }
 
-const ChartTooltipInner = memo(function ChartTooltipInner({
+const ChartTooltipInner = memo(function ChartTooltipInnerImpl({
   showDatePill = true,
   showCrosshair = true,
   showDots = true,
@@ -205,7 +205,7 @@ const ChartTooltipInner = memo(function ChartTooltipInner({
     return lines.map((line) => ({
       color: line.stroke,
       label: line.dataKey,
-      value: (tooltipData.point[line.dataKey] as number) ?? 0,
+      value: tooltipData.point[line.dataKey] as number,
     }));
   }, [tooltipData, lines, rowsRenderer]);
 
@@ -257,7 +257,7 @@ const ChartTooltipInner = memo(function ChartTooltipInner({
   const tooltipContent = (
     <>
       {/* Crosshair indicator - rendered as SVG overlay */}
-      {showCrosshair && (
+      {showCrosshair ? (
         <svg
           aria-hidden="true"
           className="pointer-events-none absolute inset-0"
@@ -283,7 +283,7 @@ const ChartTooltipInner = memo(function ChartTooltipInner({
             />
           </g>
         </svg>
-      )}
+      ) : null}
 
       {/* Dots on bars/lines - show for vertical charts only */}
       {showDots && visible && !isHorizontal && (
@@ -434,5 +434,3 @@ function DatePillTrackerInner({
     </motion.div>
   );
 }
-
-export default ChartTooltip;

@@ -131,7 +131,7 @@ export function ProjectionLine({
     [yScale]
   );
 
-  const startPoint = data[0];
+  const [startPoint] = data;
   const endPoint = data.at(-1);
 
   const geometry = useMemo(() => {
@@ -230,5 +230,3 @@ export function ProjectionLine({
 }
 
 ProjectionLine.displayName = "ProjectionLine";
-
-export default ProjectionLine;

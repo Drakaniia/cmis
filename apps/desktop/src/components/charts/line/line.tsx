@@ -118,6 +118,11 @@ function LineSeriesStroke({
   xAccessor: (datum: Record<string, unknown>) => Date;
   xScale: (value: Date) => number | undefined;
 }) {
+  const getX = useCallback(
+    (d: Record<string, unknown>) => xScale(xAccessor(d)) ?? 0,
+    [xScale, xAccessor]
+  );
+
   if (useDataTransitionPath && animatedPathD) {
     return (
       <path
@@ -139,7 +144,7 @@ function LineSeriesStroke({
       stroke={visibleStroke}
       strokeLinecap="round"
       strokeWidth={strokeWidth}
-      x={(d) => xScale(xAccessor(d)) ?? 0}
+      x={getX}
       y={getY}
     />
   );
@@ -402,5 +407,3 @@ export function Line({
 }
 
 Line.displayName = "Line";
-
-export default Line;

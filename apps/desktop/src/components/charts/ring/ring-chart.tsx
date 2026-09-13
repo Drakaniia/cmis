@@ -128,7 +128,7 @@ interface ScrubRingLayer {
   progressPath: string;
 }
 
-const RingChartCore = memo(function RingChartCore({
+const RingChartCore = memo(function RingChartCoreImpl({
   width,
   height,
   data,
@@ -281,8 +281,7 @@ const RingChartCore = memo(function RingChartCore({
     Children.forEach(children, (child) => {
       if (isRingCenter(child)) {
         centerNodes.push(child);
-      } else if (geometryScrubbing && isRing(child)) {
-      } else {
+      } else if (!(geometryScrubbing && isRing(child))) {
         svgNodes.push(child);
       }
     });
@@ -486,5 +485,3 @@ export function RingChart({
     </div>
   );
 }
-
-export default RingChart;

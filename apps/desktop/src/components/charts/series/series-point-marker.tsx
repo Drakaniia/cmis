@@ -92,32 +92,34 @@ export interface StaticSeriesPointMarkerProps extends SeriesPointMarkerStyle {
   scale?: number;
 }
 
-export const StaticSeriesPointMarker = memo(function StaticSeriesPointMarker({
-  cx,
-  cy,
-  scale = 1,
-  fill,
-  stroke,
-  strokeWidth = 2,
-  ringGap = 2,
-  outlineWidth = 0,
-  outlineColor,
-  radius = 5,
-}: StaticSeriesPointMarkerProps) {
-  return (
-    <g transform={`translate(${cx}, ${cy}) scale(${scale})`}>
-      <MarkerCircles
-        fill={fill}
-        outlineColor={outlineColor}
-        outlineWidth={outlineWidth}
-        radius={radius}
-        ringGap={ringGap}
-        stroke={stroke}
-        strokeWidth={strokeWidth}
-      />
-    </g>
-  );
-});
+export const StaticSeriesPointMarker = memo(
+  function StaticSeriesPointMarkerImpl({
+    cx,
+    cy,
+    scale = 1,
+    fill,
+    stroke,
+    strokeWidth = 2,
+    ringGap = 2,
+    outlineWidth = 0,
+    outlineColor,
+    radius = 5,
+  }: StaticSeriesPointMarkerProps) {
+    return (
+      <g transform={`translate(${cx}, ${cy}) scale(${scale})`}>
+        <MarkerCircles
+          fill={fill}
+          outlineColor={outlineColor}
+          outlineWidth={outlineWidth}
+          radius={radius}
+          ringGap={ringGap}
+          stroke={stroke}
+          strokeWidth={strokeWidth}
+        />
+      </g>
+    );
+  }
+);
 
 export interface SeriesPointMarkerProps extends SeriesPointMarkerStyle {
   cx: number;

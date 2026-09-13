@@ -143,6 +143,202 @@ function extractBarConfigs(children: ReactNode): LineConfig[] {
   return configs;
 }
 
+function computeStackedMax(
+  data: Record<string, unknown>[],
+  lines: LineConfig[]
+): number {
+  let max = 0;
+  for (const d of data) {
+    let sum = 0;
+    for (const line of lines) {
+      const value = d[line.dataKey];
+      if (typeof value === "number") {
+        sum += value;
+      }
+    }
+    if (sum > max) {
+      max = sum;
+    }
+  }
+  return max;
+}
+
+function computeGroupedMax(
+  data: Record<string, unknown>[],
+  lines: LineConfig[]
+): number {
+  let max = 0;
+  for (const line of lines) {
+    for (const d of data) {
+      const value = d[line.dataKey];
+      if (typeof value === "number" && value > max) {
+        max = value;
+      }
+    }
+  }
+  return max;
+}
+
+interface BarPositions {
+  xPositions: Record<string, number>;
+  yPositions: Record<string, number>;
+}
+
+function computeHorizontalPositions(
+  d: Record<string, unknown>,
+  lines: LineConfig[],
+  yScales: Record<string, ReturnType<typeof scaleLinear<number>>>,
+  valueScale: ReturnType<typeof scaleLinear<number>>,
+  barPos: number,
+  bandWidth: number,
+  stacked: boolean
+): BarPositions {
+  const yPositions: Record<string, number> = {};
+  const xPositions: Record<string, number> = {};
+  const seriesCount = lines.length;
+  const groupGap = seriesCount > 1 ? 4 : 0;
+  const individualBarHeight =
+    seriesCount > 0
+      ? (bandWidth - groupGap * (seriesCount - 1)) / seriesCount
+      : bandWidth;
+
+  if (stacked) {
+    let cumulative = 0;
+    for (const line of lines) {
+      const value = d[line.dataKey];
+      if (typeof value === "number") {
+        cumulative += value;
+        const axisScale = yScales[normalizeYAxisId(line.yAxisId)] ?? valueScale;
+        xPositions[line.dataKey] = axisScale(cumulative) ?? 0;
+        yPositions[line.dataKey] = barPos + bandWidth / 2;
+      }
+    }
+  } else {
+    for (const [idx, line] of lines.entries()) {
+      const value = d[line.dataKey];
+      if (typeof value === "number") {
+        const axisScale = yScales[normalizeYAxisId(line.yAxisId)] ?? valueScale;
+        xPositions[line.dataKey] = axisScale(value) ?? 0;
+        yPositions[line.dataKey] =
+          barPos +
+          idx * (individualBarHeight + groupGap) +
+          individualBarHeight / 2;
+      }
+    }
+  }
+
+  return { xPositions, yPositions };
+}
+
+function computeStackedVerticalPositions(
+  d: Record<string, unknown>,
+  lines: LineConfig[],
+  yScales: Record<string, ReturnType<typeof scaleLinear<number>>>,
+  primaryYScale: ReturnType<typeof scaleLinear<number>>,
+  stackGap: number
+): Record<string, number> {
+  const yPositions: Record<string, number> = {};
+  let cumulative = 0;
+  let seriesIdx = 0;
+  for (const line of lines) {
+    const value = d[line.dataKey];
+    if (typeof value === "number") {
+      cumulative += value;
+      const axisScale =
+        yScales[normalizeYAxisId(line.yAxisId)] ?? primaryYScale;
+      const gapOffset = seriesIdx * stackGap;
+      yPositions[line.dataKey] = (axisScale(cumulative) ?? 0) - gapOffset;
+      seriesIdx += 1;
+    }
+  }
+  return yPositions;
+}
+
+function computeGroupedVerticalPositions(
+  d: Record<string, unknown>,
+  lines: LineConfig[],
+  yScales: Record<string, ReturnType<typeof scaleLinear<number>>>,
+  primaryYScale: ReturnType<typeof scaleLinear<number>>,
+  barPos: number,
+  bandWidth: number,
+  squareSnap:
+    | { squareGap: number; groupGap?: number; fit?: boolean }
+    | undefined,
+  innerHeight: number
+): { xPositions: Record<string, number>; yPositions: Record<string, number> } {
+  const yPositions: Record<string, number> = {};
+  const xPositions: Record<string, number> = {};
+  const seriesCount = lines.length;
+  const groupGap = seriesCount > 1 ? 4 : 0;
+  const individualBarWidth =
+    seriesCount > 0
+      ? (bandWidth - groupGap * (seriesCount - 1)) / seriesCount
+      : bandWidth;
+
+  for (const [idx, line] of lines.entries()) {
+    const value = d[line.dataKey];
+    if (typeof value !== "number") {
+      continue;
+    }
+    const axisScale = yScales[normalizeYAxisId(line.yAxisId)] ?? primaryYScale;
+    const baselineY = axisScale(0) ?? innerHeight;
+    const valueY = axisScale(value) ?? 0;
+    const barLengthPx = baselineY - valueY;
+
+    yPositions[line.dataKey] =
+      squareSnap && value > 0
+        ? topSquareCenterY({
+            barLengthPx,
+            baselineY,
+            fit: squareSnap.fit,
+            gap: squareSnap.squareGap,
+            squareSize: individualBarWidth,
+          })
+        : valueY;
+
+    xPositions[line.dataKey] =
+      barPos + idx * (individualBarWidth + groupGap) + individualBarWidth / 2;
+  }
+  return { xPositions, yPositions };
+}
+
+function computeVerticalPositions(
+  d: Record<string, unknown>,
+  lines: LineConfig[],
+  yScales: Record<string, ReturnType<typeof scaleLinear<number>>>,
+  primaryYScale: ReturnType<typeof scaleLinear<number>>,
+  barPos: number,
+  bandWidth: number,
+  stacked: boolean,
+  stackGap: number,
+  squareSnap:
+    | { squareGap: number; groupGap?: number; fit?: boolean }
+    | undefined,
+  innerHeight: number
+): BarPositions {
+  if (stacked) {
+    const yPositions = computeStackedVerticalPositions(
+      d,
+      lines,
+      yScales,
+      primaryYScale,
+      stackGap
+    );
+    return { xPositions: {}, yPositions };
+  }
+
+  return computeGroupedVerticalPositions(
+    d,
+    lines,
+    yScales,
+    primaryYScale,
+    barPos,
+    bandWidth,
+    squareSnap,
+    innerHeight
+  );
+}
+
 interface ChartInnerProps {
   animationDuration: number;
   animationEasing: string;
@@ -173,7 +369,7 @@ function ChartInner(props: ChartInnerProps) {
   return <ChartCore {...props} />;
 }
 
-const ChartCore = memo(function ChartCore({
+const ChartCore = memo(function ChartCoreMemo({
   width,
   height,
   data,
@@ -250,33 +446,9 @@ const ChartCore = memo(function ChartCore({
 
   // Compute max value considering stacking
   const maxValue = useMemo(() => {
-    if (stacked) {
-      // For stacked bars, sum all values at each data point
-      let max = 0;
-      for (const d of data) {
-        let sum = 0;
-        for (const line of lines) {
-          const value = d[line.dataKey];
-          if (typeof value === "number") {
-            sum += value;
-          }
-        }
-        if (sum > max) {
-          max = sum;
-        }
-      }
-      return max || 100;
-    }
-    // For grouped bars, find max single value
-    let max = 0;
-    for (const line of lines) {
-      for (const d of data) {
-        const value = d[line.dataKey];
-        if (typeof value === "number" && value > max) {
-          max = value;
-        }
-      }
-    }
+    const max = stacked
+      ? computeStackedMax(data, lines)
+      : computeGroupedMax(data, lines);
     return max || 100;
   }, [data, lines, stacked]);
 
@@ -321,7 +493,7 @@ const ChartCore = memo(function ChartCore({
       return;
     }
     const offsets = new Map<number, Map<string, number>>();
-    for (let i = 0; i < data.length; i++) {
+    for (let i = 0; i < data.length; i += 1) {
       const d = data[i];
       if (!d) {
         continue;
@@ -398,8 +570,6 @@ const ChartCore = memo(function ChartCore({
       }
 
       const pos = isHorizontal ? point.y - margin.top : point.x - margin.left;
-
-      // Find which band the mouse is over
       const bandIndex = Math.floor(pos / columnWidth);
       const clampedIndex = Math.max(0, Math.min(data.length - 1, bandIndex));
       const d = data[clampedIndex];
@@ -408,117 +578,43 @@ const ChartCore = memo(function ChartCore({
         return;
       }
 
-      // Calculate positions for each bar
-      const yPositions: Record<string, number> = {};
-      const xPositions: Record<string, number> = {};
       const barPos = categoryScale(categoryAccessor(d)) ?? 0;
+      const positions = isHorizontal
+        ? computeHorizontalPositions(
+            d,
+            lines,
+            yScales,
+            valueScale,
+            barPos,
+            bandWidth,
+            stacked
+          )
+        : computeVerticalPositions(
+            d,
+            lines,
+            yScales,
+            primaryYScale,
+            barPos,
+            bandWidth,
+            stacked,
+            stackGap,
+            squareSnap,
+            innerHeight
+          );
 
-      if (isHorizontal) {
-        // Horizontal bars: dots at end of bar (x = value), centered vertically in band
-        const seriesCount = lines.length;
-        const groupGap = seriesCount > 1 ? 4 : 0;
-        const individualBarHeight =
-          seriesCount > 0
-            ? (bandWidth - groupGap * (seriesCount - 1)) / seriesCount
-            : bandWidth;
-
-        if (stacked) {
-          // Stacked horizontal: all bars same y, x at cumulative end
-          let cumulative = 0;
-          for (const line of lines) {
-            const value = d[line.dataKey];
-            if (typeof value === "number") {
-              cumulative += value;
-              const axisScale =
-                yScales[normalizeYAxisId(line.yAxisId)] ?? valueScale;
-              xPositions[line.dataKey] = axisScale(cumulative) ?? 0;
-              yPositions[line.dataKey] = barPos + bandWidth / 2;
-            }
-          }
-        } else {
-          // Grouped horizontal: each bar at its own y position
-          lines.forEach((line, idx) => {
-            const value = d[line.dataKey];
-            if (typeof value === "number") {
-              const axisScale =
-                yScales[normalizeYAxisId(line.yAxisId)] ?? valueScale;
-              xPositions[line.dataKey] = axisScale(value) ?? 0;
-              yPositions[line.dataKey] =
-                barPos +
-                idx * (individualBarHeight + groupGap) +
-                individualBarHeight / 2;
-            }
-          });
-        }
-      } else if (stacked) {
-        // Vertical stacked bars
-        let cumulative = 0;
-        let seriesIdx = 0;
-        for (const line of lines) {
-          const value = d[line.dataKey];
-          if (typeof value === "number") {
-            cumulative += value;
-            const axisScale =
-              yScales[normalizeYAxisId(line.yAxisId)] ?? primaryYScale;
-            const gapOffset = seriesIdx * stackGap;
-            yPositions[line.dataKey] = (axisScale(cumulative) ?? 0) - gapOffset;
-            seriesIdx++;
-          }
-        }
-      } else {
-        // Vertical grouped bars
-        const seriesCount = lines.length;
-        const groupGap = seriesCount > 1 ? 4 : 0;
-        const individualBarWidth =
-          seriesCount > 0
-            ? (bandWidth - groupGap * (seriesCount - 1)) / seriesCount
-            : bandWidth;
-
-        lines.forEach((line, idx) => {
-          const value = d[line.dataKey];
-          if (typeof value === "number") {
-            const axisScale =
-              yScales[normalizeYAxisId(line.yAxisId)] ?? primaryYScale;
-            const baselineY = axisScale(0) ?? innerHeight;
-            const valueY = axisScale(value) ?? 0;
-            const barLengthPx = baselineY - valueY;
-
-            if (squareSnap && !isHorizontal && value > 0) {
-              yPositions[line.dataKey] = topSquareCenterY({
-                barLengthPx,
-                baselineY,
-                fit: squareSnap.fit,
-                gap: squareSnap.squareGap,
-                squareSize: individualBarWidth,
-              });
-            } else {
-              yPositions[line.dataKey] = valueY;
-            }
-
-            xPositions[line.dataKey] =
-              barPos +
-              idx * (individualBarWidth + groupGap) +
-              individualBarWidth / 2;
-          }
-        });
-      }
-
-      // Tooltip position: for horizontal, position at max bar end; for vertical, center of band
-      let tooltipX: number;
-      if (isHorizontal) {
-        // Position tooltip at the end of the longest bar
-        const maxX = Math.max(...Object.values(xPositions), 0);
-        tooltipX = maxX;
-      } else {
-        tooltipX = barPos + bandWidth / 2;
-      }
+      const tooltipX = isHorizontal
+        ? Math.max(...Object.values(positions.xPositions), 0)
+        : barPos + bandWidth / 2;
 
       scheduleTooltip({
         index: clampedIndex,
         point: d,
         x: tooltipX,
-        xPositions: Object.keys(xPositions).length > 0 ? xPositions : undefined,
-        yPositions,
+        xPositions:
+          Object.keys(positions.xPositions).length > 0
+            ? positions.xPositions
+            : undefined,
+        yPositions: positions.yPositions,
       });
     },
     [
@@ -729,5 +825,3 @@ export function BarChart({
 }
 
 BarChart.displayName = "BarChart";
-
-export default BarChart;

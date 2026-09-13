@@ -25,7 +25,7 @@ export function springOptionsFromTransition(
   }
   if (transition.type === "spring") {
     const bounce =
-      typeof transition.bounce === "number" ? transition.bounce : undefined;
+      typeof transition.bounce === "number" ? transition.bounce : null;
     const baseStiffness =
       typeof transition.stiffness === "number"
         ? transition.stiffness
@@ -36,13 +36,13 @@ export function springOptionsFromTransition(
         : fallback.damping;
     return {
       damping:
-        bounce == null
+        bounce === null
           ? baseDamping
           : Math.max(8, baseDamping * (1 - bounce * 0.25)),
       mass:
         typeof transition.mass === "number" ? transition.mass : fallback.mass,
       stiffness:
-        bounce == null
+        bounce === null
           ? baseStiffness
           : Math.min(400, Math.max(80, baseStiffness * (1 + bounce * 0.35))),
     };

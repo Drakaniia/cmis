@@ -241,18 +241,18 @@ export function LineLoadingSweep({
     }
   }, [reduceMotion, isLoop, onTransitionComplete]);
 
-  if (innerWidth <= 0 || innerHeight <= 0 || heights.length < 2) {
-    return null;
-  }
-
   const xScale = scaleLinear({
     domain: [0, heights.length - 1],
     range: [0, innerWidth],
   });
   const yScale = scaleLinear({ domain: [0, 100], range: [innerHeight, 0] });
   const points = heights.map((value, index) => ({ index, value }));
-  const getX = (d: { index: number }) => xScale(d.index);
-  const getY = (d: { value: number }) => yScale(d.value);
+  const getX = useCallback((d: { index: number }) => xScale(d.index), [xScale]);
+  const getY = useCallback((d: { value: number }) => yScale(d.value), [yScale]);
+
+  if (innerWidth <= 0 || innerHeight <= 0 || heights.length < 2) {
+    return null;
+  }
 
   const silhouette = (
     <>

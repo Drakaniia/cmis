@@ -2,6 +2,7 @@
 
 import type { Transition } from "motion/react";
 import { motion } from "motion/react";
+import { useCallback } from "react";
 import { clipRevealTransition } from "./animation";
 
 export type ChartRevealClipMode = "reveal" | "conceal";
@@ -42,6 +43,10 @@ export function ChartRevealClip({
   const paddedWidth = Math.max(0, targetWidth + padding * 2);
   const paddedHeight = height + padding * 2;
 
+  const handleConcealComplete = useCallback(() => {
+    onComplete?.();
+  }, [onComplete]);
+
   if (!animating) {
     return (
       <clipPath id={clipPathId}>
@@ -67,7 +72,7 @@ export function ChartRevealClip({
           height={paddedHeight}
           initial={{ width: paddedWidth, x: -padding }}
           key={`conceal-${revealEpoch}`}
-          onAnimationComplete={() => onComplete?.()}
+          onAnimationComplete={handleConcealComplete}
           transition={transition}
           y={-padding}
         />

@@ -62,7 +62,7 @@ function RingProgressPath({
   return <motion.path d={animatedProgressPath} fill={color} />;
 }
 
-export const Ring = memo(function Ring({
+export const Ring = memo(function RingImpl({
   index,
   color: colorProp,
   animate = true,
@@ -231,5 +231,3 @@ export const Ring = memo(function Ring({
 });
 
 Ring.displayName = "Ring";
-
-export default Ring;

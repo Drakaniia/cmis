@@ -88,7 +88,7 @@ function intervalFromSeriesSpan(
   if (sourceData.length < 2) {
     return null;
   }
-  const firstRow = sourceData[0];
+  const [firstRow] = sourceData;
   const lastRow = sourceData.at(-1);
   const first = firstRow ? readDate(firstRow, xDataKey) : null;
   const last = lastRow ? readDate(lastRow, xDataKey) : null;
@@ -178,7 +178,7 @@ function buildAutoFutureValues(options: {
     { date: new Date(anchorTime), value: anchorValue },
   ];
 
-  for (let i = 1; i <= horizonPoints; i++) {
+  for (let i = 1; i <= horizonPoints; i += 1) {
     const t = anchorTime + intervalMs * i;
     const value = anchorValue + slope * intervalMs * i;
     result.push({ date: new Date(t), value });
@@ -199,7 +199,7 @@ export function computeProjectionAnchorTangentSlope(
   }
   const startIndex = resolveStartIndex(sourceData, startIndexProp);
   const historyPoints: { t: number; y: number }[] = [];
-  for (let i = 0; i <= startIndex; i++) {
+  for (let i = 0; i <= startIndex; i += 1) {
     const row = sourceData[i];
     if (!row) {
       continue;
@@ -301,7 +301,7 @@ export function buildProjectionPath(
   const anchorTime = anchorDate.getTime();
 
   const historyPoints: { t: number; y: number }[] = [];
-  for (let i = 0; i <= startIndex; i++) {
+  for (let i = 0; i <= startIndex; i += 1) {
     const row = sourceData[i];
     if (!row) {
       continue;

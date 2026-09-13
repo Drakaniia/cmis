@@ -96,7 +96,7 @@ function binomial(n: number, k: number): number {
     return 0;
   }
   let result = 1;
-  for (let i = 0; i < k; i++) {
+  for (let i = 0; i < k; i += 1) {
     result = (result * (n - i)) / (i + 1);
   }
   return result;
@@ -109,7 +109,7 @@ function composePositiveSum(sum: number, parts: number): number[][] {
   }
 
   const layouts: number[][] = [];
-  for (let gap = 1; gap <= sum - (parts - 1); gap++) {
+  for (let gap = 1; gap <= sum - (parts - 1); gap += 1) {
     for (const tail of composePositiveSum(sum - gap, parts - 1)) {
       layouts.push([gap, ...tail]);
     }
@@ -202,7 +202,7 @@ interface TickLayoutScore {
 
 function indexGaps(indices: number[]): number[] {
   const gaps: number[] = [];
-  for (let i = 1; i < indices.length; i++) {
+  for (let i = 1; i < indices.length; i += 1) {
     const current = indices[i];
     const previous = indices[i - 1];
     if (current === null || previous === null) {
@@ -241,7 +241,7 @@ function scoreTickLayout(
   }
 
   const pixelGaps: number[] = [];
-  for (let i = 1; i < indices.length; i++) {
+  for (let i = 1; i < indices.length; i += 1) {
     const current = indices[i];
     const previous = indices[i - 1];
     if (current === null || previous === null) {
@@ -343,7 +343,7 @@ export function selectEvenlySpacedIndices(
   let bestScore = scoreTickLayout(bestIndices, resolveXPx, targetCount);
   let bestCountDistance = bestScore.countDistance;
 
-  for (let tickCount = minCount; tickCount <= maxCount; tickCount++) {
+  for (let tickCount = minCount; tickCount <= maxCount; tickCount += 1) {
     for (const rawIndices of allIndexLayouts(length, tickCount)) {
       const indices =
         options?.data && options.dateLabels && options.xAccessor
@@ -444,9 +444,7 @@ function buildDomainTicks({
     (date: Date): number | undefined;
   };
 }): AxisTick[] {
-  const domain = xScale.domain();
-  const startDate = domain[0];
-  const endDate = domain[1];
+  const [startDate, endDate] = xScale.domain();
 
   if (!(startDate && endDate)) {
     return [];
@@ -459,7 +457,7 @@ function buildDomainTicks({
   const seenLabels = new Set<string>();
   const ticks: AxisTick[] = [];
 
-  for (let i = 0; i < tickCount; i++) {
+  for (let i = 0; i < tickCount; i += 1) {
     const t = i / (tickCount - 1);
     const date = new Date(startTime + t * timeRange);
     const label = shortDateFmt.format(date);
@@ -485,7 +483,7 @@ function domainExtendsPastData(
   if (data.length === 0) {
     return false;
   }
-  const domainEnd = xScale.domain()[1];
+  const [, domainEnd] = xScale.domain();
   const lastPoint = data.at(-1);
   if (!(domainEnd && lastPoint)) {
     return false;
@@ -510,7 +508,7 @@ function appendProjectionTailTicks(
   }
 
   const lastPoint = data.at(-1);
-  const domainEnd = xScale.domain()[1];
+  const [, domainEnd] = xScale.domain();
   if (!(lastPoint && domainEnd)) {
     return ticks;
   }
@@ -526,7 +524,7 @@ function appendProjectionTailTicks(
   const extras: AxisTick[] = [];
   const extraCount = Math.min(maxExtraTicks, 3);
 
-  for (let i = 1; i <= extraCount; i++) {
+  for (let i = 1; i <= extraCount; i += 1) {
     const date = new Date(
       startTime + (i / (extraCount + 1)) * (endTime - startTime)
     );
@@ -574,7 +572,7 @@ export function XAxis(props: XAxisProps) {
   return <XAxisInner {...props} container={container} />;
 }
 
-const XAxisInner = memo(function XAxisInner({
+const XAxisInner = memo(function XAxisInnerImpl({
   numTicks = 5,
   tickerHalfWidth = 50,
   tickMode = "data",
@@ -665,5 +663,3 @@ const XAxisInner = memo(function XAxisInner({
 });
 
 XAxis.displayName = "XAxis";
-
-export default XAxis;

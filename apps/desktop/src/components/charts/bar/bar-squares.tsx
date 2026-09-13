@@ -277,7 +277,7 @@ function SquareColumn({
   );
 }
 
-const BarSquaresInner = memo(function BarSquaresInner({
+const BarSquaresInner = memo(function BarSquaresInnerImpl({
   dataKey,
   yAxisId,
   fill = chartCssVars.linePrimary,
@@ -419,7 +419,7 @@ export function BarSquares(props: BarSquaresProps) {
 
 BarSquares.displayName = "BarSquares";
 
-const BarColumnTrackInner = memo(function BarColumnTrackInner({
+const BarColumnTrackInner = memo(function BarColumnTrackInnerImpl({
   fill = chartCssVars.grid,
   opacity = 0.3,
   squareGap = 3,
@@ -492,6 +492,7 @@ const BarColumnTrackInner = memo(function BarColumnTrackInner({
             enterTransition={enterTransition}
             fill={fill}
             index={i}
+            // biome-ignore lint/suspicious/noArrayIndexKey: data array is stable chart data that does not reorder
             key={`track-${i}-${line.dataKey}`}
             revealEpoch={revealEpoch}
             rx={rx}
@@ -634,5 +635,3 @@ export function BarColumnTrack(props: BarColumnTrackProps) {
 }
 
 BarColumnTrack.displayName = "BarColumnTrack";
-
-export default BarSquares;

@@ -13,7 +13,7 @@ export interface DateTickerProps {
   visible: boolean;
 }
 
-const DateTickerCompact = memo(function DateTickerCompact({
+const DateTickerCompact = memo(function DateTickerCompactImpl({
   currentIndex,
   labels,
 }: Omit<DateTickerProps, "visible">) {
@@ -28,7 +28,7 @@ const DateTickerCompact = memo(function DateTickerCompact({
   );
 });
 
-const DateTickerInner = memo(function DateTickerInner({
+const DateTickerInner = memo(function DateTickerInnerImpl({
   currentIndex,
   labels,
 }: Omit<DateTickerProps, "visible">) {
@@ -67,7 +67,7 @@ const DateTickerInner = memo(function DateTickerInner({
     if (currentIndex < 0 || currentIndex >= parsedLabels.length) {
       return 0;
     }
-    for (let i = monthSegments.length - 1; i >= 0; i--) {
+    for (let i = monthSegments.length - 1; i >= 0; i -= 1) {
       const segment = monthSegments[i];
       if (segment && segment.startIndex <= currentIndex) {
         return i;
@@ -148,5 +148,3 @@ export function DateTicker({ currentIndex, labels, visible }: DateTickerProps) {
 }
 
 DateTicker.displayName = "DateTicker";
-
-export default DateTicker;

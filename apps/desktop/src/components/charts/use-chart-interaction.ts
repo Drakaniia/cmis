@@ -71,7 +71,7 @@ export function useChartInteraction({
     resetTooltipDedupe,
   } = useScheduledTooltip<TooltipData>();
 
-  const isDraggingRef = useRef(false);
+  const isDraggingRef = useRef<boolean>(false);
   const dragStartXRef = useRef<number>(0);
   const lastHoveredXRef = useRef<number | null>(null);
 
@@ -173,6 +173,7 @@ export function useChartInteraction({
         return;
       }
 
+      // biome-ignore lint/suspicious/noUnnecessaryConditions: isDraggingRef.current is a mutable ref that changes at runtime
       if (isDraggingRef.current) {
         const startX = Math.min(dragStartXRef.current, chartX);
         const endX = Math.max(dragStartXRef.current, chartX);
@@ -198,6 +199,7 @@ export function useChartInteraction({
   const handleMouseLeave = useCallback(() => {
     lastHoveredXRef.current = null;
     clearTooltip();
+    // biome-ignore lint/suspicious/noUnnecessaryConditions: isDraggingRef.current is a mutable ref that changes at runtime
     if (isDraggingRef.current) {
       isDraggingRef.current = false;
     }
@@ -219,6 +221,7 @@ export function useChartInteraction({
   );
 
   const handleMouseUp = useCallback(() => {
+    // biome-ignore lint/suspicious/noUnnecessaryConditions: isDraggingRef.current is a mutable ref that changes at runtime
     if (isDraggingRef.current) {
       isDraggingRef.current = false;
     }

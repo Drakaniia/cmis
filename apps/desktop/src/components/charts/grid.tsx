@@ -177,7 +177,7 @@ export function Grid({
   return (
     <g className="chart-grid">
       {/* Gradient mask for horizontal grid lines - fades at left/right */}
-      {horizontal && fadeHorizontal && (
+      {horizontal && fadeHorizontal ? (
         <defs>
           <linearGradient id={hGradientId} x1="0%" x2="100%" y1="0%" y2="0%">
             <stop offset="0%" style={{ stopColor: "white", stopOpacity: 0 }} />
@@ -198,7 +198,7 @@ export function Grid({
             />
           </mask>
         </defs>
-      )}
+      ) : null}
 
       {horizontal && shimmerEnabled ? (
         <defs>
@@ -221,7 +221,7 @@ export function Grid({
       ) : null}
 
       {/* Gradient mask for vertical grid lines - fades at top/bottom */}
-      {vertical && fadeVertical && (
+      {vertical && fadeVertical ? (
         <defs>
           <linearGradient id={vGradientId} x1="0%" x2="0%" y1="0%" y2="100%">
             <stop offset="0%" style={{ stopColor: "white", stopOpacity: 0 }} />
@@ -242,9 +242,9 @@ export function Grid({
             />
           </mask>
         </defs>
-      )}
+      ) : null}
 
-      {horizontal && (
+      {horizontal ? (
         <g mask={horizontalFadeMask}>
           <GridRows
             numTicks={rowTickValuesResolved ? undefined : numTicksRows}
@@ -269,7 +269,7 @@ export function Grid({
             />
           ) : null}
         </g>
-      )}
+      ) : null}
       {horizontal && highlightRowValues && highlightRowValues.length > 0 ? (
         <g className="chart-grid-highlight-rows">
           {highlightRowValues.map((value) => {
@@ -313,5 +313,3 @@ export function Grid({
 }
 
 Grid.displayName = "Grid";
-
-export default Grid;

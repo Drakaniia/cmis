@@ -2,6 +2,7 @@
 
 import { curveMonotoneX } from "@visx/curve";
 import { AreaClosed } from "@visx/shape";
+import { useCallback } from "react";
 import { useChartStable } from "../chart-context";
 
 // biome-ignore lint/suspicious/noExplicitAny: d3 curve factory type
@@ -29,21 +30,28 @@ export function PatternArea({
 }: PatternAreaProps) {
   const { renderData, xScale, yScale, xAccessor } = useChartStable();
 
+  const getX = useCallback(
+    (d: Record<string, unknown>) => xScale(xAccessor(d)) ?? 0,
+    [xScale, xAccessor]
+  );
+  const getY = useCallback(
+    (d: Record<string, unknown>) => {
+      const v = d[dataKey];
+      return typeof v === "number" ? (yScale(v) ?? 0) : 0;
+    },
+    [dataKey, yScale]
+  );
+
   return (
     <AreaClosed
       curve={curve}
       data={renderData}
       fill={fill}
-      x={(d) => xScale(xAccessor(d)) ?? 0}
-      y={(d) => {
-        const v = d[dataKey];
-        return typeof v === "number" ? (yScale(v) ?? 0) : 0;
-      }}
+      x={getX}
+      y={getY}
       yScale={yScale}
     />
   );
 }
 
 PatternArea.displayName = "PatternArea";
-
-export default PatternArea;

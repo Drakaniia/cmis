@@ -87,7 +87,7 @@ export function BarXAxis(props: BarXAxisProps) {
   return <BarXAxisInner {...props} container={container} />;
 }
 
-const BarXAxisInner = memo(function BarXAxisInner({
+const BarXAxisInner = memo(function BarXAxisInnerImpl({
   tickerHalfWidth = 50,
   showAllLabels = false,
   maxLabels = 12,
@@ -149,5 +149,3 @@ const BarXAxisInner = memo(function BarXAxisInner({
 });
 
 BarXAxis.displayName = "BarXAxis";
-
-

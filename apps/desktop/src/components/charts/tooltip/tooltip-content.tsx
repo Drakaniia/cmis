@@ -20,11 +20,11 @@ export function TooltipContent({ title, rows, children }: TooltipContentProps) {
   return (
     <div className="overflow-hidden">
       <div className="px-3 py-2.5">
-        {title && (
+        {title ? (
           <div className="mb-2 text-left font-medium text-white text-xs">
             {title}
           </div>
-        )}
+        ) : null}
         <div className="space-y-1.5">
           {rows.map((row) => (
             <div
@@ -45,16 +45,14 @@ export function TooltipContent({ title, rows, children }: TooltipContentProps) {
           ))}
         </div>
 
-        {children && (
+        {children ? (
           <div className="mt-2 transition-opacity duration-200 ease-out">
             {children}
           </div>
-        )}
+        ) : null}
       </div>
     </div>
   );
 }
 
 TooltipContent.displayName = "TooltipContent";
-
-export default TooltipContent;
