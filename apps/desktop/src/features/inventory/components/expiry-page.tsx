@@ -161,7 +161,7 @@ export function ExpiryPage() {
   );
 
   return (
-    <div className="flex h-full flex-col overflow-hidden">
+    <div className="page-canvas flex h-full flex-col overflow-hidden">
       {/* Filters — sticky translucent */}
       <ExpiryFiltersBar
         activeChips={activeChips}
