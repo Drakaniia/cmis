@@ -1,3 +1,4 @@
+import { Button } from "@cmis/ui/components/button";
 import { AnimatePresence, motion } from "motion/react";
 import {
   type ChangeEvent,
@@ -135,22 +136,25 @@ export function AdjustThresholdPopover({
                 </p>
               </div>
 
+              {/* §8 Button hierarchy: Cancel (ghost), Save (confirm/primary) */}
               <div className="flex justify-end gap-2">
-                <button
-                  className="press-feedback rounded-md px-3 py-1.5 text-caption text-muted-foreground hover:bg-muted"
+                <Button
+                  className="press-feedback"
                   onClick={handleClose}
-                  type="button"
+                  size="sm"
+                  variant="ghost"
                 >
                   Cancel
-                </button>
-                <button
-                  className="press-feedback rounded-md bg-primary px-3 py-1.5 font-medium text-primary-foreground text-sm hover:bg-primary/90 disabled:opacity-50"
+                </Button>
+                <Button
+                  className="press-feedback"
                   disabled={!isValid}
                   onClick={handleSubmit}
-                  type="button"
+                  size="sm"
+                  variant="confirm"
                 >
                   Save
-                </button>
+                </Button>
               </div>
             </div>
           </motion.div>

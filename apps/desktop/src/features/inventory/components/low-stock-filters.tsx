@@ -276,10 +276,10 @@ export function LowStockFiltersBar({
         {/* Bulk reorder — right-aligned inline, CMIS-UI-04 §3.1 */}
         {selectedCount > 0 ? (
           <Button
-            className="press-feedback ml-auto shrink-0 bg-[#800000] text-white hover:bg-[#6b0000]"
+            className="press-feedback ml-auto shrink-0"
             onClick={onBulkReorder}
             size="sm"
-            variant="destructive"
+            variant="confirm"
           >
             <ShoppingCart aria-hidden className="size-3.5" />
             Reorder selected ({selectedCount})

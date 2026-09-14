@@ -16,8 +16,14 @@ import type { DisposeReason, ExpiryRow } from "../types";
  * CMIS-UI-03 §3 — Dispose Confirm Modal
  * Modal confirm: "Dispose [Qty] × [Item] batch [Batch]?"
  * + reason (Expired/Damaged/Other) + quantity must match row's qty.
- * Dim scrim + scale 0.98→1 spring, anchored to row's dispose button (§7 spatial consistency).
- * Reduced-motion: cross-fade only.
+ *
+ * Apple Design:
+ * §12 — Glass material with backdrop blur, bright top edge catches light.
+ * §8  — Button hierarchy: Cancel (ghost), Confirm Dispose (destructive).
+ * §1  — All buttons have instant press feedback (scale 0.97).
+ * §7  — Spatial consistency: centered modal, origin from dispose button.
+ * §14 — Reduced motion: cross-fade only, no spring/blur/scale.
+ * §15 — Tight tracking on heading, caption tracking on metadata.
  */
 
 export function DisposeConfirmModal({
@@ -123,10 +129,11 @@ export function DisposeConfirmModal({
     <AnimatePresence>
       {open ? (
         <>
+          {/* §12 Scrim — dim to focus */}
           <motion.div
             animate={{ opacity: 1 }}
             aria-hidden
-            className="fixed inset-0 z-50 bg-black/32"
+            className="fixed inset-0 z-50 bg-black/32 backdrop-blur-[2px]"
             exit={{ opacity: 0 }}
             initial={{ opacity: 0 }}
             onClick={handleClose}
@@ -137,7 +144,11 @@ export function DisposeConfirmModal({
               animate="animate"
               aria-label="Confirm dispose"
               aria-modal="true"
-              className="surface-frosted flex w-full max-w-[440px] flex-col overflow-hidden rounded-xl border border-border/50 shadow-xl"
+              className={cn(
+                "flex w-full max-w-[440px] flex-col overflow-hidden rounded-2xl",
+                /* §12 Glass material */
+                "border border-border/40 bg-card/80 shadow-xl backdrop-blur-2xl"
+              )}
               exit="exit"
               initial="initial"
               role="dialog"
@@ -150,9 +161,12 @@ export function DisposeConfirmModal({
               transition={reduceMotion ? { duration: 0 } : sheetSpring}
               variants={variants}
             >
-              {/* Header */}
-              <div className="flex items-center justify-between border-border/50 border-b px-4 py-3">
-                <h2 className="font-semibold text-foreground text-sm">
+              {/* §12 Header — frosted bar */}
+              <div className="flex items-center justify-between border-border/30 border-b px-4 py-3">
+                <h2
+                  className="font-semibold text-foreground text-sm"
+                  style={{ letterSpacing: "-0.01em" }}
+                >
                   Dispose Batch
                 </h2>
                 <Button
@@ -229,8 +243,8 @@ export function DisposeConfirmModal({
                 ) : null}
               </div>
 
-              {/* Footer */}
-              <div className="flex items-center justify-end gap-2 border-border/50 border-t px-4 py-3">
+              {/* §8 Footer — Cancel (ghost), Confirm Dispose (destructive) */}
+              <div className="flex items-center justify-end gap-2 border-border/30 border-t px-4 py-3">
                 <Button
                   className="press-feedback"
                   onClick={handleClose}
