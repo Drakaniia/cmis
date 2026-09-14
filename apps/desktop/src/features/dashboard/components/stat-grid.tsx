@@ -3,11 +3,15 @@
  *
  * Four stat cards in a responsive 2×2 (mobile) → 4×1 (desktop) grid.
  * Uses DashboardMetricCard from components.md spec.
+ *
+ * Apple Design §4 — Stagger springs: each card enters with a slight delay,
+ * creating a cascading reveal that telegraphs hierarchy (§8 hint).
+ * Apple Design §12 — Cards are glass materials; grid is semantic grouping.
  */
 
 import { Link } from "@tanstack/react-router";
 import { AlertTriangle, ClipboardList, Clock, Package } from "lucide-react";
-import { motion } from "motion/react";
+import { motion, useReducedMotion } from "motion/react";
 
 import { densitySpring } from "@/lib/motion";
 import type { HomeStat } from "../mock";
@@ -32,11 +36,6 @@ function toneToTrendType(tone: string): TrendType {
   return "neutral";
 }
 
-const SECTION = {
-  animate: { opacity: 1, y: 0 },
-  initial: { opacity: 0, y: 12 },
-} as const;
-
 export function StatGrid({
   links,
   stats,
@@ -44,16 +43,23 @@ export function StatGrid({
   links: Record<DashboardLinkKey, string>;
   stats: HomeStat[];
 }) {
+  const reduceMotion = useReducedMotion();
+
   return (
     <motion.div
+      animate={{ opacity: 1, y: 0 }}
       className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4"
-      {...SECTION}
-      transition={{ ...densitySpring, staggerChildren: 0.04 }}
+      initial={reduceMotion ? { opacity: 1 } : { opacity: 0, y: 12 }}
+      transition={
+        reduceMotion
+          ? { duration: 0 }
+          : { ...densitySpring, staggerChildren: 0.06 }
+      }
     >
       {stats.map((stat) => (
         <motion.div
           animate={{ opacity: 1, y: 0 }}
-          initial={{ opacity: 0, y: 10 }}
+          initial={reduceMotion ? { opacity: 1 } : { opacity: 0, y: 10 }}
           key={stat.label}
           transition={densitySpring}
         >

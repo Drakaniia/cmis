@@ -1,11 +1,6 @@
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@cmis/ui/components/card";
 import { cn } from "@cmis/ui/lib/utils";
 import { ArrowDown, ArrowUp, Minus } from "lucide-react";
+import { motion, useReducedMotion } from "motion/react";
 
 type IconType =
   | React.ElementType
@@ -47,8 +42,12 @@ const TREND_LABELS: Record<TrendType, string> = {
 };
 
 /**
- * A professional, animated metric card for admin dashboards.
- * Displays a key value, title, icon, and trend indicator with motion hover effects.
+ * Apple Design §12 — Glass metric card with translucent material.
+ * §15 — Optical typography: display-sized value with tight tracking,
+ *         caption-sized label with slight positive tracking.
+ * §1  — Press feedback via motion spring (scale 0.97 on press).
+ * §4  — Hover lift via spring (scale 1.02, shadow deepens).
+ * §14 — Reduced motion: no scale, just opacity cross-fade.
  */
 const DashboardMetricCard: React.FC<DashboardMetricCardProps> = ({
   value,
@@ -58,39 +57,75 @@ const DashboardMetricCard: React.FC<DashboardMetricCardProps> = ({
   trendType = "neutral",
   className,
 }) => {
+  const reduceMotion = useReducedMotion();
   const TrendIcon = TREND_ICONS[trendType];
   const trendColorClass = TREND_COLOR_CLASSES[trendType];
 
   return (
-    <div className={cn("cursor-pointer rounded-lg", className)}>
-      <Card className="h-full transition-colors duration-200">
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="font-medium text-muted-foreground text-sm">
+    <motion.div
+      className={cn("group/card cursor-pointer", className)}
+      transition={{
+        bounce: 0,
+        duration: 0.3,
+        type: "spring",
+      }}
+      whileHover={reduceMotion ? undefined : { scale: 1.02, y: -2 }}
+      whileTap={reduceMotion ? undefined : { scale: 0.97 }}
+    >
+      {/* §12 Glass card — translucent material with backdrop blur */}
+      <div
+        className={cn(
+          "relative flex h-full flex-col gap-3 overflow-hidden rounded-xl p-4",
+          /* §12 Material: translucent surface with blur */
+          "border border-border/40 bg-card/70 backdrop-blur-xl",
+          /* §12 Depth: subtle shadow that deepens on hover */
+          "shadow-[0_1px_3px_oklch(0_0_0/0.04),0_4px_12px_oklch(0_0_0/0.02)]",
+          "transition-shadow duration-200",
+          "group-hover/card:shadow-[0_2px_8px_oklch(0_0_0/0.06),0_8px_24px_oklch(0_0_0/0.04)]",
+          /* §12 Bright top edge — light catching the material */
+          "before:pointer-events-none before:absolute before:inset-x-0 before:top-0 before:h-px before:bg-gradient-to-b before:from-white/40 before:to-transparent dark:before:from-white/10"
+        )}
+      >
+        {/* Header: icon + label */}
+        <div className="flex items-center justify-between">
+          {/* §15 Caption: slight positive tracking for legibility at small size */}
+          <span className="font-medium text-caption text-muted-foreground uppercase tracking-widest">
             {title}
-          </CardTitle>
+          </span>
           {IconComponent ? (
             <IconComponent
               aria-hidden="true"
-              className="h-4 w-4 text-muted-foreground"
+              className="size-4 text-muted-foreground/60"
             />
           ) : null}
-        </CardHeader>
-        <CardContent>
-          <div className="mb-2 font-bold text-2xl text-foreground">{value}</div>
-          {trendChange ? (
-            <p
-              className={cn(
-                "flex items-center font-medium text-xs",
-                trendColorClass
-              )}
-            >
-              <TrendIcon aria-hidden="true" className="mr-1 h-3 w-3" />
-              {trendChange} {TREND_LABELS[trendType]}
-            </p>
-          ) : null}
-        </CardContent>
-      </Card>
-    </div>
+        </div>
+
+        {/* §15 Display value: tight tracking as size grows, optical sizing */}
+        <div
+          className="font-bold text-foreground tabular-nums"
+          style={{
+            fontSize: "clamp(1.5rem, 3vw, 2rem)",
+            letterSpacing: "-0.02em",
+            lineHeight: 1.1,
+          }}
+        >
+          {value}
+        </div>
+
+        {/* Trend indicator */}
+        {trendChange ? (
+          <p
+            className={cn(
+              "flex items-center gap-1 font-medium text-xs",
+              trendColorClass
+            )}
+          >
+            <TrendIcon aria-hidden="true" className="size-3" />
+            {trendChange} {TREND_LABELS[trendType]}
+          </p>
+        ) : null}
+      </div>
+    </motion.div>
   );
 };
 
