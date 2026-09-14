@@ -10,6 +10,7 @@ import { useCallback, useEffect, useState } from "react";
 import { AppSidebar } from "@/components/app-sidebar";
 import Header from "@/components/header";
 import { ThemeProvider } from "@/components/theme-provider";
+import { TitleBar } from "@/components/titlebar";
 
 import "../index.css";
 
@@ -74,13 +75,16 @@ function RootComponent() {
         disableTransitionOnChange
         storageKey="vite-ui-theme"
       >
-        <div className="flex h-svh overflow-hidden overflow-x-hidden">
-          <AppSidebar collapsed={sidebarCollapsed} onToggle={handleToggle} />
-          <div className="flex min-w-0 flex-1 flex-col">
-            <Header />
-            <main className="flex-1 overflow-y-auto">
-              <Outlet />
-            </main>
+        <div className="flex h-svh flex-col overflow-hidden overflow-x-hidden">
+          <TitleBar />
+          <div className="flex flex-1 overflow-hidden overflow-x-hidden">
+            <AppSidebar collapsed={sidebarCollapsed} onToggle={handleToggle} />
+            <div className="flex min-w-0 flex-1 flex-col">
+              <Header />
+              <main className="flex-1 overflow-y-auto">
+                <Outlet />
+              </main>
+            </div>
           </div>
         </div>
         <Toaster position="bottom-right" richColors />
