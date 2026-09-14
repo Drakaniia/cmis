@@ -252,6 +252,15 @@
   backdrop-filter: blur(12px) saturate(160%);
 }
 
+/* Desktop window title bar — same grey material as the sidebar/header chrome
+ * so the entire window shell (titlebar + sidebar + header) reads as one
+ * continuous surface. Matched to material-sidebar (88% card + blur 12px). */
+.titlebar {
+  background: color-mix(in oklch, var(--card) 88%, transparent);
+  -webkit-backdrop-filter: blur(12px) saturate(160%);
+  backdrop-filter: blur(12px) saturate(160%);
+}
+
 .surface-frosted {
   background: color-mix(in oklch, var(--card) 78%, transparent);
   -webkit-backdrop-filter: blur(16px) saturate(180%);
@@ -426,6 +435,45 @@ html::-webkit-scrollbar {
   overscroll-behavior: contain;
 }
 
+/* ─── Apple Design §12 — Toast Material ────────────────────────────
+ * Frosted translucent toast (§12 lighter material): content scrolls
+ * underneath, bright top edge catches light, refined shadow.
+ * Spring-like transitions approximate Apple's critically damped spring
+ * (damping 1.0, response 0.3s) using cubic-bezier curves.
+ */
+.cn-toast {
+  background: color-mix(in oklch, var(--popover) 72%, transparent) !important;
+  border: 1px solid color-mix(in oklch, var(--border) 50%, transparent) !important;
+  border-top: 1px solid oklch(1 0 0 / 0.35) !important;
+  border-radius: calc(var(--radius) + 4px) !important;
+  box-shadow:
+    0 4px 16px oklch(0 0 0 / 0.06),
+    0 1px 4px oklch(0 0 0 / 0.04) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  backdrop-filter: blur(20px) saturate(180%);
+  /* §4 Spring-like transitions — cubic-bezier approximates critically
+     damped spring (damping 1.0, response ~0.3s). Snap-in entry,
+     smooth deceleration, no overshoot. */
+  transition:
+    transform 350ms cubic-bezier(0.22, 0.68, 0, 1),
+    opacity 250ms cubic-bezier(0.22, 0.68, 0, 1),
+    height 350ms cubic-bezier(0.22, 0.68, 0, 1),
+    box-shadow 200ms ease !important;
+}
+
+.cn-toast:active {
+  box-shadow:
+    0 2px 8px oklch(0 0 0 / 0.08),
+    0 1px 2px oklch(0 0 0 / 0.04) !important;
+}
+
+.dark .cn-toast {
+  border-top: 1px solid oklch(1 0 0 / 0.12) !important;
+  box-shadow:
+    0 4px 16px oklch(0 0 0 / 0.2),
+    0 1px 4px oklch(0 0 0 / 0.12) !important;
+}
+
 /* ─── Apple Design §14 — Reduced motion & accessibility ───────────
  * Three independent signals (WWDC 2018/2022):
  *   1. prefers-reduced-motion: replace slides/springs with cross-fades
@@ -445,9 +493,16 @@ html::-webkit-scrollbar {
     transform: none;
   }
   .surface-frosted,
-  .material-sidebar {
+  .material-sidebar,
+  .titlebar {
     -webkit-backdrop-filter: none;
     backdrop-filter: none;
+  }
+  /* §14 Toasts: cross-fade only, no slide/spring — replaces spring
+      transitions with a short opacity fade. */
+  .cn-toast {
+    transform: none !important;
+    transition: opacity 150ms ease !important;
   }
 }
 
@@ -462,13 +517,21 @@ html::-webkit-scrollbar {
     --apple-scrollbar-thumb-hover: oklch(1 0 0 / 0.6);
     --apple-scrollbar-thumb-active: oklch(1 0 0 / 0.72);
   }
-  .material-sidebar {
+  .material-sidebar,
+  .titlebar {
     background: var(--card);
     -webkit-backdrop-filter: none;
     backdrop-filter: none;
   }
   .surface-frosted {
     background: var(--card);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+  /* §14 Toasts: solid frosty background, no blur — respects user
+      preference for reduced transparency. */
+  .cn-toast {
+    background: var(--popover) !important;
     -webkit-backdrop-filter: none;
     backdrop-filter: none;
   }
@@ -489,11 +552,22 @@ html::-webkit-scrollbar {
     background: var(--card);
     border-right: 1.5px solid var(--border);
   }
+  .titlebar {
+    background: var(--card);
+    border-bottom: 1.5px solid var(--border);
+  }
   .surface-frosted {
     background: var(--card);
     border: 1.5px solid var(--border);
   }
   .canvas-card {
     border: 1.5px solid var(--border);
+  }
+  /* §14 Toasts: solid background with defined border for high contrast. */
+  .cn-toast {
+    background: var(--popover) !important;
+    border: 1.5px solid var(--border) !important;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
   }
 }
