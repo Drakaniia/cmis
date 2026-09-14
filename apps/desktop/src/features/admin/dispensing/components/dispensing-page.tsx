@@ -1,6 +1,4 @@
-import { Button } from "@cmis/ui/components/button";
 import { useNavigate, useSearch } from "@tanstack/react-router";
-import { Download } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -138,19 +136,6 @@ export function DispensingPage({
 
   return (
     <div className="flex h-[calc(100svh-48px)] flex-col overflow-hidden">
-      <div className="flex shrink-0 justify-end border-border/50 border-b bg-card px-3 py-2">
-        <Button
-          className="press-feedback"
-          disabled={sorted.length === 0}
-          onClick={handleExport}
-          size="sm"
-          variant="outline"
-        >
-          <Download aria-hidden className="size-3.5" />
-          Export CSV
-        </Button>
-      </div>
-
       <DispensingFilterBar
         activeChips={activeChips}
         branches={branches}
@@ -158,6 +143,7 @@ export function DispensingPage({
         medicines={medicines}
         onBranchChange={setBranch}
         onClearFilters={clearFilters}
+        onExport={handleExport}
         onMedicineChange={setMedicine}
         onPresetChange={setPreset}
         onRemoveChip={removeChip}

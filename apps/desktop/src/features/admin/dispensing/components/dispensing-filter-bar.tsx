@@ -1,3 +1,4 @@
+import { Button } from "@cmis/ui/components/button";
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -7,7 +8,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuTrigger,
 } from "@cmis/ui/components/dropdown-menu";
-import { ChevronDown, Filter, Search, X } from "lucide-react";
+import { ChevronDown, Download, Filter, Search, X } from "lucide-react";
 import { type ChangeEvent, type KeyboardEvent, useCallback } from "react";
 
 import type { DispensingChipKey } from "../hooks/use-dispensing-filters";
@@ -102,6 +103,7 @@ export function DispensingFilterBar({
   medicines,
   onBranchChange,
   onClearFilters,
+  onExport,
   onMedicineChange,
   onPresetChange,
   onRemoveChip,
@@ -117,6 +119,7 @@ export function DispensingFilterBar({
   medicines: string[];
   onBranchChange: (value: string) => void;
   onClearFilters: () => void;
+  onExport: () => void;
   onMedicineChange: (value: string) => void;
   onPresetChange: (value: DispensingDatePreset) => void;
   onRemoveChip: (key: DispensingChipKey) => void;
@@ -330,6 +333,16 @@ export function DispensingFilterBar({
             ))}
           </DropdownMenuContent>
         </DropdownMenu>
+
+        <Button
+          className="press-feedback"
+          onClick={onExport}
+          size="sm"
+          variant="outline"
+        >
+          <Download aria-hidden className="size-3.5" />
+          Export CSV
+        </Button>
 
         <span className="text-caption text-muted-foreground">
           {resultCount} records
