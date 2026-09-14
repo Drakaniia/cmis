@@ -133,7 +133,7 @@ export function LowStockPage() {
   }, [selectedIds.size]);
 
   return (
-    <div className="flex h-full flex-col overflow-hidden">
+    <div className="page-canvas flex h-full flex-col overflow-hidden">
       {/* Filters — sticky translucent */}
       <LowStockFiltersBar
         activeChips={activeChips}

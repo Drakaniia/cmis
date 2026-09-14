@@ -565,7 +565,7 @@ export function LowStockList({
       {/* Virtual rows */}
       <div
         aria-label="Low-stock alerts list"
-        className="flex-1 overflow-auto"
+        className="flex-1 overflow-auto bg-card"
         ref={parentRef}
         role="table"
       >
