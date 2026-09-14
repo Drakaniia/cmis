@@ -21,7 +21,7 @@ const links = dashboardLinks("admin");
 
 function AdminIndex() {
   return (
-    <div className="page-canvas min-h-[calc(100svh-48px)]">
+    <div className="min-h-[calc(100svh-48px)] bg-muted/20">
       <div className="mx-auto w-full max-w-6xl px-4 pt-6 pb-10 sm:px-6 sm:pt-8">
         {/* ── Triage zone ────────────────────────────────────── */}
         <div className="mt-6 space-y-4 sm:mt-8 sm:space-y-5">
