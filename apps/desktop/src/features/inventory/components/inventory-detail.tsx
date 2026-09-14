@@ -1,6 +1,7 @@
 import { Button } from "@cmis/ui/components/button";
 import { cn } from "@cmis/ui/lib/utils";
 import { Clock, Package, X } from "lucide-react";
+import { motion, useReducedMotion } from "motion/react";
 import { useEffect, useRef } from "react";
 import { daysUntilExpiry, expiryLabel } from "../mock";
 import type { InventoryItem } from "../types";
@@ -36,6 +37,14 @@ function StatusMarker({ status }: { status: InventoryItem["status"] }) {
   );
 }
 
+/**
+ * Apple Design §12 — Action bar is a translucent material layer between
+ * the header and scrolling content. Content scrolls underneath (§12).
+ * §1 — Each button has instant press feedback (scale 0.97).
+ * §4 — Spring hover on the entire bar creates a living surface.
+ * §8 — Primary action (Stock In) is visually dominant; secondary
+ *       actions recede — hierarchy through material weight, not size.
+ */
 export function InventoryDetailContent({
   item,
   onStockIn,
@@ -50,6 +59,7 @@ export function InventoryDetailContent({
   autoFocus?: boolean;
 }) {
   const stockInRef = useRef<HTMLButtonElement>(null);
+  const reduceMotion = useReducedMotion();
 
   useEffect(() => {
     if (autoFocus && item && stockInRef.current) {
@@ -85,11 +95,12 @@ export function InventoryDetailContent({
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
+      {/* §15 — Header: tight tracking on heading, caption tracking on metadata */}
       <div className="shrink-0 border-border/50 border-b px-4 py-3">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
             <h2
-              className="truncate font-semibold text-foreground text-sm tracking-tight"
+              className="truncate font-semibold text-foreground text-sm"
               style={{ letterSpacing: "-0.01em" }}
             >
               {item.name} — {item.category}
@@ -141,15 +152,32 @@ export function InventoryDetailContent({
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-2 border-border/50 border-b px-3 py-2">
+      {/* §12 — Frosted action bar: translucent material between header & scroll.
+       * Content scrolls underneath; material weight is lighter than header
+       * (less opaque, more blur) to encode hierarchy. §8 — Stock In is the
+       * primary action with confirm variant; Stock Out is secondary outline;
+       * Edit/History are ghost — hierarchy through visual weight. */}
+      <motion.div
+        animate={{ opacity: 1 }}
+        className={cn(
+          "flex flex-wrap items-center gap-1.5 px-3 py-2",
+          /* §12 Material: lighter frosted surface for action bar */
+          "border-border/30 border-b bg-card/50 backdrop-blur-md"
+        )}
+        initial={reduceMotion ? { opacity: 1 } : { opacity: 0 }}
+        transition={reduceMotion ? { duration: 0 } : { duration: 0.2 }}
+      >
+        {/* §8 — Primary CTA: confirm variant (solid, confident) */}
         <Button
           className="press-feedback"
           onClick={onStockIn}
           ref={stockInRef}
           size="sm"
+          variant="confirm"
         >
           Stock In
         </Button>
+        {/* §8 — Secondary: outline (visible but not dominant) */}
         <Button
           className="press-feedback"
           onClick={onStockOut}
@@ -158,14 +186,16 @@ export function InventoryDetailContent({
         >
           Stock Out
         </Button>
+        {/* §8 — Tertiary: ghost (subtle, same weight as text) */}
         <Button className="press-feedback" size="sm" variant="ghost">
           Edit
         </Button>
         <Button className="press-feedback" size="sm" variant="ghost">
           History
         </Button>
-      </div>
+      </motion.div>
 
+      {/* Content scroll area — §12 content scrolls under the frosted bar */}
       <div className="flex-1 overflow-auto">
         <div className="px-4 py-3">
           <h3 className="flex items-center gap-1.5 font-semibold text-caption text-foreground uppercase tracking-widest">

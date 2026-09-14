@@ -20,6 +20,15 @@ function stepDotClass(active: boolean, done: boolean): string {
   return "w-4 bg-muted";
 }
 
+/**
+ * Apple Design §12 — WizardShell is a frosted glass dialog.
+ * §4  — Step transitions use directional slide (12px) with spring ease.
+ * §8  — Footer buttons: Cancel (ghost, tertiary), Back (outline, secondary),
+ *        Next/Confirm (confirm variant, primary CTA).
+ * §1  — All buttons have instant press feedback (scale 0.97).
+ * §12 — Header & footer are frosted material bars; body scrolls between them.
+ * §14 — Reduced motion: cross-fade only, no slide/spring.
+ */
 export function WizardShell({
   open,
   onOpenChange,
@@ -98,10 +107,11 @@ export function WizardShell({
       {open ? (
         <>
           {" "}
+          {/* §12 Scrim — dim to focus, blur background */}
           <motion.div
             animate={{ opacity: 1 }}
             aria-hidden
-            className="fixed inset-0 z-50 bg-black/32"
+            className="fixed inset-0 z-50 bg-black/32 backdrop-blur-[2px]"
             exit={{ opacity: 0 }}
             initial={{ opacity: 0 }}
             onClick={handleClose}
@@ -112,7 +122,11 @@ export function WizardShell({
               animate="animate"
               aria-label={title}
               aria-modal="true"
-              className="surface-frosted flex max-h-[86vh] w-full max-w-[560px] flex-col overflow-hidden rounded-xl border border-border/50 shadow-xl"
+              className={cn(
+                "flex max-h-[86vh] w-full max-w-[560px] flex-col overflow-hidden rounded-2xl",
+                /* §12 Glass material: translucent with blur */
+                "border border-border/40 bg-card/80 shadow-xl backdrop-blur-2xl"
+              )}
               exit="exit"
               initial="initial"
               role="dialog"
@@ -125,21 +139,34 @@ export function WizardShell({
               transition={reduceMotion ? { duration: 0 } : sheetSpring}
               variants={variants}
             >
-              {/* Header with progress */}
-              <div className="flex items-center justify-between gap-2 border-border/50 border-b px-4 py-3">
+              {/* §12 Header — frosted bar with progress */}
+              <div className="flex items-center justify-between gap-2 border-border/30 border-b px-4 py-3">
                 <div className="min-w-0">
-                  <h2 className="font-semibold text-foreground text-sm tracking-tight">
-                    {title} — Step {step} of {totalSteps}
+                  {/* §15 — Tight tracking on heading */}
+                  <h2
+                    className="font-semibold text-foreground text-sm"
+                    style={{ letterSpacing: "-0.01em" }}
+                  >
+                    {title}
                   </h2>
-                  <div className="mt-1.5 flex items-center gap-1.5">
+                  <p className="mt-0.5 text-caption text-muted-foreground">
+                    Step {step} of {totalSteps}
+                  </p>
+                  {/* Step dots — §4 spring transition on width change */}
+                  <div className="mt-2 flex items-center gap-1.5">
                     {stepNumbers.map((stepNumber) => (
-                      <span
+                      <motion.span
                         className={cn(
                           "h-1.5 rounded-full",
                           stepDotClass(stepNumber === step, stepNumber < step)
                         )}
                         key={stepNumber}
-                        style={{ transition: "width 200ms ease-out" }}
+                        layout
+                        transition={
+                          reduceMotion
+                            ? { duration: 0 }
+                            : { bounce: 0, duration: 0.3, type: "spring" }
+                        }
                       />
                     ))}
                   </div>
@@ -155,7 +182,7 @@ export function WizardShell({
                 </Button>
               </div>
 
-              {/* Body with slide per step */}
+              {/* §12 Body — content scrolls between frosted header/footer */}
               <div className="flex-1 overflow-auto">
                 <AnimatePresence custom={direction} initial={false} mode="wait">
                   <motion.div
@@ -214,8 +241,11 @@ export function WizardShell({
                 ) : null}
               </div>
 
-              {/* Footer */}
-              <div className="flex items-center justify-between border-border/50 border-t px-4 py-3">
+              {/* §12 Footer — frosted bar, button hierarchy per §8:
+               *   Cancel = ghost (tertiary, de-emphasized)
+               *   Back   = outline (secondary, visible but not dominant)
+               *   Next   = confirm (primary CTA, solid fill) */}
+              <div className="flex items-center justify-between border-border/30 border-t px-4 py-3">
                 <Button
                   className="press-feedback"
                   onClick={onCancel}
@@ -239,6 +269,7 @@ export function WizardShell({
                     disabled={!canNext}
                     onClick={onNext}
                     size="sm"
+                    variant="confirm"
                   >
                     {nextLabel}
                   </Button>

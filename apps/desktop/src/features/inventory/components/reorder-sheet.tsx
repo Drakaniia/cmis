@@ -1,17 +1,28 @@
 import { Button } from "@cmis/ui/components/button";
 import { cn } from "@cmis/ui/lib/utils";
-import { AnimatePresence, motion } from "motion/react";
+import { X } from "lucide-react";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { type ChangeEvent, useCallback, useEffect, useState } from "react";
 
-import { sheetSpring } from "@/lib/motion";
+import {
+  materializeEnter,
+  materializeEnterReduced,
+  sheetSpring,
+} from "@/lib/motion";
 import type { LowStockRow } from "../types";
 
 /**
  * CMIS-UI-04 §3.1 — Reorder Sheet
  * Opens from reorder button origin. Prefills item, supplier, suggested qty.
  * Suggested qty = max(threshold*2 - current, threshold).
- * Apple Design §7: spatial consistency — sheet enters from bottom, exits to bottom.
- * Apple Design §12: frosted backdrop with materialize animation.
+ *
+ * Apple Design:
+ * §12 — Glass material with backdrop blur, bright top edge.
+ * §8  — Button hierarchy: Cancel (ghost), Create Reorder (confirm/primary).
+ * §1  — All buttons have instant press feedback (scale 0.97).
+ * §7  — Spatial consistency: centered modal.
+ * §14 — Reduced motion: cross-fade only.
+ * §15 — Tight tracking on heading.
  */
 export function ReorderSheet({
   open,
@@ -34,6 +45,8 @@ export function ReorderSheet({
   const [qty, setQty] = useState(0);
   const [supplier, setSupplier] = useState("");
   const [notes, setNotes] = useState("");
+  const reduceMotion = useReducedMotion();
+  const variants = reduceMotion ? materializeEnterReduced : materializeEnter;
 
   // Sync defaults when row changes
   useEffect(() => {
@@ -85,45 +98,76 @@ export function ReorderSheet({
     onOpenChange(false);
   }, [row, isValid, onConfirm, qty, supplier, onOpenChange]);
 
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        onOpenChange(false);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, onOpenChange]);
+
   return (
     <AnimatePresence>
       {open && row ? (
         <>
-          {/* Scrim — Apple Design §12: dim to focus */}
+          {/* §12 Scrim — dim to focus */}
           <motion.div
             animate={{ opacity: 1 }}
-            className="fixed inset-0 z-40 bg-black/40 backdrop-blur-[2px]"
+            aria-hidden
+            className="fixed inset-0 z-40 bg-black/32 backdrop-blur-[2px]"
             exit={{ opacity: 0 }}
             initial={{ opacity: 0 }}
             onClick={handleClose}
-            transition={sheetSpring}
+            transition={reduceMotion ? { duration: 0 } : { duration: 0.18 }}
           />
-          {/* Sheet — CMIS-UI-04 §5: from bottom, blur+scale */}
-          <motion.div
-            animate={{ filter: "blur(0px)", opacity: 1, scale: 1, y: 0 }}
-            aria-label="Reorder"
-            className="fixed inset-0 z-50 mx-auto flex max-w-lg items-center justify-center p-6"
-            exit={{ filter: "blur(8px)", opacity: 0, scale: 0.98, y: 20 }}
-            initial={{ filter: "blur(8px)", opacity: 0, scale: 0.98, y: 20 }}
-            role="dialog"
-            transition={sheetSpring}
-          >
-            <div className="w-full max-w-lg rounded-2xl border border-border/50 bg-card/95 p-6 shadow-xl backdrop-blur-xl">
-              <div className="mb-4 flex items-center justify-between">
-                <h2 className="font-bold text-foreground text-lg tracking-tight">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6">
+            <motion.div
+              animate="animate"
+              aria-label="Reorder"
+              aria-modal="true"
+              className={cn(
+                "flex w-full max-w-lg flex-col overflow-hidden rounded-2xl",
+                /* §12 Glass material */
+                "border border-border/40 bg-card/80 shadow-xl backdrop-blur-2xl"
+              )}
+              exit="exit"
+              initial="initial"
+              role="dialog"
+              style={{
+                transformOrigin: "center center",
+                willChange: reduceMotion
+                  ? undefined
+                  : "transform, opacity, filter",
+              }}
+              transition={reduceMotion ? { duration: 0 } : sheetSpring}
+              variants={variants}
+            >
+              {/* §12 Header — frosted bar */}
+              <div className="flex items-center justify-between border-border/30 border-b px-4 py-3">
+                <h2
+                  className="font-semibold text-foreground text-sm"
+                  style={{ letterSpacing: "-0.01em" }}
+                >
                   Reorder
                 </h2>
-                <button
+                <Button
                   aria-label="Close"
-                  className="press-feedback rounded p-1 text-muted-foreground hover:bg-muted"
+                  className="press-feedback"
                   onClick={handleClose}
-                  type="button"
+                  size="icon-sm"
+                  variant="ghost"
                 >
-                  ✕
-                </button>
+                  <X className="size-4" />
+                </Button>
               </div>
 
-              <div className="space-y-4">
+              {/* Body */}
+              <div className="space-y-4 p-4">
                 {/* Item name */}
                 <div>
                   <span className="mb-1 block text-caption text-muted-foreground">
@@ -228,29 +272,30 @@ export function ReorderSheet({
                     value={notes}
                   />
                 </div>
-
-                {/* Actions */}
-                <div className="flex justify-end gap-2 pt-2">
-                  <Button
-                    className="press-feedback"
-                    onClick={handleClose}
-                    type="button"
-                    variant="ghost"
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    className="press-feedback"
-                    disabled={!isValid}
-                    onClick={handleSubmit}
-                    type="button"
-                  >
-                    Create Reorder
-                  </Button>
-                </div>
               </div>
-            </div>
-          </motion.div>
+
+              {/* §8 Footer — Cancel (ghost), Create Reorder (confirm/primary) */}
+              <div className="flex items-center justify-end gap-2 border-border/30 border-t px-4 py-3">
+                <Button
+                  className="press-feedback"
+                  onClick={handleClose}
+                  type="button"
+                  variant="ghost"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  className="press-feedback"
+                  disabled={!isValid}
+                  onClick={handleSubmit}
+                  type="button"
+                  variant="confirm"
+                >
+                  Create Reorder
+                </Button>
+              </div>
+            </motion.div>
+          </div>
         </>
       ) : null}
     </AnimatePresence>

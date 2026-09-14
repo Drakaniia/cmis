@@ -111,10 +111,11 @@ export function ExtendExpiryModal({
     <AnimatePresence>
       {open ? (
         <>
+          {/* §12 Scrim — dim to focus */}
           <motion.div
             animate={{ opacity: 1 }}
             aria-hidden
-            className="fixed inset-0 z-50 bg-black/32"
+            className="fixed inset-0 z-50 bg-black/32 backdrop-blur-[2px]"
             exit={{ opacity: 0 }}
             initial={{ opacity: 0 }}
             onClick={handleClose}
@@ -125,7 +126,11 @@ export function ExtendExpiryModal({
               animate="animate"
               aria-label="Extend expiry"
               aria-modal="true"
-              className="surface-frosted flex w-full max-w-[440px] flex-col overflow-hidden rounded-xl border border-border/50 shadow-xl"
+              className={cn(
+                "flex w-full max-w-[440px] flex-col overflow-hidden rounded-2xl",
+                /* §12 Glass material */
+                "border border-border/40 bg-card/80 shadow-xl backdrop-blur-2xl"
+              )}
               exit="exit"
               initial="initial"
               role="dialog"
@@ -138,9 +143,12 @@ export function ExtendExpiryModal({
               transition={reduceMotion ? { duration: 0 } : sheetSpring}
               variants={variants}
             >
-              {/* Header */}
-              <div className="flex items-center justify-between border-border/50 border-b px-4 py-3">
-                <h2 className="font-semibold text-foreground text-sm">
+              {/* §12 Header — frosted bar */}
+              <div className="flex items-center justify-between border-border/30 border-b px-4 py-3">
+                <h2
+                  className="font-semibold text-foreground text-sm"
+                  style={{ letterSpacing: "-0.01em" }}
+                >
                   Extend Expiry
                 </h2>
                 <Button
@@ -198,7 +206,8 @@ export function ExtendExpiryModal({
               </div>
 
               {/* Footer */}
-              <div className="flex items-center justify-end gap-2 border-border/50 border-t px-4 py-3">
+              {/* §8 Footer — Cancel (ghost, tertiary), Extend Expiry (confirm, primary) */}
+              <div className="flex items-center justify-end gap-2 border-border/30 border-t px-4 py-3">
                 <Button
                   className="press-feedback"
                   onClick={handleClose}
@@ -211,6 +220,7 @@ export function ExtendExpiryModal({
                   className="press-feedback"
                   onClick={handleConfirm}
                   size="sm"
+                  variant="confirm"
                 >
                   Extend Expiry
                 </Button>

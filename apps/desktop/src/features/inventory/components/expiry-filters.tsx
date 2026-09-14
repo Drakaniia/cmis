@@ -322,7 +322,7 @@ export function ExpiryFiltersBar({
         {/* Bulk dispose — right-aligned inline, CMIS-UI-03 §3 */}
         {selectedCount > 0 ? (
           <Button
-            className="press-feedback ml-auto shrink-0 bg-[#800000] text-white hover:bg-[#6b0000]"
+            className="press-feedback ml-auto shrink-0"
             onClick={onBulkDispose}
             size="sm"
             variant="destructive"
