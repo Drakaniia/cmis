@@ -62,10 +62,7 @@ export default function Header() {
   const title = resolveTitle(pathname);
 
   return (
-    <header
-      className="surface-frosted flex shrink-0 items-center justify-between gap-3 border-border/50 border-b px-3 py-2 sm:px-4"
-      style={{ borderTop: "1px solid rgba(255,255,255,0.15)" }}
-    >
+    <header className="surface-frosted flex shrink-0 items-center justify-between gap-3 border-border/50 border-b px-3 py-2 sm:px-4">
       {/* Left — dynamic page title */}
       <div className="min-w-0">
         <h1 className="truncate font-bold text-foreground text-heading tracking-tight">
