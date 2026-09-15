@@ -2,6 +2,8 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Copy, Minus, Square, X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
+import { DesktopMenubar } from "./menubar/menubar";
+
 /**
  * Desktop window title bar — grey chrome that matches the header
  * (`surface-frosted`) and sidebar (`material-sidebar`).
@@ -16,7 +18,11 @@ import { useCallback, useEffect, useState } from "react";
  * calls `startDragging()` on mousedown as a fallback (required
  * when `withGlobalTauri` is false and for WebView2).
  */
-export function TitleBar() {
+export function TitleBar({
+  onToggleSidebar,
+}: {
+  onToggleSidebar?: () => void;
+}) {
   const [isMaximized, setIsMaximized] = useState(false);
 
   const syncMaximized = useCallback(async () => {
@@ -99,14 +105,18 @@ export function TitleBar() {
   }, [syncMaximized]);
 
   const handleDragMouseDown = useCallback(async (event: React.MouseEvent) => {
-    // only left-drag on the drag region itself, not on buttons
+    // only left-drag on the drag region itself, not on buttons/menubar
     if (event.button !== 0) {
       return;
     }
-    // don't start drag when clicking controls (they are outside
-    // this element, but guard anyway)
     const target = event.target as HTMLElement;
-    if (target.closest("button")) {
+    if (
+      target.closest("button") ||
+      target.closest("[role='menubar']") ||
+      target.closest("[role='menu']") ||
+      target.closest("[data-menubar-root]") ||
+      target.closest("[data-menubar-popup]")
+    ) {
       return;
     }
     try {
@@ -156,13 +166,21 @@ export function TitleBar() {
   const handleDoubleClick = useCallback(
     async (event: React.MouseEvent) => {
       const target = event.target as HTMLElement;
-      if (target.closest("button")) {
+      if (
+        target.closest("button") ||
+        target.closest("[role='menubar']") ||
+        target.closest("[role='menu']")
+      ) {
         return;
       }
       await handleMaximize();
     },
     [handleMaximize]
   );
+
+  const noopToggle = useCallback(() => {
+    onToggleSidebar?.();
+  }, [onToggleSidebar]);
 
   return (
     // biome-ignore lint/a11y/noStaticElementInteractions: Tauri drag region requires mouse handlers on header
@@ -172,31 +190,9 @@ export function TitleBar() {
       onDoubleClick={handleDoubleClick}
       onMouseDown={handleDragMouseDown}
     >
-      {/* Left — draggable app identity (grey matches sidebar/header) */}
-      {/* biome-ignore lint/a11y/noStaticElementInteractions: drag region */}
-      {/* biome-ignore lint/a11y/noNoninteractiveElementInteractions: Tauri drag region is intentionally non-interactive */}
-      <div
-        className="flex min-w-0 flex-1 items-center gap-2"
-        data-tauri-drag-region
-        onMouseDown={handleDragMouseDown}
-      >
-        <img
-          alt=""
-          className="size-4 shrink-0 rounded-[3px] dark:hidden"
-          height={16}
-          src="/cmis-dark-rounded.png"
-          width={16}
-        />
-        <img
-          alt=""
-          className="hidden size-4 shrink-0 rounded-[3px] dark:block"
-          height={16}
-          src="/cmis-white-rounded.png"
-          width={16}
-        />
-        <span className="truncate font-medium text-[12px] text-foreground/80">
-          cmis
-        </span>
+      {/* Left — Apple §7 menubar only (logo removed per user request) */}
+      <div className="flex min-w-0 flex-1 items-center">
+        <DesktopMenubar onToggleSidebar={noopToggle} />
       </div>
 
       {/* Right — window controls (functional inside Tauri, no-op in browser) */}
