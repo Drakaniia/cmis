@@ -12,8 +12,7 @@ import { Link } from "@tanstack/react-router";
 import { Pill, TrendingDown, TrendingUp } from "lucide-react";
 import { motion } from "motion/react";
 import { densitySpring } from "@/lib/motion";
-import type { DispensingVelocityData } from "../mock";
-import type { DashboardLinkKey } from "../types";
+import type { DashboardLinkKey, DispensingVelocityData } from "../types";
 
 const SECTION = {
   animate: { opacity: 1, y: 0 },

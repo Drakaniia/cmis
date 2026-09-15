@@ -14,8 +14,7 @@ import { AlertTriangle, ClipboardList, Clock, Package } from "lucide-react";
 import { motion, useReducedMotion } from "motion/react";
 
 import { densitySpring } from "@/lib/motion";
-import type { HomeStat } from "../mock";
-import type { DashboardLinkKey } from "../types";
+import type { DashboardLinkKey, HomeStat } from "../types";
 import type { TrendType } from "./dashboard-metric-card";
 import { DashboardMetricCard } from "./dashboard-metric-card";
 

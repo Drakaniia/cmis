@@ -15,11 +15,11 @@ import { useCallback } from "react";
 
 import { densitySpring } from "@/lib/motion";
 import type {
+  DashboardLinkKey,
   DispensingVelocityData,
   HourlyCount,
   StockAdjustmentsData,
-} from "../mock";
-import type { DashboardLinkKey } from "../types";
+} from "../types";
 import { ActivityStatsCard } from "./activity-stats-card";
 import { DispensingVelocityCard } from "./dispensing-velocity-card";
 import { StockAdjustmentsCard } from "./stock-adjustments-card";

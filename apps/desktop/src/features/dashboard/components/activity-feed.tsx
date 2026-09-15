@@ -14,7 +14,7 @@ import { Clock } from "lucide-react";
 import { motion } from "motion/react";
 
 import { densitySpring } from "@/lib/motion";
-import type { ActivityRow } from "../mock";
+import type { ActivityRow } from "../types";
 
 /**
  * CMIS-UI-01 §3.3 — accent bar color by action type.

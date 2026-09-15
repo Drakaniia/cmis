@@ -20,3 +20,72 @@ export type DashboardLinkKey =
   | "lowStock"
   | "requests"
   | "users";
+
+export interface HomeStat {
+  context: string;
+  label: string;
+  link: DashboardLinkKey;
+  sparkline: number[];
+  tone: StatTone;
+  value: string;
+}
+
+export interface ExpiryAlert {
+  batch: string;
+  daysUntilExpiry: number;
+  expiry: string;
+  id: string;
+  medicine: string;
+  qty: number;
+  unit: string;
+}
+
+export interface LowStockAlert {
+  category: string;
+  id: string;
+  medicine: string;
+  qty: number;
+  threshold: number;
+  unit: string;
+  updatedAt: string;
+}
+
+export interface DispensingCategory {
+  color: string;
+  count: number;
+  label: string;
+}
+
+export interface DispensingVelocityData {
+  categoryBreakdown: DispensingCategory[];
+  changePercent: number;
+  dailyCounts: { count: number; label: string }[];
+  todayTotal: number;
+}
+
+export interface StockAdjustmentItem {
+  branch?: string;
+  detail: string;
+  medicine: string;
+}
+
+export interface StockAdjustmentsData {
+  discrepancies: { count: number; items: StockAdjustmentItem[] };
+  flagged: { count: number; items: StockAdjustmentItem[] };
+  transfers: { count: number; items: StockAdjustmentItem[] };
+}
+
+export interface HourlyCount {
+  dispensed: number;
+  hour: number;
+  requests: number;
+}
+
+export interface ActivityRow {
+  action: string;
+  actor: string;
+  id: string;
+  target: string;
+  timestamp: string;
+  tone: StatTone;
+}
