@@ -69,7 +69,10 @@
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
+  /* Apple §12 — canvas sits one step under the chrome material (sidebar/header
+     ≈ 0.88 × card over this value). 0.16 keeps the hierarchy legible while
+     narrowing the gap so pages don't feel detached from the chrome. */
+  --background: oklch(0.16 0 0);
   --foreground: oklch(0.985 0 0);
   --card: oklch(0.205 0 0);
   --card-foreground: oklch(0.985 0 0);
@@ -102,7 +105,7 @@
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
-  --chart-background: oklch(0.145 0 0);
+  --chart-background: oklch(0.16 0 0);
   --chart-foreground: oklch(0.45 0 0);
   --chart-foreground-muted: oklch(0.65 0.01 260);
   --chart-crosshair: oklch(0.45 0 0);
@@ -117,7 +120,7 @@
   --chart-scale-03: oklch(0.48 0.05 270);
   --chart-scale-04: oklch(0.58 0.06 270);
   --chart-scale-05: oklch(0.68 0.07 270);
-  --chart-scale-pattern-color: oklch(0.145 0 0);
+  --chart-scale-pattern-color: oklch(0.16 0 0);
   --apple-scrollbar-thumb: oklch(1 0 0 / 0.24);
   --apple-scrollbar-thumb-hover: oklch(1 0 0 / 0.34);
   --apple-scrollbar-thumb-active: oklch(1 0 0 / 0.46);
@@ -240,7 +243,9 @@
  *   material-sidebar  — heavier structural material (85% white + blur 12px)
  *   surface-frosted   — sheets/modals (72% white + blur 16px + scale)
  *   canvas-card       — dashboard cards (subtle card shadow + radius)
- *   page-canvas       — page background (muted tint)
+ *   page-canvas       — page background (muted tint). Owned by the app shell
+ *                         (<main> in __root.tsx) so every page inherits one
+ *                         consistent canvas; pages must not paint their own.
  *   field-opaque      — table/form fields (opaque, clinical)
  *
  * Apple §12: material weight encodes hierarchy. Heavier = structural.

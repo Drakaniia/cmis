@@ -13,6 +13,7 @@ import {
   ClipboardCheck,
   ClipboardList,
   LayoutDashboard,
+  type LucideIcon,
   Package,
   Search,
   Settings,
@@ -20,6 +21,12 @@ import {
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { useHelpDialogs } from "@/features/help/help-dialogs-context";
+import {
+  HELP_COMMANDS,
+  type HelpCommandEntry,
+  runHelpCommand,
+} from "@/features/help/lib/help-commands";
 import { materializeEnter, paletteSpring } from "@/lib/motion";
 
 /**
@@ -35,58 +42,86 @@ import { materializeEnter, paletteSpring } from "@/lib/motion";
  * §12 Translucent material: surface-frosted with backdrop-blur on the palette
  *   panel, scrim behind to dim the page and keep the spatial relationship clear.
  */
-interface CommandEntry {
-  icon: React.ElementType;
+interface RouteCommandEntry {
+  icon: LucideIcon;
+  kind: "route";
   label: string;
   section: string;
   to: string;
 }
 
-const COMMAND_ITEMS: CommandEntry[] = [
-  { icon: LayoutDashboard, label: "Home", section: "Overview", to: "/admin" },
+/**
+ * Palette entries are either straight navigation or a Help action handled by
+ * the shared Help host. `HelpCommandEntry` owns the help-side model so the
+ * palette cannot drift from the header dropdown.
+ */
+type CommandEntry = RouteCommandEntry | HelpCommandEntry;
+
+const ROUTE_ITEMS: RouteCommandEntry[] = [
+  {
+    icon: LayoutDashboard,
+    kind: "route",
+    label: "Home",
+    section: "Overview",
+    to: "/admin",
+  },
   {
     icon: Package,
+    kind: "route",
     label: "Stock Management",
     section: "Inventory",
     to: "/admin/inventory",
   },
   {
     icon: AlertTriangle,
+    kind: "route",
     label: "Expiry Alerts",
     section: "Inventory",
     to: "/admin/inventory/expiry",
   },
   {
     icon: AlertCircle,
+    kind: "route",
     label: "Low-Stock Alerts",
     section: "Inventory",
     to: "/admin/inventory/low-stock",
   },
   {
     icon: ClipboardList,
+    kind: "route",
     label: "Request Queue",
     section: "Requests",
     to: "/admin/requests",
   },
   {
     icon: ClipboardCheck,
+    kind: "route",
     label: "Dispensing Log",
     section: "Requests",
     to: "/admin/dispensing",
   },
   {
     icon: BarChart3,
+    kind: "route",
     label: "Reports & Analytics",
     section: "Reports",
     to: "/admin/reports",
   },
   {
     icon: Settings,
+    kind: "route",
     label: "Settings",
     section: "Administration",
     to: "/admin/settings",
   },
 ];
+
+const COMMAND_ITEMS: CommandEntry[] = [...ROUTE_ITEMS, ...HELP_COMMANDS];
+
+/** Stable React key + handler identity for both entry kinds. */
+function commandKey(entry: CommandEntry): string {
+  return entry.kind === "route" ? entry.to : `help-action:${entry.action}`;
+}
 
 export function CommandPalette() {
   const [open, setOpen] = useState(false);
@@ -144,16 +179,33 @@ export function CommandPalette() {
     return groups;
   }, []);
 
+  const { openReportIssue } = useHelpDialogs();
+
+  const runEntry = useCallback(
+    (entry: CommandEntry) => {
+      setOpen(false);
+      if (entry.kind === "route") {
+        router.navigate({ to: entry.to });
+        return;
+      }
+      runHelpCommand(entry, {
+        navigate: (to) => {
+          router.navigate({ to });
+        },
+        openReportIssue,
+      });
+    },
+    [openReportIssue, router]
+  );
+
+  // Precomputed per entry so no handler is recreated per render.
   const selectHandlers = useMemo(() => {
     const handlers: Record<string, () => void> = {};
     for (const item of COMMAND_ITEMS) {
-      handlers[item.to] = () => {
-        setOpen(false);
-        router.navigate({ to: item.to });
-      };
+      handlers[commandKey(item)] = () => runEntry(item);
     }
     return handlers;
-  }, [router]);
+  }, [runEntry]);
 
   // §14 Reduced motion: skip blur/scale, use opacity-only transition.
   const dialogTransition = reduceMotion ? { duration: 0.15 } : paletteSpring;
@@ -238,8 +290,8 @@ export function CommandPalette() {
                         {items.map((item) => (
                           <CommandItem
                             className="press-feedback"
-                            key={item.to}
-                            onSelect={selectHandlers[item.to]}
+                            key={commandKey(item)}
+                            onSelect={selectHandlers[commandKey(item)]}
                             value={item.label}
                           >
                             <item.icon className="mr-2 size-4" />

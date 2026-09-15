@@ -22,6 +22,7 @@ import { motion, useReducedMotion } from "motion/react";
 import type * as React from "react";
 import { useCallback, useState } from "react";
 
+import { useUpdaterOptional } from "@/features/updater/use-updater";
 import { chromeSpring } from "@/lib/motion";
 
 interface NavItem {
@@ -217,6 +218,12 @@ export function AppSidebar({
   const [hoveredItem, setHoveredItem] = useState<string | null>(null);
   const [brandHovered, setBrandHovered] = useState(false);
   const reduceMotion = useReducedMotion();
+  const updater = useUpdaterOptional();
+  const hasUpdate =
+    updater?.status === "available" ||
+    updater?.status === "ready" ||
+    updater?.status === "downloading";
+  const displayVersion = updater?.currentVersion ?? null;
 
   const handleBrandMouseEnter = useCallback(() => {
     if (collapsed) {
@@ -381,11 +388,37 @@ export function AppSidebar({
         </TooltipProvider>
       </div>
 
-      {collapsed ? null : (
-        <div className="shrink-0 px-3 pb-3">
+      {collapsed ? (
+        <div className="flex shrink-0 justify-center px-2 pb-3">
+          {hasUpdate ? (
+            <span
+              aria-hidden
+              className="size-2 rounded-full bg-primary"
+              title="Update available"
+            />
+          ) : null}
+        </div>
+      ) : (
+        <div className="shrink-0 space-y-1 px-3 pb-3">
           <p className="border-border/70 border-t pt-2 text-[10.5px] text-muted-foreground/70">
             Clinical Inventory System
           </p>
+          <div className="flex items-center gap-2">
+            {displayVersion ? (
+              <span className="font-mono text-[10.5px] text-muted-foreground">
+                v{displayVersion}
+              </span>
+            ) : null}
+            {hasUpdate ? (
+              <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-1.5 py-0.5 font-semibold text-[10px] text-primary">
+                <span
+                  aria-hidden
+                  className="size-1.5 rounded-full bg-primary"
+                />{" "}
+                Update
+              </span>
+            ) : null}
+          </div>
         </div>
       )}
     </motion.aside>

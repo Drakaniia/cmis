@@ -1,6 +1,8 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import { Settings } from "lucide-react";
 
+import { HelpMenu } from "@/features/help/components/help-menu";
+import { useUpdaterOptional } from "@/features/updater/use-updater";
 import { CommandPalette } from "./command-palette";
 import { ThemeSwitcher } from "./mode-toggle";
 
@@ -56,6 +58,11 @@ function resolveTitle(pathname: string): string {
  * Title is derived from the active route; search is compact and right-aligned.
  */
 export default function Header() {
+  const updater = useUpdaterOptional();
+  const hasUpdate =
+    updater?.status === "available" ||
+    updater?.status === "ready" ||
+    updater?.status === "downloading";
   const pathname = useRouterState({
     select: (state) => state.location.pathname,
   });
@@ -76,12 +83,19 @@ export default function Header() {
           <CommandPalette />
         </div>
         <ThemeSwitcher />
+        <HelpMenu />
         <Link
           aria-label="Settings"
-          className="flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+          className="relative flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
           to="/admin/settings"
         >
           <Settings className="size-4" />
+          {hasUpdate ? (
+            <span
+              aria-hidden
+              className="absolute top-1 right-1 size-2 rounded-full bg-primary ring-2 ring-background"
+            />
+          ) : null}
         </Link>
       </div>
     </header>
