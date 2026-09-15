@@ -4,7 +4,7 @@ import { AlertTriangle, X } from "lucide-react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { expiryLabel } from "@/features/inventory/mock";
+import { expiryLabel } from "@/features/inventory/domain/expiry";
 import { materializeEnter, sheetSpring } from "@/lib/motion";
 import type { DispensePayload } from "../hooks/use-request-board";
 import type { BatchOption } from "../stock";

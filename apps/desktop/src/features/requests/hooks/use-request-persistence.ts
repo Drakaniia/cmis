@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { loadRequests, saveRequest, seedRequests } from "../persistence";
+import { loadRequests, saveRequest } from "../persistence";
 import type { RequestItem } from "../types";
 
 /**
@@ -7,7 +7,7 @@ import type { RequestItem } from "../types";
  * changed request through. Outside the desktop shell nothing loads and nothing
  * writes, so the in-memory board behaves exactly as before.
  */
-export function useRequestPersistence(seed: RequestItem[]) {
+export function useRequestPersistence(_seed: RequestItem[]) {
   const [hydrated, setHydrated] = useState<RequestItem[] | null>(null);
   const [ready, setReady] = useState(false);
 
@@ -21,9 +21,8 @@ export function useRequestPersistence(seed: RequestItem[]) {
       if (stored && stored.length > 0) {
         setHydrated(stored);
       } else if (stored) {
-        // First run in the desktop shell — make the mock the starting state so
-        // the very first restart already feels continuous.
-        await seedRequests(seed);
+        // Empty DB — no seed, board stays empty per spec §8 (no mock fallback)
+        setHydrated([]);
       }
       if (!cancelled) {
         setReady(true);
@@ -33,7 +32,7 @@ export function useRequestPersistence(seed: RequestItem[]) {
     return () => {
       cancelled = true;
     };
-  }, [seed]);
+  }, []);
 
   const persist = useCallback((item: RequestItem) => {
     saveRequest(item);

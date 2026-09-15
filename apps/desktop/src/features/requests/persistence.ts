@@ -25,16 +25,14 @@ import type {
   StatusHistoryEntry,
 } from "./types";
 
-const DB_URL = "sqlite:cmis.db";
-
 let databasePromise: Promise<Database | null> | null = null;
 
-/** Opens the database once; returns null when the desktop shell is absent. */
+/** Opens the database once; returns null when the desktop shell is absent. Delegates to shared singleton. */
 function getDatabase(): Promise<Database | null> {
   databasePromise ??= (async () => {
     try {
-      const { default: SqlDatabase } = await import("@tauri-apps/plugin-sql");
-      return await SqlDatabase.load(DB_URL);
+      const { getDb } = await import("@/lib/db");
+      return (await getDb()) as unknown as Database;
     } catch {
       return null;
     }
