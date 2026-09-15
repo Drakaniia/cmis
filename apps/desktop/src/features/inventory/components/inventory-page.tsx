@@ -11,18 +11,77 @@ import { toast } from "sonner";
 import { useDensity } from "@/hooks/use-density";
 import { useBarcodeWedge } from "../hooks/use-barcode-wedge";
 import { useInventoryFilters } from "../hooks/use-inventory-filters";
+import { useInventoryItems } from "../hooks/use-inventory-items";
 import { useMediaQuery1200 } from "../hooks/use-media-query-1200";
 import { usePanelRatio } from "../hooks/use-panel-ratio";
-import { mockInventory } from "../mock";
-import type { InventoryItem } from "../types";
+import {
+  useStockInMutation,
+  useStockOutMutation,
+} from "../hooks/use-stock-mutations";
+import type { InventoryItem, StockOutPayload } from "../types";
 import { InventoryDetailContent } from "./inventory-detail";
 import { InventoryDetailSheet } from "./inventory-detail-sheet";
 import { InventoryFiltersBar } from "./inventory-filters";
 import { InventoryList } from "./inventory-list";
+import { NoInventoryEmptyState } from "./no-inventory-empty-state";
 import { StockInWizard } from "./stock-in-wizard";
 import { StockOutWizard } from "./stock-out-wizard";
 
-function derivedStatus(
+/**
+ * Creates a medication the inventory has never seen, plus its first batch.
+ *
+ * A brand-new item has no row to update, so it cannot go through the stock-in
+ * mutation and is written directly instead. Returns the new id so the caller can
+ * select it once the list refetches.
+ */
+async function insertNewItemWithBatch(payload: {
+  batch: string;
+  category: string;
+  expiry: string;
+  name: string;
+  qty: number;
+  supplier: string;
+}): Promise<string> {
+  const { getDb } = await import("@/lib/db");
+  const db = await getDb();
+  const id =
+    typeof crypto !== "undefined" && "randomUUID" in crypto
+      ? crypto.randomUUID()
+      : `inv-${Date.now()}`;
+  const sku = `SKU-${payload.name.slice(0, 4).toUpperCase()}-${payload.qty}`;
+  await db.execute(
+    "INSERT INTO inventory_items (id, sku, name, dosage, dosage_missing, stock_on_hand, total_dispensed, stock_remaining, daily_sum, total_mismatch, qty, status, needs_batch, category, supplier, threshold, is_no_stock, created_at, updated_at) VALUES (?, ?, ?, ?, 0, ?, 0, NULL, 0, 0, ?, ?, 0, ?, ?, 20, 0, ?, ?)",
+    [
+      id,
+      sku,
+      payload.name,
+      "",
+      payload.qty,
+      payload.qty,
+      payload.qty > 0 ? "in" : "out",
+      payload.category,
+      payload.supplier,
+      new Date().toISOString(),
+      new Date().toISOString(),
+    ]
+  );
+  if (payload.batch) {
+    await db.execute(
+      "INSERT INTO inventory_batches (id, item_id, batch, expiry, qty, supplier) VALUES (?, ?, ?, ?, ?, ?)",
+      [
+        `${id}-b`,
+        id,
+        payload.batch,
+        payload.expiry,
+        payload.qty,
+        payload.supplier,
+      ]
+    );
+  }
+  return id;
+}
+
+function _derivedStatus(
   total: number,
   threshold: number,
   current: InventoryItem["status"]
@@ -41,10 +100,18 @@ export function InventoryPage() {
   const isWide = useMediaQuery1200();
   const { displayRatio, setRatio, toggleCollapse, collapsed } = usePanelRatio();
 
-  // Inventory state (mock mutable)
-  const [items, setItems] = useState<InventoryItem[]>(mockInventory);
-  const [loading, setLoading] = useState(false);
+  // Live inventory from SQLite
+  const {
+    data: itemsData,
+    isLoading: loading,
+    error: queryError,
+    refetch,
+  } = useInventoryItems();
+  const items = itemsData ?? [];
+  const stockInMut = useStockInMutation();
+  const stockOutMut = useStockOutMutation();
   const [error, setError] = useState<string | null>(null);
+  const effectiveError = (queryError as Error | null)?.message ?? error;
   const {
     filtered,
     filters,
@@ -176,7 +243,7 @@ export function InventoryPage() {
     openStockOut(originRect);
   }, [openStockOut, originRect]);
 
-  // Stock In confirm — mutate items
+  // Stock In confirm — persistent via SQLite
   const handleStockInConfirm = useCallback(
     (payload: {
       itemId: string | null;
@@ -190,61 +257,39 @@ export function InventoryPage() {
       supplier: string;
       notes: string;
     }) => {
+      // Use mutation; payload.isNew creates new item via direct DB insert fallback
       if (payload.isNew || !payload.itemId) {
-        const newItem: InventoryItem = {
-          batches: [
-            {
-              batch: payload.batch,
-              expiry: payload.expiry,
-              qty: payload.qty,
-              supplier: payload.supplier,
-            },
-          ],
+        // For new items, insert directly via Database (no prior item)
+        (async () => {
+          try {
+            const id = await insertNewItemWithBatch(payload);
+            await refetch();
+            setSelectedId(id);
+            toast.success("Stock in — saved to SQLite");
+          } catch (e) {
+            setError(e instanceof Error ? e.message : String(e));
+          }
+        })();
+        return;
+      }
+      stockInMut.mutate(
+        {
+          batch: payload.batch,
           category: payload.category,
-          dispensingHistory: [],
           expiry: payload.expiry,
-          id: `inv-${Date.now()}`,
+          identifier: payload.itemId ?? payload.name,
           name: payload.name,
           qty: payload.qty,
-          sku: `SKU-${String(items.length + 1).padStart(3, "0")}`,
-          status: payload.qty > 0 ? "in" : "out",
           supplier: payload.supplier,
-          threshold: 15,
-        };
-        setItems((prev) => [newItem, ...prev]);
-        setSelectedId(newItem.id);
-      } else {
-        setItems((prev) =>
-          prev.map((it) => {
-            if (it.id !== payload.itemId) {
-              return it;
-            }
-            const newBatches = [
-              ...it.batches,
-              {
-                batch: payload.batch,
-                expiry: payload.expiry,
-                qty: payload.qty,
-                supplier: payload.supplier,
-              },
-            ];
-            const total = newBatches.reduce((s, b) => s + b.qty, 0);
-            const nearest = [...newBatches].sort(
-              (a, b) =>
-                new Date(a.expiry).getTime() - new Date(b.expiry).getTime()
-            )[0].expiry;
-            return {
-              ...it,
-              batches: newBatches,
-              expiry: nearest,
-              qty: total,
-              status: derivedStatus(total, it.threshold, it.status),
-            };
-          })
-        );
-      }
+          unit: payload.unit,
+        },
+        {
+          onError: (e) => setError(e.message),
+          onSuccess: () => toast.success("Stock in — saved"),
+        }
+      );
     },
-    [items.length]
+    [refetch, stockInMut]
   );
 
   const handleStockOutConfirm = useCallback(
@@ -255,52 +300,28 @@ export function InventoryPage() {
       reason: string;
       notes: string;
     }) => {
-      setItems((prev) =>
-        prev.map((it) => {
-          if (it.id !== payload.itemId) {
-            return it;
-          }
-          const newBatches = it.batches.map((b) =>
-            b.batch === payload.batch
-              ? { ...b, qty: Math.max(0, b.qty - payload.qty) }
-              : b
-          );
-          const total = newBatches.reduce((s, b) => s + b.qty, 0);
-          const historyEntry = {
-            batch: payload.batch,
-            date: new Date().toLocaleDateString("en-US", {
-              day: "2-digit",
-              month: "short",
-              year: "numeric",
-            }),
-            qty: payload.qty,
-            requestor: payload.reason,
-            staff: "Staff",
-          };
-          return {
-            ...it,
-            batches: newBatches,
-            dispensingHistory: [historyEntry, ...it.dispensingHistory],
-            qty: total,
-            status: derivedStatus(total, it.threshold, it.status),
-          };
-        })
+      stockOutMut.mutate(
+        {
+          batch: payload.batch,
+          itemId: payload.itemId,
+          qty: payload.qty,
+          reason: payload.reason as StockOutPayload["reason"],
+        },
+        {
+          onError: (e) => setError(e.message),
+          onSuccess: () => toast.success("Stock out — saved"),
+        }
       );
     },
-    []
+    [stockOutMut]
   );
 
-  // Error retry — focus moves to banner per spec §5
   const handleRetry = useCallback(() => {
     setError(null);
-    setLoading(true);
-    // Simulate retry: reload mock data after delay
-    setTimeout(() => {
-      setItems(mockInventory);
-      setLoading(false);
-      toast.success("Inventory refreshed");
-    }, 600);
-  }, []);
+    refetch()
+      .then(() => toast.success("Inventory refreshed"))
+      .catch(() => toast.error("Retry failed"));
+  }, [refetch]);
 
   // Divider drag
   const containerRef = useRef<HTMLDivElement>(null);
@@ -334,11 +355,17 @@ export function InventoryPage() {
 
   // TODO: trigger error state from real data fetching
   // For now, expose via a small dev trigger
-  const showErrorBanner = !loading && error !== null;
+  const showErrorBanner = !loading && effectiveError !== null;
+  const isEmptyDb = !loading && items.length === 0 && !effectiveError;
+
+  if (isEmptyDb) {
+    return (
+      <NoInventoryEmptyState description="Import your inventory CSV to get started. No data is bundled — pick the file via Admin." />
+    );
+  }
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      {/* Error banner — spec §5: inline banner + retry, focus moves to banner */}
       {showErrorBanner ? (
         <div
           className="flex shrink-0 items-center gap-2 border-destructive/20 border-b bg-destructive/5 px-3 py-2 text-sm"
@@ -350,7 +377,7 @@ export function InventoryPage() {
             aria-hidden
             className="size-4 shrink-0 text-destructive"
           />
-          <span className="flex-1 text-destructive">{error}</span>
+          <span className="flex-1 text-destructive">{effectiveError}</span>
           <Button
             className="press-feedback shrink-0"
             onClick={handleRetry}

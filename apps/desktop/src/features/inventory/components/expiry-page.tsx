@@ -2,9 +2,10 @@ import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { useDensity } from "@/hooks/use-density";
+import { buildMinimapBuckets } from "../domain/expiry";
 import { useExpiryFilters } from "../hooks/use-expiry-filters";
+import { useInventoryItems } from "../hooks/use-inventory-items";
 import { useMediaQuery900 } from "../hooks/use-media-query-1200";
-import { buildMinimapBuckets, mockExpiryInventory } from "../mock-expiry";
 import type { DisposeReason, ExpiryRow } from "../types";
 import { DisposeConfirmModal } from "./dispose-confirm-modal";
 import { ExpiryFiltersBar } from "./expiry-filters";
@@ -20,7 +21,8 @@ import { ExtendExpiryModal } from "./extend-expiry-modal";
 export function ExpiryPage() {
   const { density } = useDensity();
   const isWideEnough = useMediaQuery900();
-  const [items] = useState(mockExpiryInventory);
+  const { data: itemsData } = useInventoryItems();
+  const items = itemsData ?? [];
   const [activeMonth, setActiveMonth] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedBatchKeys, setSelectedBatchKeys] = useState<Set<string>>(
@@ -161,7 +163,7 @@ export function ExpiryPage() {
   );
 
   return (
-    <div className="page-canvas flex h-full flex-col overflow-hidden">
+    <div className="flex h-full flex-col overflow-hidden">
       {/* Filters — sticky translucent */}
       <ExpiryFiltersBar
         activeChips={activeChips}

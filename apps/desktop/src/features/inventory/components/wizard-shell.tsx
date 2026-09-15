@@ -4,6 +4,7 @@ import { X } from "lucide-react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { type ReactNode, useCallback, useEffect, useState } from "react";
 
+import { useBlockingModalGate } from "@/features/updater/blocking-modal-gate";
 import {
   materializeEnter,
   materializeEnterReduced,
@@ -66,6 +67,7 @@ export function WizardShell({
 }) {
   const [confirmDiscard, setConfirmDiscard] = useState(false);
   const reduceMotion = useReducedMotion();
+  useBlockingModalGate(open);
   const variants = reduceMotion ? materializeEnterReduced : materializeEnter;
 
   useEffect(() => {

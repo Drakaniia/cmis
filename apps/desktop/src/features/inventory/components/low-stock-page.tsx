@@ -2,9 +2,9 @@ import { useCallback, useState } from "react";
 import { toast } from "sonner";
 
 import { useDensity } from "@/hooks/use-density";
+import { useInventoryItems } from "../hooks/use-inventory-items";
 import { useLowStockFilters } from "../hooks/use-low-stock-filters";
 import { useMediaQuery900 } from "../hooks/use-media-query-1200";
-import { mockLowStockItems } from "../mock-low-stock";
 import type { LowStockRow } from "../types";
 import { AdjustThresholdPopover } from "./adjust-threshold-popover";
 import { LowStockFiltersBar } from "./low-stock-filters";
@@ -20,7 +20,8 @@ import { ReorderSheet } from "./reorder-sheet";
 export function LowStockPage() {
   const { density } = useDensity();
   const isWideEnough = useMediaQuery900();
-  const [items] = useState(mockLowStockItems);
+  const { data: itemsData } = useInventoryItems();
+  const items = itemsData ?? [];
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
@@ -133,7 +134,7 @@ export function LowStockPage() {
   }, [selectedIds.size]);
 
   return (
-    <div className="page-canvas flex h-full flex-col overflow-hidden">
+    <div className="flex h-full flex-col overflow-hidden">
       {/* Filters — sticky translucent */}
       <LowStockFiltersBar
         activeChips={activeChips}

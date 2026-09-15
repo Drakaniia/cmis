@@ -9,7 +9,7 @@ import {
   materializeEnterReduced,
   sheetSpring,
 } from "@/lib/motion";
-import { expiryLabel } from "../mock-expiry";
+import { expiryLabel } from "../domain/expiry";
 import type { ExpiryRow } from "../types";
 
 /**

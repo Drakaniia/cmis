@@ -8,7 +8,7 @@ import {
   useState,
 } from "react";
 import { toast } from "sonner";
-import { expiryLabel } from "../mock";
+import { expiryLabel } from "../domain/expiry";
 import type { InventoryItem } from "../types";
 import { WizardShell } from "./wizard-shell";
 
