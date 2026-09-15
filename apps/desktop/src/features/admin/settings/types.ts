@@ -13,7 +13,8 @@ export type SettingsTabId =
   | "audit"
   | "data"
   | "health"
-  | "backup";
+  | "backup"
+  | "updates";
 
 export interface SettingsTabMeta {
   description: string;
@@ -28,7 +29,7 @@ export const SETTINGS_TABS: SettingsTabMeta[] = [
     label: "General",
   },
   {
-    description: "Create, edit, deactivate accounts and assign roles",
+    description: "Create, edit and deactivate accounts",
     id: "users",
     label: "Users",
   },
@@ -66,6 +67,11 @@ export const SETTINGS_TABS: SettingsTabMeta[] = [
     description: "Schedule, location and restore",
     id: "backup",
     label: "Backup",
+  },
+  {
+    description: "Check for updates, version and preferences",
+    id: "updates",
+    label: "Updates",
   },
 ];
 

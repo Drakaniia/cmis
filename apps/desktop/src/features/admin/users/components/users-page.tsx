@@ -5,8 +5,8 @@ import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useMediaQuery1200 } from "@/features/inventory/hooks/use-media-query-1200";
 import { ConfirmModal } from "../../components/confirm-modal";
-import { isDestructiveRoleChange, useUsers } from "../hooks/use-users";
-import type { AdminUser, UserDraft, UserFilters, UserRole } from "../types";
+import { useUsers } from "../hooks/use-users";
+import type { AdminUser, UserDraft, UserFilters } from "../types";
 import { DEFAULT_USER_FILTERS, filterUsers } from "../types";
 import { UserDetailContent } from "./user-detail";
 import { UserDetailSheet } from "./user-detail-sheet";
@@ -19,7 +19,6 @@ type ConfirmState =
   | { ids: string[]; kind: "bulk" }
   | { kind: "deactivate"; user: AdminUser }
   | { kind: "reset"; user: AdminUser }
-  | { kind: "role"; role: UserRole; user: AdminUser }
   | null;
 
 /**
@@ -34,7 +33,6 @@ export function UsersPage() {
   const isWide = useMediaQuery1200();
   const {
     users,
-    changeRole,
     createUser,
     isEmailTaken,
     setStatus,
@@ -56,9 +54,6 @@ export function UsersPage() {
 
   const activeChips = useMemo(() => {
     const chips: { key: keyof UserFilters; label: string }[] = [];
-    if (filters.role !== "All") {
-      chips.push({ key: "role", label: `Role: ${filters.role}` });
-    }
     if (filters.status !== "All") {
       chips.push({ key: "status", label: `Status: ${filters.status}` });
     }
@@ -112,13 +107,6 @@ export function UsersPage() {
     setSheetOpen(false);
   }, []);
 
-  const handleRequestRole = useCallback((user: AdminUser, role: UserRole) => {
-    if (user.role === role) {
-      return;
-    }
-    setConfirm({ kind: "role", role, user });
-  }, []);
-
   const handleToggleStatus = useCallback(
     (user: AdminUser) => {
       if (user.status === "active") {
@@ -161,12 +149,7 @@ export function UsersPage() {
     if (!confirm) {
       return;
     }
-    if (confirm.kind === "role") {
-      changeRole(confirm.user.id, confirm.role);
-      toast.success(`${confirm.user.name} → ${confirm.role}`, {
-        description: "Role change recorded in the audit log.",
-      });
-    } else if (confirm.kind === "deactivate") {
+    if (confirm.kind === "deactivate") {
       setStatus(confirm.user.id, "inactive");
       toast.success(`${confirm.user.name} deactivated`);
     } else if (confirm.kind === "reset") {
@@ -178,7 +161,7 @@ export function UsersPage() {
     }
     setConfirm(null);
     setSheetOpen(false);
-  }, [changeRole, confirm, setStatus, setStatusMany]);
+  }, [confirm, setStatus, setStatusMany]);
 
   const handleFormConfirm = useCallback(
     (draft: UserDraft) => {
@@ -187,9 +170,7 @@ export function UsersPage() {
         toast.success(`${draft.name} updated`);
       } else {
         createUser(draft);
-        toast.success(`${draft.name} created`, {
-          description: `${draft.role}`,
-        });
+        toast.success(`${draft.name} created`);
       }
     },
     [createUser, formUser, updateUser]
@@ -227,15 +208,6 @@ export function UsersPage() {
   const confirmProps = (() => {
     if (!confirm) {
       return null;
-    }
-    if (confirm.kind === "role") {
-      return {
-        confirmLabel: "Change role",
-        description: `Change ${confirm.user.name} from ${confirm.user.role} to ${confirm.role}? Access is granted immediately and the change is audited.`,
-        destructive: isDestructiveRoleChange(confirm.user.role, confirm.role),
-        title: "Change role?",
-        typeToConfirm: undefined,
-      };
     }
     if (confirm.kind === "deactivate") {
       return {
@@ -298,7 +270,6 @@ export function UsersPage() {
         <div className="flex min-w-0 flex-1 flex-col overflow-hidden bg-card">
           <UserTable
             onAction={handleAction}
-            onRequestRole={handleRequestRole}
             onSelect={handleSelect}
             onToggleSelect={handleToggleSelect}
             onToggleSelectAll={handleToggleSelectAll}

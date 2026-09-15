@@ -1,6 +1,5 @@
 import { useCallback, useState } from "react";
 
-import { mockSettings } from "../mock";
 import type {
   Category,
   ExpiryWindowDays,
@@ -9,11 +8,37 @@ import type {
 } from "../types";
 
 /**
+ * Factory defaults for every settings section. The settings page reads these
+ * directly (e.g. `state.general.dateFormat`), so sections must never be
+ * `undefined` — an empty state crashes every tab (see CMIS-UI-09 §2).
+ */
+export const DEFAULT_SETTINGS: SettingsState = {
+  alerts: {
+    expiryWindowDays: 30,
+    globalLowStock: 15,
+    overrides: [],
+  },
+  backup: {
+    lastBackupAt: "",
+    nextRun: "",
+    path: "%APPDATA%/com.cmis.app/backups",
+    schedule: "off",
+  },
+  categories: [],
+  general: {
+    appName: "cmis",
+    dateFormat: "MM/DD/YYYY",
+    timeFormat: "12-hour",
+  },
+  suppliers: [],
+};
+
+/**
  * CMIS-UI-09 §2 — settings mutations. Every section save is global and
  * immediately visible to all roles, so the caller toasts + the audit log
  * records "Settings changed: [section] by [Admin]" (§2.3 persistence).
  */
-export function useSettings(initial: SettingsState = mockSettings) {
+export function useSettings(initial: SettingsState = DEFAULT_SETTINGS) {
   const [state, setState] = useState<SettingsState>(initial);
 
   const updateGeneral = useCallback(

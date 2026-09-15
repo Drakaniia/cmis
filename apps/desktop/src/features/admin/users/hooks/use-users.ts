@@ -1,16 +1,16 @@
 import { useCallback, useState } from "react";
 
-import { mockUsers } from "../mock";
-import type { AdminUser, UserDraft, UserRole, UserStatus } from "../types";
-
-/** The signed-in Admin acting on the roster (§1.5 role history authorship). */
-const ACTOR = "A. Lim";
+import type { AdminUser, UserDraft, UserStatus } from "../types";
+import { DEFAULT_USERS } from "../types";
 
 /**
- * CMIS-UI-09 §1 — mutable roster with append-only role history. Every write
- * records who did it and when; nothing overwrites the previous role.
+ * CMIS-UI-09 — mutable roster (single-user app). Role history was removed
+ * 2026-09-15 along with the role concept itself.
+ *
+ * Defaults to the shipped roster so User Management opens with accounts; pass
+ * an explicit list (including `[]`) to render a different one.
  */
-export function useUsers(initial: AdminUser[] = mockUsers) {
+export function useUsers(initial: AdminUser[] = DEFAULT_USERS) {
   const [users, setUsers] = useState<AdminUser[]>(initial);
 
   const isEmailTaken = useCallback(
@@ -24,15 +24,12 @@ export function useUsers(initial: AdminUser[] = mockUsers) {
   );
 
   const createUser = useCallback((draft: UserDraft) => {
-    const at = new Date().toISOString();
     const user: AdminUser = {
       actions7d: [0, 0, 0, 0, 0, 0, 0],
       email: draft.email.trim(),
       id: `usr-${Date.now()}`,
-      lastLogin: at,
+      lastLogin: new Date().toISOString(),
       name: draft.name.trim(),
-      role: draft.role,
-      roleHistory: [{ at, by: ACTOR, from: null, to: draft.role }],
       status: "active",
     };
     setUsers((prev) => [user, ...prev]);
@@ -40,41 +37,13 @@ export function useUsers(initial: AdminUser[] = mockUsers) {
   }, []);
 
   const updateUser = useCallback((id: string, draft: UserDraft) => {
-    const at = new Date().toISOString();
-    setUsers((prev) =>
-      prev.map((user) => {
-        if (user.id !== id) {
-          return user;
-        }
-        const roleChanged = user.role !== draft.role;
-        return {
-          ...user,
-          email: draft.email.trim(),
-          name: draft.name.trim(),
-          role: draft.role,
-          roleHistory: roleChanged
-            ? [
-                ...user.roleHistory,
-                { at, by: ACTOR, from: user.role, to: draft.role },
-              ]
-            : user.roleHistory,
-        };
-      })
-    );
-  }, []);
-
-  const changeRole = useCallback((id: string, role: UserRole) => {
-    const at = new Date().toISOString();
     setUsers((prev) =>
       prev.map((user) =>
         user.id === id
           ? {
               ...user,
-              role,
-              roleHistory: [
-                ...user.roleHistory,
-                { at, by: ACTOR, from: user.role, to: role },
-              ],
+              email: draft.email.trim(),
+              name: draft.name.trim(),
             }
           : user
       )
@@ -95,7 +64,6 @@ export function useUsers(initial: AdminUser[] = mockUsers) {
   }, []);
 
   return {
-    changeRole,
     createUser,
     isEmailTaken,
     setStatus,
@@ -103,9 +71,4 @@ export function useUsers(initial: AdminUser[] = mockUsers) {
     updateUser,
     users,
   } as const;
-}
-
-/** Demoting an Admin strips branch-spanning access — treat as destructive. */
-export function isDestructiveRoleChange(from: UserRole, to: UserRole): boolean {
-  return from === "Admin" && to !== "Admin";
 }

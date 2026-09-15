@@ -7,7 +7,6 @@ import { AuditTable } from "../../audit/components/audit-table";
 import { CorrectionModal } from "../../audit/components/correction-modal";
 import { downloadAuditCsv } from "../../audit/export-audit";
 import { useAuditFilters } from "../../audit/hooks/use-audit-filters";
-import { mockAuditRows } from "../../audit/mock";
 import type { AuditRow } from "../../audit/types";
 import { SettingsCard } from "./settings-card";
 
@@ -23,7 +22,7 @@ function noop() {
  * Simplified version that doesn't depend on router search params.
  */
 export function AuditTab() {
-  const [rows, setRows] = useState<AuditRow[]>(mockAuditRows);
+  const [rows, setRows] = useState<AuditRow[]>([] as AuditRow[]);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [correctionRow, setCorrectionRow] = useState<AuditRow | null>(null);
 

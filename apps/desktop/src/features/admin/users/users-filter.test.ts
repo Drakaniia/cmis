@@ -10,8 +10,6 @@ function user(overrides: Partial<AdminUser> = {}): AdminUser {
     id: "usr-1",
     lastLogin: "2026-09-12T09:00:00",
     name: "M. Reyes",
-    role: "Staff",
-    roleHistory: [],
     status: "active",
     ...overrides,
   };
@@ -28,7 +26,6 @@ describe("filterUsers", () => {
       email: "r.santos@buksu.edu.ph",
       id: "usr-2",
       name: "R. Santos",
-      role: "Admin",
       status: "inactive",
     }),
   ];
@@ -42,12 +39,11 @@ describe("filterUsers", () => {
     expect(filterUsers(rows, filters({ search: "SANTOS@" }))).toHaveLength(1);
   });
 
-  it("combines role and status narrowings", () => {
+  it("narrows by status", () => {
+    expect(filterUsers(rows, filters({ status: "inactive" }))).toHaveLength(1);
+    expect(filterUsers(rows, filters({ status: "active" }))).toHaveLength(1);
     expect(
-      filterUsers(rows, filters({ role: "Admin", status: "inactive" }))
-    ).toHaveLength(1);
-    expect(
-      filterUsers(rows, filters({ role: "Admin", status: "active" }))
+      filterUsers(rows, filters({ search: "santos", status: "active" }))
     ).toHaveLength(0);
   });
 });

@@ -10,7 +10,6 @@ import {
 } from "../dispensing-search";
 import { downloadDispensingCsv } from "../export-dispensing";
 import { useDispensingFilters } from "../hooks/use-dispensing-filters";
-import { mockDispensingRows } from "../mock";
 import type { DispensingRow } from "../types";
 import { DispensingFilterBar } from "./dispensing-filter-bar";
 import type { SortDir, SortKey } from "./dispensing-table";
@@ -29,7 +28,7 @@ export function DispensingPage({
 }) {
   const navigate = useNavigate();
   const search: DispensingSearch = useSearch({ from: routePath });
-  const [rows] = useState<DispensingRow[]>(mockDispensingRows);
+  const [rows] = useState<DispensingRow[]>([]);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [sortKey, setSortKey] = useState<SortKey>("dispensedAt");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
@@ -155,7 +154,7 @@ export function DispensingPage({
         staffList={staffList}
       />
 
-      <div className="min-h-0 flex-1 overflow-auto bg-card">
+      <div className="min-h-0 flex-1 overflow-auto">
         <DispensingTable
           expandedId={expandedId}
           onClearFilters={clearFilters}

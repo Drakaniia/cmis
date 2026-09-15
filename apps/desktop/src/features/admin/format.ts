@@ -31,6 +31,11 @@ export function relativeTime(iso: string, now: number = Date.now()): string {
 
 export function absoluteDateTime(iso: string): string {
   const date = new Date(iso);
+  // A missing or unparseable timestamp renders as an em dash: `new Date("")`
+  // otherwise prints "Invalid Date, Invalid Date" (Backups, before any run).
+  if (Number.isNaN(date.getTime())) {
+    return "—";
+  }
   const day = date.toLocaleDateString("en-US", {
     day: "numeric",
     month: "short",

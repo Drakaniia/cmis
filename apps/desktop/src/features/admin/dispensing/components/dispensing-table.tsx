@@ -307,7 +307,7 @@ export function DispensingTable({
       <div className="flex h-full flex-col overflow-hidden">
         <div
           className={cn(
-            "sticky top-0 z-[1] grid shrink-0 items-center gap-2 border-border/50 border-b bg-muted/60 px-3 py-1.5",
+            "sticky top-0 z-[1] grid shrink-0 items-center gap-2 border-border/50 border-b bg-card/95 px-3 py-1.5 backdrop-blur-[6px]",
             GRID
           )}
         >
@@ -369,7 +369,7 @@ export function DispensingTable({
         <thead className="block">
           <tr
             className={cn(
-              "sticky top-0 z-[1] grid items-center gap-2 border-border/50 border-b bg-muted/70 px-3 py-1.5 font-medium text-caption text-muted-foreground backdrop-blur-[6px]",
+              "sticky top-0 z-[1] grid items-center gap-2 border-border/50 border-b bg-card/95 px-3 py-1.5 font-medium text-caption text-muted-foreground backdrop-blur-[6px]",
               GRID
             )}
           >

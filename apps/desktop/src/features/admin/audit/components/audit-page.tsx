@@ -5,7 +5,6 @@ import { toast } from "sonner";
 
 import { downloadAuditCsv } from "../export-audit";
 import { useAuditFilters } from "../hooks/use-audit-filters";
-import { mockAuditRows } from "../mock";
 import type { AuditRow } from "../types";
 import { AuditFilterBar } from "./audit-filter-bar";
 import { AuditTable } from "./audit-table";
@@ -21,7 +20,7 @@ const ACTOR = "A. Lim";
  * that appends rather than overwrites, and export exactly what's on screen.
  */
 export function AuditPage() {
-  const [rows, setRows] = useState<AuditRow[]>(mockAuditRows);
+  const [rows, setRows] = useState<AuditRow[]>([]);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [correctionRow, setCorrectionRow] = useState<AuditRow | null>(null);
 
@@ -130,7 +129,7 @@ export function AuditPage() {
         users={users}
       />
 
-      <div className="min-h-0 flex-1 overflow-auto bg-card">
+      <div className="min-h-0 flex-1 overflow-auto">
         <AuditTable
           expandedId={expandedId}
           onCorrect={setCorrectionRow}

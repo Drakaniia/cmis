@@ -6,7 +6,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@cmis/ui/components/dropdown-menu";
-import { cn } from "@cmis/ui/lib/utils";
 import {
   KeyRound,
   MoreHorizontal,
@@ -21,26 +20,13 @@ import { toast } from "sonner";
 import { ConfirmModal } from "../../components/confirm-modal";
 import { UserFormModal } from "../../users/components/user-form-modal";
 import { useUsers } from "../../users/hooks/use-users";
-import type { AdminUser, UserDraft, UserRole } from "../../users/types";
+import type { AdminUser, UserDraft } from "../../users/types";
 import { DEFAULT_USER_FILTERS, filterUsers } from "../../users/types";
 import { SettingsCard } from "./settings-card";
 
-type ConfirmState =
-  | { kind: "deactivate"; user: AdminUser }
-  | { kind: "role"; role: UserRole; user: AdminUser }
-  | null;
-
-const ROLE_BADGE: Record<UserRole, string> = {
-  Admin: "border-primary/40 bg-primary/12 text-primary",
-  Staff: "border-border bg-muted text-foreground",
-  Viewer:
-    "border-[var(--chart-2)]/40 bg-[var(--chart-2)]/12 text-[var(--chart-2)]",
-};
+type ConfirmState = { kind: "deactivate"; user: AdminUser } | null;
 
 function confirmationDescription(confirm: ConfirmState): string {
-  if (confirm?.kind === "role") {
-    return `Change ${confirm.user.name} from ${confirm.user.role} to ${confirm.role}?`;
-  }
   if (confirm?.kind === "deactivate") {
     return `Deactivate ${confirm.user.name}? They will be unable to log in.`;
   }
@@ -64,23 +50,13 @@ function UserRow({
   }, [onToggleStatus, user]);
 
   return (
-    <div className="grid grid-cols-[1.2fr_0.8fr_0.7fr_auto] items-center gap-2 border-border/50 border-b px-3 py-2 last:border-b-0">
+    <div className="grid grid-cols-[1.2fr_0.7fr_auto] items-center gap-2 border-border/50 border-b px-3 py-2 last:border-b-0">
       <span className="min-w-0 truncate">
         <span className="block truncate font-medium text-foreground text-sm">
           {user.name}
         </span>
         <span className="block truncate text-caption text-muted-foreground">
           {user.email}
-        </span>
-      </span>
-      <span className="min-w-0">
-        <span
-          className={cn(
-            "inline-flex items-center rounded-full border px-2 py-0.5 font-medium text-caption",
-            ROLE_BADGE[user.role]
-          )}
-        >
-          {user.role}
         </span>
       </span>
       <span className="text-caption text-muted-foreground">
@@ -127,8 +103,7 @@ function UserRow({
  * Simplified version of the standalone UsersPage that fits within a tab panel.
  */
 export function UsersTab() {
-  const { users, changeRole, createUser, isEmailTaken, setStatus, updateUser } =
-    useUsers();
+  const { users, createUser, isEmailTaken, setStatus, updateUser } = useUsers();
 
   const [filters] = useState(DEFAULT_USER_FILTERS);
   const [formOpen, setFormOpen] = useState(false);
@@ -163,17 +138,12 @@ export function UsersTab() {
     if (!confirm) {
       return;
     }
-    if (confirm.kind === "role") {
-      changeRole(confirm.user.id, confirm.role);
-      toast.success(`${confirm.user.name} → ${confirm.role}`, {
-        description: "Role change recorded in the audit log.",
-      });
-    } else if (confirm.kind === "deactivate") {
+    if (confirm.kind === "deactivate") {
       setStatus(confirm.user.id, "inactive");
       toast.success(`${confirm.user.name} deactivated`);
     }
     setConfirm(null);
-  }, [confirm, changeRole, setStatus]);
+  }, [confirm, setStatus]);
 
   const handleConfirmDialogChange = useCallback((open: boolean) => {
     if (!open) {
@@ -188,9 +158,7 @@ export function UsersTab() {
         toast.success(`${draft.name} updated`);
       } else {
         createUser(draft);
-        toast.success(`${draft.name} created`, {
-          description: `${draft.role}`,
-        });
+        toast.success(`${draft.name} created`);
       }
     },
     [formUser, updateUser, createUser]
@@ -209,9 +177,8 @@ export function UsersTab() {
         title="Users"
       >
         <div className="overflow-hidden rounded-md border border-border/60">
-          <div className="grid grid-cols-[1.2fr_0.8fr_0.7fr_auto] items-center gap-2 border-border/50 border-b bg-muted/60 px-3 py-1.5 font-medium text-caption text-muted-foreground">
+          <div className="grid grid-cols-[1.2fr_0.7fr_auto] items-center gap-2 border-border/50 border-b bg-muted/60 px-3 py-1.5 font-medium text-caption text-muted-foreground">
             <span>Name</span>
-            <span>Role</span>
             <span>Status</span>
             <span className="w-8" />
           </div>
@@ -240,13 +207,13 @@ export function UsersTab() {
       />
 
       <ConfirmModal
-        confirmLabel={confirm?.kind === "role" ? "Change role" : "Deactivate"}
+        confirmLabel="Deactivate"
         description={confirmationDescription(confirm)}
         destructive
         onConfirm={handleConfirm}
         onOpenChange={handleConfirmDialogChange}
         open={confirm !== null}
-        title={confirm?.kind === "role" ? "Change role?" : "Deactivate user?"}
+        title="Deactivate user?"
       />
     </div>
   );
