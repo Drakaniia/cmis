@@ -1,0 +1,255 @@
+import { utils, writeFile } from "xlsx";
+import { INVENTORY_TEMPLATE_HEADERS } from "./csv-parser";
+
+export interface InventoryExportRow {
+  category: string | null;
+  daily: number[]; // length 31
+  dosage: string;
+  name: string;
+  stockOnHand: number | null;
+  stockRemaining: number | null;
+  supplier: string | null;
+  totalDispensed: number | null;
+}
+
+const STRENGTH_UNITS = [
+  "mg",
+  "g",
+  "mcg",
+  "ml",
+  "mg/ml",
+  "mg/5ml",
+  "%",
+  "IU",
+  "units",
+];
+const FORMS = [
+  "tablet",
+  "capsule",
+  "cap",
+  "sachet",
+  "syrup",
+  "suspension",
+  "susp",
+  "ointment",
+  "cream",
+  "drops",
+  "vial",
+  "ampule",
+  "nebule",
+  "injection",
+  "suppository",
+  "box",
+  "piece",
+  "tabs",
+  "tab",
+];
+
+/** Leading numeric strength, e.g. "200" in "200mg/200mg/5ml". */
+const LEADING_STRENGTH = /^\s*(\d+(?:\.\d+)?(?:\/\d+(?:\.\d+)?)?)\s*/;
+const LEADING_COMMA = /^,/;
+
+/** A token only counts as a unit/form when a separator (or end) follows it. */
+function tokenEndsHere(text: string, token: string): boolean {
+  const after = text.slice(token.length, token.length + 1);
+  return after === "" || after === " " || after === "," || after === "(";
+}
+
+/** Splits the leading numeric strength off the dosage text. */
+function takeStrength(trimmed: string): {
+  rest: string;
+  strengthValue: string;
+} {
+  const match = trimmed.match(LEADING_STRENGTH);
+  if (!match) {
+    return { rest: trimmed, strengthValue: "" };
+  }
+  const [, strengthValue = ""] = match;
+  return {
+    rest: trimmed.slice(match[0].length).trim(),
+    strengthValue,
+  };
+}
+
+/**
+ * Splits the leading strength unit off, when it is one of the template's units.
+ *
+ * Units may sit flush against the number ("500mg tabs"), which is why the check
+ * is on the character that follows rather than on whitespace.
+ */
+function takeUnit(rest: string): { rest: string; strengthUnit: string } {
+  const lower = rest.toLowerCase();
+  for (const unit of STRENGTH_UNITS) {
+    if (!lower.startsWith(unit.toLowerCase())) {
+      continue;
+    }
+    if (tokenEndsHere(rest, unit)) {
+      return { rest: rest.slice(unit.length).trim(), strengthUnit: unit };
+    }
+  }
+  return { rest, strengthUnit: "" };
+}
+
+/** Splits the leading dosage form off, when it is one of the template's forms. */
+function takeForm(rest: string): { form: string; rest: string } {
+  const lower = rest.toLowerCase();
+  for (const form of FORMS) {
+    if (!lower.startsWith(form.toLowerCase())) {
+      continue;
+    }
+    if (tokenEndsHere(rest, form)) {
+      return {
+        form,
+        rest: rest.slice(form.length).trim().replace(LEADING_COMMA, "").trim(),
+      };
+    }
+  }
+  return { form: "", rest };
+}
+
+function splitDosageForExport(dosage: string): {
+  form: string;
+  packSize: string;
+  strengthUnit: string;
+  strengthValue: string;
+} {
+  const trimmed = dosage.trim();
+  if (trimmed === "") {
+    return { form: "", packSize: "", strengthUnit: "", strengthValue: "" };
+  }
+
+  // Try to parse: <number> <unit> <form> <pack>
+  const strength = takeStrength(trimmed);
+  const unit = takeUnit(strength.rest);
+  const form = takeForm(unit.rest);
+
+  const { form: formToken, rest: packSize } = form;
+  // Nothing recognisable came out, so the whole text is the dosage: keep it in
+  // one slot ("cream", "60ml susp") rather than scattering it across four.
+  if (!(strength.strengthValue || unit.strengthUnit || formToken) && packSize) {
+    return {
+      form: packSize,
+      packSize: "",
+      strengthUnit: "",
+      strengthValue: "",
+    };
+  }
+
+  return {
+    form: formToken,
+    packSize,
+    strengthUnit: unit.strengthUnit,
+    strengthValue: strength.strengthValue,
+  };
+}
+
+export function buildInventoryXlsxRows(
+  rows: InventoryExportRow[]
+): (string | number | null)[][] {
+  const header = [...INVENTORY_TEMPLATE_HEADERS] as string[];
+  const out: (string | number | null)[][] = [header];
+  for (const r of rows) {
+    const { strengthValue, strengthUnit, form, packSize } =
+      splitDosageForExport(r.dosage);
+    const daily =
+      r.daily.length === 31
+        ? r.daily
+        : [...r.daily, ...new Array(31 - r.daily.length).fill(0)].slice(0, 31);
+    const totalDispensed = r.totalDispensed ?? daily.reduce((a, b) => a + b, 0);
+    const stockRemaining =
+      r.stockRemaining ??
+      (r.stockOnHand === null
+        ? 0 - totalDispensed
+        : r.stockOnHand - totalDispensed);
+    out.push([
+      r.name,
+      strengthValue,
+      strengthUnit,
+      form,
+      packSize,
+      r.stockOnHand ?? "",
+      ...daily.map((d) => (d === 0 ? "" : d)),
+      totalDispensed,
+      stockRemaining,
+      r.category ?? "",
+      r.supplier ?? "",
+    ]);
+  }
+  // Pad to at least 100 data rows with formulas placeholder — but xlsx writer will not need formulas for empty rows, template already has them.
+  return out;
+}
+
+/**
+ * Builds the template workbook for `rows`.
+ *
+ * Exported (rather than only written to disk) so the export → import round trip
+ * is testable, and so the totals cells below stay in one place.
+ */
+export function buildInventoryWorkbook(rows: InventoryExportRow[]) {
+  const aoa = buildInventoryXlsxRows(rows);
+  const ws = utils.aoa_to_sheet(aoa);
+
+  // Column widths per spec
+  const cols = [
+    { wch: 28 }, // A name
+    { wch: 14 }, // B
+    { wch: 14 }, // C
+    { wch: 16 }, // D
+    { wch: 14 }, // E
+    { wch: 16 }, // F
+    ...new Array(31).fill({ wch: 6 } as const), // G-AK
+    { wch: 16 }, // AL
+    { wch: 16 }, // AM
+    { wch: 18 }, // AN
+    { wch: 20 }, // AO
+  ];
+  (ws as unknown as { "!cols": unknown })["!cols"] = cols;
+
+  // Freeze A2, auto-filter, print title
+  (ws as unknown as Record<string, unknown>)["!freeze"] = {
+    activePane: "bottomRight",
+    topLeftCell: "B2",
+    xSplit: 1,
+    ySplit: 1,
+  };
+  (ws as unknown as Record<string, unknown>)["!autofilter"] = { ref: "A1:AO1" };
+
+  // AL/AM carry formulas so a human keeps the live-recalculating template, and
+  // a cached value so the importer (which only reads cached results, not
+  // formulas) gets the totals back instead of blanks on re-import (spec 4.6).
+  const cells = ws as unknown as Record<
+    string,
+    { f: string; t: "n"; v: number }
+  >;
+  for (let r = 2; r <= aoa.length; r += 1) {
+    const alAddr = utils.encode_cell({ c: 37, r: r - 1 }); // AL col 0-index 37
+    const amAddr = utils.encode_cell({ c: 38, r: r - 1 });
+    const nameCell = aoa[r - 1]?.[0];
+    const total = aoa[r - 1]?.[37];
+    const remaining = aoa[r - 1]?.[38];
+    if (
+      typeof nameCell === "string" &&
+      nameCell.trim() !== "" &&
+      typeof total === "number" &&
+      typeof remaining === "number"
+    ) {
+      cells[alAddr] = { f: `SUM(G${r}:AK${r})`, t: "n", v: total };
+      cells[amAddr] = {
+        f: `IF(F${r}="",0,F${r})-AL${r}`,
+        t: "n",
+        v: remaining,
+      };
+    }
+  }
+
+  const wb = utils.book_new();
+  utils.book_append_sheet(wb, ws, "Inventory Template");
+  return wb;
+}
+
+export function downloadInventoryXlsx(
+  rows: InventoryExportRow[],
+  fileName: string
+): void {
+  writeFile(buildInventoryWorkbook(rows), fileName);
+}
