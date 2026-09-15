@@ -19,8 +19,7 @@ import {
 } from "lucide-react";
 import { motion } from "motion/react";
 import { densitySpring } from "@/lib/motion";
-import type { StockAdjustmentsData } from "../mock";
-import type { DashboardLinkKey } from "../types";
+import type { DashboardLinkKey, StockAdjustmentsData } from "../types";
 
 const SECTION = {
   animate: { opacity: 1, y: 0 },

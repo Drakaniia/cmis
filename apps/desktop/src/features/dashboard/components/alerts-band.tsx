@@ -14,8 +14,7 @@ import { AlertTriangle, CheckCircle2, Clock } from "lucide-react";
 import { motion } from "motion/react";
 
 import { densitySpring } from "@/lib/motion";
-import type { ExpiryAlert, LowStockAlert } from "../mock";
-import type { DashboardLinkKey } from "../types";
+import type { DashboardLinkKey, ExpiryAlert, LowStockAlert } from "../types";
 
 const SECTION = {
   animate: { opacity: 1, y: 0 },
