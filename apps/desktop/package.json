@@ -36,6 +36,7 @@
     "test:watch": "vp test --watch"
   },
   "dependencies": {
+    "@base-ui/react": "^1.8.0",
     "@cmis/env": "workspace:*",
     "@cmis/ui": "workspace:*",
     "@number-flow/react": "^0.6.2",
@@ -44,8 +45,11 @@
     "@tanstack/react-router": "^1.170.18",
     "@tanstack/react-virtual": "^3.14.11",
     "@tauri-apps/api": "^2.11.1",
+    "@tauri-apps/plugin-opener": "^2.5.5",
+    "@tauri-apps/plugin-process": "^2.3.1",
     "@tauri-apps/plugin-sql": "^2.4.0",
     "@tauri-apps/plugin-store": "^2.4.0",
+    "@tauri-apps/plugin-updater": "^2.11.0",
     "@visx/curve": "4.0.1-alpha.0",
     "@visx/event": "4.0.1-alpha.0",
     "@visx/gradient": "4.0.1-alpha.0",
@@ -69,6 +73,7 @@
     "react-use-measure": "^2.1.7",
     "sonner": "catalog:",
     "tailwind-merge": "^3.6.0",
+    "xlsx": "^0.18.5",
     "zod": "catalog:"
   },
   "devDependencies": {
