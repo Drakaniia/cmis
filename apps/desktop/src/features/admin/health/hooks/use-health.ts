@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
 
-import { mockHealthCards, mockPendingSyncs } from "../mock";
 import type { HealthCardData, HealthCardId, PendingSync } from "../types";
 
 export interface HealthActionResult {
@@ -13,8 +12,8 @@ export interface HealthActionResult {
  * a single card in place rather than navigating away.
  */
 export function useHealth(
-  initialCards: HealthCardData[] = mockHealthCards,
-  initialSyncs: PendingSync[] = mockPendingSyncs
+  initialCards: HealthCardData[] = [],
+  initialSyncs: PendingSync[] = []
 ) {
   const [cards, setCards] = useState<HealthCardData[]>(initialCards);
   const [pendingSyncs, setPendingSyncs] = useState<PendingSync[]>(initialSyncs);

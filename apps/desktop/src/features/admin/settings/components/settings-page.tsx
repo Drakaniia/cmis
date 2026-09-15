@@ -14,6 +14,7 @@ import { HealthTab } from "./health-tab";
 import { SettingsTabBar } from "./settings-tab-bar";
 import { SuppliersTab } from "./suppliers-tab";
 import { ThresholdsTab } from "./thresholds-tab";
+import { UpdatesTab } from "./updates-tab";
 import { UsersTab } from "./users-tab";
 
 function tabFromHash(): SettingsTabId {
@@ -58,7 +59,7 @@ export function SettingsPage() {
     <div className="flex h-[calc(100svh-48px)] flex-col overflow-hidden">
       <SettingsTabBar active={tab} onSelect={selectTab} />
 
-      <div className="min-h-0 flex-1 overflow-auto bg-card">
+      <div className="min-h-0 flex-1 overflow-auto">
         <div className="mx-auto w-full max-w-4xl px-3 py-4 sm:px-4">
           <AnimatePresence mode="wait">
             <motion.div
@@ -108,6 +109,7 @@ export function SettingsPage() {
                   onTrigger={settings.triggerBackup}
                 />
               ) : null}
+              {tab === "updates" ? <UpdatesTab /> : null}
             </motion.div>
           </AnimatePresence>
         </div>

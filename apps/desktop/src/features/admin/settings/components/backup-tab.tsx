@@ -82,7 +82,9 @@ export function BackupTab({
           <div>
             <dt className="text-caption text-muted-foreground">Last backup</dt>
             <dd className="font-medium text-foreground text-sm">
-              {absoluteDateTime(backup.lastBackupAt)}
+              {backup.lastBackupAt
+                ? absoluteDateTime(backup.lastBackupAt)
+                : "Never"}
             </dd>
           </div>
           <div>

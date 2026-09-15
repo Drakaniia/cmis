@@ -8,7 +8,6 @@ import { ChevronDown, Search, X } from "lucide-react";
 import { type ChangeEvent, useCallback } from "react";
 
 import type { UserFilters } from "../types";
-import { USER_ROLES } from "../types";
 
 /** A dropdown item that reports the value it represents. */
 function ValueOption({
@@ -129,11 +128,6 @@ export function UserFiltersBar({
     [onChange]
   );
 
-  const handleRoleChange = useCallback(
-    (value: string) => onChange({ role: value }),
-    [onChange]
-  );
-
   const handleStatusChange = useCallback(
     (value: string) => onChange({ status: value }),
     [onChange]
@@ -166,12 +160,6 @@ export function UserFiltersBar({
           ) : null}
         </div>
 
-        <FilterMenu
-          label="Role"
-          onChange={handleRoleChange}
-          options={USER_ROLES}
-          value={filters.role}
-        />
         <FilterMenu
           label="Status"
           onChange={handleStatusChange}

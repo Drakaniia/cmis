@@ -1,12 +1,10 @@
 import { Button } from "@cmis/ui/components/button";
-import { cn } from "@cmis/ui/lib/utils";
 import { Pencil, ScrollText } from "lucide-react";
 import { useCallback } from "react";
 
 import { MiniHistogram, StatusDot } from "../../components/indicators";
 import { absoluteDateTime, relativeTime } from "../../format";
 import type { AdminUser } from "../types";
-import { ROLE_BADGE_CLASS } from "../types";
 
 /**
  * CMIS-UI-09 §1.5 — read-only detail. Write actions live behind the Edit
@@ -38,7 +36,7 @@ export function UserDetailContent({
     return (
       <div className="flex flex-1 items-center justify-center p-6 text-center">
         <p className="max-w-[220px] text-caption text-muted-foreground">
-          Select a user to inspect their role history and activity.
+          Select a user to inspect their activity.
         </p>
       </div>
     );
@@ -74,14 +72,6 @@ export function UserDetailContent({
           </div>
         </div>
         <div className="mt-3 flex flex-wrap items-center gap-2">
-          <span
-            className={cn(
-              "inline-flex items-center rounded-full border px-2 py-0.5 font-medium text-caption",
-              ROLE_BADGE_CLASS[user.role]
-            )}
-          >
-            {user.role}
-          </span>
           <span className="inline-flex items-center gap-1.5 text-caption text-muted-foreground">
             <StatusDot
               label={user.status === "active" ? "Active" : "Inactive"}
@@ -113,30 +103,6 @@ export function UserDetailContent({
             data={user.actions7d}
             label={`${totalActions} actions over the last 7 days`}
           />
-        </section>
-
-        <section>
-          <h3 className="font-semibold text-caption text-muted-foreground uppercase tracking-widest">
-            Role history
-          </h3>
-          <ol className="mt-2 space-y-2 border-border/60 border-l pl-3">
-            {[...user.roleHistory].reverse().map((entry) => (
-              <li className="relative" key={`${entry.at}-${entry.to}`}>
-                <span
-                  aria-hidden
-                  className="absolute top-1.5 -left-[17px] size-2 rounded-full bg-primary"
-                />
-                <p className="text-foreground text-sm">
-                  {entry.from
-                    ? `${entry.from} → ${entry.to}`
-                    : `Added as ${entry.to}`}
-                </p>
-                <p className="text-caption text-muted-foreground">
-                  {entry.by} · {absoluteDateTime(entry.at)}
-                </p>
-              </li>
-            ))}
-          </ol>
         </section>
       </div>
 

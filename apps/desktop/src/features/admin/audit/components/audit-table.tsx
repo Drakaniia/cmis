@@ -17,7 +17,7 @@ import { AuditRowDetail } from "./audit-row-detail";
 const GRID = "grid-cols-[1.1fr_0.9fr_0.9fr_2fr_0.9fr_auto]";
 const COLUMN_COUNT = 6;
 const HEADER_CLASS =
-  "sticky top-0 z-[1] grid items-center gap-2 border-border/50 border-b bg-muted/70 px-3 py-1.5 font-medium text-caption text-muted-foreground backdrop-blur-[6px]";
+  "sticky top-0 z-[1] grid items-center gap-2 border-border/50 border-b bg-card/95 px-3 py-1.5 font-medium text-caption text-muted-foreground backdrop-blur-[6px]";
 const ROW_CLASS =
   "border-border/50 border-b grid items-center gap-2 px-3 py-2 text-sm transition-colors hover:bg-muted/50";
 

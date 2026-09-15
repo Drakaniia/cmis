@@ -18,8 +18,7 @@ import { motion } from "motion/react";
 import { type KeyboardEvent, type MouseEvent, useCallback } from "react";
 import { densitySpring } from "@/lib/motion";
 import { absoluteDateTime, relativeTime } from "../../format";
-import type { AdminUser, UserRole } from "../types";
-import { RoleBadgeMenu } from "./role-badge-menu";
+import type { AdminUser } from "../types";
 
 export type UserRowAction =
   | "edit"
@@ -28,7 +27,7 @@ export type UserRowAction =
   | "view-audit";
 
 const ROW_GRID =
-  "grid-cols-[auto_1.3fr_0.9fr_0.9fr_0.7fr_auto] lg:grid-cols-[auto_1.2fr_1fr_0.9fr_0.8fr_auto]";
+  "grid-cols-[auto_1.3fr_0.9fr_0.7fr_auto] lg:grid-cols-[auto_1.2fr_1fr_0.8fr_auto]";
 
 /** Switch-style status toggle (role="switch", color paired with a label). */
 function StatusToggle({
@@ -95,7 +94,6 @@ function UserTableRow({
   user,
   isRowSelected,
   onAction,
-  onRequestRole,
   onSelect,
   onToggleSelect,
   onToggleStatus,
@@ -104,7 +102,6 @@ function UserTableRow({
   user: AdminUser;
   isRowSelected: boolean;
   onAction: (user: AdminUser, action: UserRowAction) => void;
-  onRequestRole: (user: AdminUser, role: UserRole) => void;
   onSelect: (id: string, rect: DOMRect | null) => void;
   onToggleSelect: (id: string) => void;
   onToggleStatus: (user: AdminUser) => void;
@@ -134,10 +131,6 @@ function UserTableRow({
   const handleToggleSelect = useCallback(
     () => onToggleSelect(user.id),
     [onToggleSelect, user.id]
-  );
-  const handleRequestRole = useCallback(
-    (role: UserRole) => onRequestRole(user, role),
-    [onRequestRole, user]
   );
   const handleEdit = useCallback(
     () => onAction(user, "edit"),
@@ -187,9 +180,6 @@ function UserTableRow({
       </td>
       <td className="hidden min-w-0 truncate text-caption text-muted-foreground lg:block">
         {user.email}
-      </td>
-      <td className="min-w-0">
-        <RoleBadgeMenu onRequestRole={handleRequestRole} user={user} />
       </td>
       <td className="min-w-0">
         <StatusToggle onToggle={onToggleStatus} user={user} />
@@ -248,12 +238,10 @@ export function UserTable({
   onSelect,
   onToggleSelect,
   onToggleSelectAll,
-  onRequestRole,
   onToggleStatus,
   onAction,
 }: {
   onAction: (user: AdminUser, action: UserRowAction) => void;
-  onRequestRole: (user: AdminUser, role: UserRole) => void;
   onSelect: (id: string, rect: DOMRect | null) => void;
   onToggleSelect: (id: string) => void;
   onToggleSelectAll: (checked: boolean) => void;
@@ -288,9 +276,6 @@ export function UserTable({
                 Email
               </th>
               <th className="text-left font-medium" scope="col">
-                Role
-              </th>
-              <th className="text-left font-medium" scope="col">
                 Status
               </th>
               <th className="text-left font-medium" scope="col">
@@ -307,7 +292,6 @@ export function UserTable({
                 isRowSelected={selectedIds.has(user.id)}
                 key={user.id}
                 onAction={onAction}
-                onRequestRole={onRequestRole}
                 onSelect={onSelect}
                 onToggleSelect={onToggleSelect}
                 onToggleStatus={onToggleStatus}
