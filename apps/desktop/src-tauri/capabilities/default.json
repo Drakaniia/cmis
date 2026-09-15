@@ -13,6 +13,12 @@
     "core:window:allow-toggle-maximize",
     "core:window:allow-is-maximized",
     "core:window:allow-start-dragging",
-    "core:window:allow-internal-toggle-maximize"
+    "core:window:allow-internal-toggle-maximize",
+    "opener:default",
+    "store:default",
+    "updater:default",
+    "process:allow-restart",
+    "sql:default",
+    "sql:allow-execute"
   ]
 }
