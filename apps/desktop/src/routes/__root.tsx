@@ -4,6 +4,7 @@ import {
   createRootRouteWithContext,
   HeadContent,
   Outlet,
+  useRouterState,
 } from "@tanstack/react-router";
 import { useCallback, useEffect, useState } from "react";
 
@@ -11,6 +12,10 @@ import { AppSidebar } from "@/components/app-sidebar";
 import Header from "@/components/header";
 import { ThemeProvider } from "@/components/theme-provider";
 import { TitleBar } from "@/components/titlebar";
+import { DocsHeader } from "@/features/help/components/docs/docs-header";
+import { HelpDialogsProvider } from "@/features/help/help-dialogs-context";
+import { useFirstRunHint } from "@/features/help/use-first-run-hint";
+import { UpdaterProvider } from "@/features/updater/use-updater";
 
 import "../index.css";
 
@@ -66,6 +71,15 @@ function RootComponent() {
     setSidebarCollapsed((prev) => !prev);
   }, []);
 
+  const pathname = useRouterState({
+    select: (state) => state.location.pathname,
+  });
+  // Documentation is a standalone reading surface: keep the title bar (window
+  // drag + controls) but drop the admin sidebar and header.
+  const isDocsRoute = pathname.startsWith("/docs");
+
+  useFirstRunHint({ enabled: !isDocsRoute });
+
   return (
     <>
       <HeadContent />
@@ -75,19 +89,36 @@ function RootComponent() {
         disableTransitionOnChange
         storageKey="vite-ui-theme"
       >
-        <div className="flex h-svh flex-col overflow-hidden overflow-x-hidden">
-          <TitleBar />
-          <div className="flex flex-1 overflow-hidden overflow-x-hidden">
-            <AppSidebar collapsed={sidebarCollapsed} onToggle={handleToggle} />
-            <div className="flex min-w-0 flex-1 flex-col">
-              <Header />
-              <main className="flex-1 overflow-y-auto">
-                <Outlet />
-              </main>
-            </div>
-          </div>
-        </div>
-        <Toaster position="bottom-right" richColors />
+        <UpdaterProvider>
+          <HelpDialogsProvider>
+            {isDocsRoute ? (
+              <div className="flex h-svh flex-col overflow-hidden overflow-x-hidden">
+                <TitleBar onToggleSidebar={handleToggle} />
+                <DocsHeader />
+                <main className="page-canvas flex-1 overflow-y-auto">
+                  <Outlet />
+                </main>
+              </div>
+            ) : (
+              <div className="flex h-svh flex-col overflow-hidden overflow-x-hidden">
+                <TitleBar onToggleSidebar={handleToggle} />
+                <div className="flex flex-1 overflow-hidden overflow-x-hidden">
+                  <AppSidebar
+                    collapsed={sidebarCollapsed}
+                    onToggle={handleToggle}
+                  />
+                  <div className="flex min-w-0 flex-1 flex-col">
+                    <Header />
+                    <main className="page-canvas flex-1 overflow-y-auto">
+                      <Outlet />
+                    </main>
+                  </div>
+                </div>
+              </div>
+            )}
+            <Toaster position="bottom-right" richColors />
+          </HelpDialogsProvider>
+        </UpdaterProvider>
       </ThemeProvider>
     </>
   );

@@ -5,8 +5,16 @@ import ReactDOM from "react-dom/client";
 import Loader from "./components/loader";
 import { routeTree } from "./routeTree.gen";
 
-// todo: configure QueryClient defaults for offline (retry: false, gcTime)
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      gcTime: 5 * 60 * 1000,
+      refetchOnWindowFocus: false,
+      retry: false,
+      staleTime: 30_000,
+    },
+  },
+});
 
 const router = createRouter({
   context: { queryClient },
