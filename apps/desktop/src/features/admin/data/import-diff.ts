@@ -1,5 +1,4 @@
 import type { ImportDiff, ImportSampleRow } from "./types";
-import { EXISTING_INVENTORY_ROWS, EXISTING_REQUEST_ROWS } from "./types";
 
 function kindFromName(fileName: string): ImportDiff["kind"] {
   const lower = fileName.toLowerCase();
@@ -39,18 +38,17 @@ export function parseImportDiff(fileName: string, content: string): ImportDiff {
   const kind = kindFromName(fileName);
 
   if (kind === "db") {
+    // A .db backup's contents cannot be counted without opening it, so the diff
+    // reports no numbers at all rather than plausible-looking invented ones.
     return {
-      counts: {
-        deletes: EXISTING_INVENTORY_ROWS,
-        inserts: EXISTING_INVENTORY_ROWS,
-        updates: EXISTING_REQUEST_ROWS,
-      },
+      counts: { deletes: 0, inserts: 0, updates: 0 },
       fileName,
       kind,
       sample: [],
       warnings: [
         "Restoring a backup replaces the current database entirely.",
         "Any stock changes recorded since the backup will be lost.",
+        "This build previews .db backups only — nothing is written for them.",
       ],
     };
   }

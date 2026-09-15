@@ -6,18 +6,22 @@
 export type ExportDataType = "inventory" | "requests" | "logs";
 
 export interface ExportTypeMeta {
-  count: number;
   id: ExportDataType;
   label: string;
 }
 
+/**
+ * Labels only: the row counts beside each label are read from the database at
+ * runtime (see `useExportCounts`). They used to be compile-time constants, which
+ * meant the card advertised numbers no database ever contained.
+ */
 export const EXPORT_TYPES: ExportTypeMeta[] = [
-  { count: 812, id: "inventory", label: "Inventory" },
-  { count: 341, id: "requests", label: "Requests" },
-  { count: 1284, id: "logs", label: "Audit logs" },
+  { id: "inventory", label: "Inventory" },
+  { id: "requests", label: "Requests" },
+  { id: "logs", label: "Audit logs" },
 ];
 
-export type ExportFormat = "csv" | "json";
+export type ExportFormat = "csv" | "json" | "xlsx";
 
 export interface ImportDiff {
   /** Per-type change counts */
@@ -27,6 +31,16 @@ export interface ImportDiff {
     updates: number;
   };
   fileName: string;
+  /**
+   * Present only when the file is an inventory sheet the importer can actually
+   * write. Anything else is a preview: confirming it imports nothing.
+   */
+  inventory?: {
+    /** `YYYY-MM` the daily grid is recorded under */
+    month: string;
+    /** Where that month came from, e.g. "from the file name" */
+    monthNote: string;
+  };
   kind: "csv" | "db" | "json";
   sample: ImportSampleRow[];
   /** Human-readable cautions surfaced above the confirm action */
@@ -38,6 +52,3 @@ export interface ImportSampleRow {
   id: string;
   label: string;
 }
-
-export const EXISTING_INVENTORY_ROWS = 812;
-export const EXISTING_REQUEST_ROWS = 341;
