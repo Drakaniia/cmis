@@ -3,7 +3,7 @@ import { cn } from "@cmis/ui/lib/utils";
 import { Clock, Package, X } from "lucide-react";
 import { motion, useReducedMotion } from "motion/react";
 import { useEffect, useRef } from "react";
-import { daysUntilExpiry, expiryLabel } from "../mock";
+import { daysUntilExpiry, expiryLabel } from "../domain/expiry";
 import type { InventoryItem } from "../types";
 
 function StatusMarker({ status }: { status: InventoryItem["status"] }) {

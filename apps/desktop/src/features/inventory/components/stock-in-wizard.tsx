@@ -10,7 +10,13 @@ import {
   useState,
 } from "react";
 import { toast } from "sonner";
-import { expiryLabel, mockSuppliers } from "../mock";
+import { expiryLabel } from "../domain/expiry";
+import { SUPPLIER_LEAD_TIMES } from "../domain/low-stock";
+
+const mockSuppliers = SUPPLIER_LEAD_TIMES.map(
+  (s) => s.name
+) as unknown as readonly string[];
+
 import type { InventoryItem } from "../types";
 import { INVENTORY_CATEGORIES } from "../types";
 import { WizardShell } from "./wizard-shell";

@@ -10,7 +10,7 @@ import { cn } from "@cmis/ui/lib/utils";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { ArrowDown, ArrowUp, ArrowUpDown, Package } from "lucide-react";
 import { type MouseEvent, type ReactElement, useCallback, useRef } from "react";
-import { daysUntilExpiry } from "../mock";
+import { daysUntilExpiry } from "../domain/expiry";
 import type { InventoryItem, SortKey } from "../types";
 
 const STATUS_DOT_CONFIG: Record<

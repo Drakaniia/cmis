@@ -33,7 +33,7 @@ import {
   EXPIRY_STATUS_CONFIG,
   expiryLabel,
   relativeExpiryText,
-} from "../mock-expiry";
+} from "../domain/expiry";
 import type { ExpiryRow, SortKey } from "../types";
 
 /**
@@ -474,7 +474,7 @@ export function ExpiryList({
       {/* Header — CMIS-UI-03 §2 table columns */}{" "}
       <div
         className={cn(
-          "sticky top-0 z-[1] grid shrink-0 items-center gap-2 border-border/50 border-b bg-muted/60 px-2 py-1 font-medium text-caption",
+          "sticky top-0 z-[1] grid shrink-0 items-center gap-2 border-border/50 border-b bg-card/95 px-2 py-1 font-medium text-caption backdrop-blur-[6px]",
           gridCols
         )}
         role="row"
@@ -512,7 +512,7 @@ export function ExpiryList({
       {/* Virtual rows */}
       <div
         aria-label="Expiry alerts list"
-        className="flex-1 overflow-auto bg-card"
+        className="flex-1 overflow-auto"
         ref={parentRef}
         role="table"
       >

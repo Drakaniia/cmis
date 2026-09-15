@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { buildExpiryRows } from "../mock-expiry";
+import { buildExpiryRows } from "../domain/expiry";
 import type {
   ExpiryDatePreset,
   ExpiryFilters,

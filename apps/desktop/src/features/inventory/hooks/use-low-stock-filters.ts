@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { buildLowStockRows } from "../mock-low-stock";
+import { buildLowStockRows } from "../domain/low-stock";
 import type {
   InventoryItem,
   LowStockFilters,

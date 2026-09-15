@@ -31,7 +31,7 @@ import { motion } from "motion/react";
 import { type MouseEvent, type ReactElement, useCallback, useRef } from "react";
 
 import { densitySpring } from "@/lib/motion";
-import { getLeadTime, LOW_STOCK_STATUS_CONFIG } from "../mock-low-stock";
+import { getLeadTime, LOW_STOCK_STATUS_CONFIG } from "../domain/low-stock";
 import type { LowStockRow, LowStockSortKey } from "../types";
 
 const SKELETON_ROW_KEYS = Array.from(
@@ -520,7 +520,7 @@ export function LowStockList({
       {/* Header — CMIS-UI-04 §2 table columns */}
       <div
         className={cn(
-          "sticky top-0 z-[1] grid shrink-0 items-center gap-2 border-border/50 border-b bg-muted/60 px-2 py-1 font-medium text-caption",
+          "sticky top-0 z-[1] grid shrink-0 items-center gap-2 border-border/50 border-b bg-card/95 px-2 py-1 font-medium text-caption backdrop-blur-[6px]",
           gridCols
         )}
         role="row"
@@ -565,7 +565,7 @@ export function LowStockList({
       {/* Virtual rows */}
       <div
         aria-label="Low-stock alerts list"
-        className="flex-1 overflow-auto bg-card"
+        className="flex-1 overflow-auto"
         ref={parentRef}
         role="table"
       >
