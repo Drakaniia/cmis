@@ -1,6 +1,6 @@
-sparklines, trend data,
+backup data is still .json or .db,  i want to to also have manual option, backup or export ad very detailed xlsx,  that is importable to the same app when using this app
 
-replace all hardcoded value or all const value into real backend ipc integration
-move the toast in the bottom right
+so when i fillup template,, and try to import it, will it now work?
 
-add sparklines or line chart inside in the right side of the TOTAL ITEMS, LOW STOCK, PENDING REQUESTS, AND EXPIRING IN, in Home Dashbaord page
+
+you are  on latest versoin taost when i click check for update in the help navbar
