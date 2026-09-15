@@ -1,9 +1,10 @@
 import { Button } from "@cmis/ui/components/button";
 import { cn } from "@cmis/ui/lib/utils";
-import { X } from "lucide-react";
+import { Check, Copy, X } from "lucide-react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import {
   type ChangeEvent,
+  type ClipboardEvent,
   type ReactNode,
   useCallback,
   useEffect,
@@ -48,6 +49,7 @@ export function ConfirmModal({
 }) {
   const [typed, setTyped] = useState("");
   const [attempted, setAttempted] = useState(false);
+  const [copied, setCopied] = useState(false);
   const reduceMotion = useReducedMotion();
   const variants = reduceMotion ? materializeEnterReduced : materializeEnter;
 
@@ -55,6 +57,7 @@ export function ConfirmModal({
     if (open) {
       setTyped("");
       setAttempted(false);
+      setCopied(false);
     }
   }, [open]);
 
@@ -85,12 +88,19 @@ export function ConfirmModal({
     onOpenChange(false);
   }, [onOpenChange]);
 
-  const handleTypedChange = useCallback(
-    (event: ChangeEvent<HTMLInputElement>) => {
-      setTyped(event.target.value);
-    },
-    []
-  );
+  const handleCopy = useCallback(async () => {
+    if (!typeToConfirm) {
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(typeToConfirm);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1400);
+    } catch {
+      // fallback: select input text
+      setCopied(false);
+    }
+  }, [typeToConfirm]);
 
   const transformOrigin = "center center";
 
@@ -150,23 +160,15 @@ export function ConfirmModal({
                 {children}
 
                 {typeToConfirm ? (
-                  <label className="block text-caption text-foreground">
-                    Type <span className="font-semibold">{typeToConfirm}</span>{" "}
-                    to confirm
-                    <input
-                      className={cn(
-                        "mt-1 h-8 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus:border-ring focus:ring-1 focus:ring-ring",
-                        attempted && !satisfied && "border-destructive"
-                      )}
-                      onChange={handleTypedChange}
-                      value={typed}
-                    />
-                    {attempted && !satisfied ? (
-                      <span className="mt-1 block text-destructive">
-                        Text does not match.
-                      </span>
-                    ) : null}
-                  </label>
+                  <TypeToConfirmField
+                    attempted={attempted}
+                    copied={copied}
+                    onCopy={handleCopy}
+                    onTypedText={setTyped}
+                    satisfied={satisfied}
+                    typed={typed}
+                    typeToConfirm={typeToConfirm}
+                  />
                 ) : null}
               </div>
 
@@ -180,7 +182,12 @@ export function ConfirmModal({
                   Cancel
                 </Button>
                 <Button
-                  className="press-feedback"
+                  aria-disabled={!satisfied}
+                  className={cn(
+                    "press-feedback transition-opacity",
+                    destructive && !satisfied && "opacity-50"
+                  )}
+                  disabled={!satisfied}
                   onClick={handleConfirm}
                   size="sm"
                   variant={destructive ? "destructive" : "default"}
@@ -193,5 +200,98 @@ export function ConfirmModal({
         </>
       ) : null}
     </AnimatePresence>
+  );
+}
+
+/**
+ * The "type the name to confirm" field, with the copy shortcut beside it.
+ *
+ * It owns the paste handling because WebViews occasionally deliver clipboard
+ * text without firing a change event: mirroring it on the next microtask keeps
+ * the typed text — and the confirm button — in step either way.
+ */
+function TypeToConfirmField({
+  attempted,
+  copied,
+  onCopy,
+  onTypedText,
+  satisfied,
+  typeToConfirm,
+  typed,
+}: {
+  attempted: boolean;
+  copied: boolean;
+  onCopy: () => void;
+  onTypedText: (value: string) => void;
+  satisfied: boolean;
+  typeToConfirm: string;
+  typed: string;
+}) {
+  const handleTypedChange = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => {
+      onTypedText(event.target.value);
+    },
+    [onTypedText]
+  );
+
+  const handlePaste = useCallback(
+    (event: ClipboardEvent<HTMLInputElement>) => {
+      const pasted = event.clipboardData.getData("text");
+      if (!pasted) {
+        return;
+      }
+      const target = event.currentTarget;
+      // Run after the browser has applied the default input value.
+      queueMicrotask(() => onTypedText(target.value));
+    },
+    [onTypedText]
+  );
+
+  return (
+    <div className="block text-caption text-foreground">
+      <div className="inline-flex flex-wrap items-center gap-1.5">
+        <label htmlFor="confirm-type-input">
+          Type{" "}
+          <span className="inline-flex items-center gap-1 rounded bg-muted px-1.5 py-0.5 font-semibold">
+            {typeToConfirm}
+          </span>{" "}
+          to confirm
+        </label>
+        <Button
+          aria-label={`Copy ${typeToConfirm}`}
+          className="h-6 px-1.5"
+          onClick={onCopy}
+          size="sm"
+          type="button"
+          variant="ghost"
+        >
+          {copied ? (
+            <Check className="size-3.5 text-[var(--success)]" />
+          ) : (
+            <Copy className="size-3.5" />
+          )}
+          <span className="text-[11px]">{copied ? "Copied" : "Copy"}</span>
+        </Button>
+      </div>
+      <input
+        aria-label={`Type ${typeToConfirm} to confirm`}
+        autoComplete="off"
+        autoCorrect="off"
+        className={cn(
+          "mt-1 h-8 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus:border-ring focus:ring-1 focus:ring-ring",
+          attempted && !satisfied && "border-destructive"
+        )}
+        id="confirm-type-input"
+        onChange={handleTypedChange}
+        onPaste={handlePaste}
+        spellCheck={false}
+        value={typed}
+      />
+      {attempted && !satisfied ? (
+        <span className="mt-1 block text-destructive">
+          Text does not match.
+        </span>
+      ) : null}
+    </div>
   );
 }
