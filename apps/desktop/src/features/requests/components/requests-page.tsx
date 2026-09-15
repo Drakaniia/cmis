@@ -9,7 +9,6 @@ import type { DispensePayload } from "../hooks/use-request-board";
 import { countInStatus, useRequestBoard } from "../hooks/use-request-board";
 import { useRequestFilters } from "../hooks/use-request-filters";
 import { useRequestPersistence } from "../hooks/use-request-persistence";
-import { mockRequests } from "../mock";
 import type { RequestsSearch } from "../request-search";
 import {
   filtersFromSearch,
@@ -75,8 +74,8 @@ function acceptsTypedText(target: EventTarget | null): boolean {
 export function RequestsPage({ to }: { to: "/admin/requests" }) {
   const { density } = useDensity();
   const now = useNow();
-  const persistence = useRequestPersistence(mockRequests);
-  const board = useRequestBoard(mockRequests, persistence.persist);
+  const persistence = useRequestPersistence([]);
+  const board = useRequestBoard([], persistence.persist);
   const navigate = useNavigate();
   const search: RequestsSearch = useSearch({ from: to });
 
