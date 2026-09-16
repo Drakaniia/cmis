@@ -107,6 +107,55 @@ const ADMIN_NAV: NavSection[] = [
   },
 ];
 
+/*
+ * CMIS-UI-00 §2.1 — rail geometry.
+ *
+ * A tab icon is anchored to the *collapsed* rail's centre column, so the one
+ * thing that never moves while the panel springs between widths is the icon
+ * itself (Apple §2 direct manipulation, §7 spatial consistency). Every offset
+ * below is derived from the two rail widths instead of being pinned per
+ * element, which is what makes the anchor hold in both states.
+ */
+const RAIL_WIDTH_COLLAPSED = 68;
+const RAIL_WIDTH_EXPANDED = 248;
+/** `px-2` on the nav scroller — the gutter between the rail edge and a tab. */
+const RAIL_PAD_X = 8;
+/** `size-3.5`. */
+const TAB_ICON_SIZE = 14;
+/** The icon's gravity point, measured from the aside's left edge. */
+const ICON_COLUMN_CENTER = RAIL_WIDTH_COLLAPSED / 2;
+/** Link-relative offsets, and a link starts at RAIL_PAD_X. */
+const TAB_ICON_LEFT = ICON_COLUMN_CENTER - RAIL_PAD_X - TAB_ICON_SIZE / 2;
+/** Icon → `gap-2` → label, so the label keeps its original spacing. */
+const TAB_LABEL_LEFT = TAB_ICON_LEFT + TAB_ICON_SIZE + 8;
+/** `pr-2` on the link — keeps the badge off the pill's own edge. */
+const TAB_LABEL_RIGHT_PAD = 8;
+/**
+ * The label keeps a fixed box and is clipped by the rail rather than being
+ * unmounted, so hiding it can never re-measure the row around it.
+ */
+const TAB_LABEL_WIDTH =
+  RAIL_WIDTH_EXPANDED - RAIL_PAD_X * 2 - TAB_LABEL_RIGHT_PAD;
+
+/** `gap-2.5` — the mark keeps its original breathing room from the wordmark. */
+const BRAND_MARK_GAP = 10;
+/** `size-7`. */
+const BRAND_MARK_SIZE = 28;
+/** `pr-3` on the brand row. */
+const BRAND_ROW_PAD_RIGHT = 12;
+/**
+ * Apple §7 spatial consistency — the mark and (on hover, while collapsed) the
+ * expand affordance occupy one rail-anchored slot, so the morph between them
+ * happens in place instead of jumping to the centre.
+ */
+const BRAND_SLOT = { left: 0, width: RAIL_WIDTH_COLLAPSED } as const;
+/** The wordmark starts where the centred mark ends, plus BRAND_MARK_GAP. */
+const BRAND_LABEL_LEFT =
+  ICON_COLUMN_CENTER + BRAND_MARK_SIZE / 2 + BRAND_MARK_GAP;
+/** Fixed box, so hiding the wordmark can never re-measure the row. */
+const BRAND_LABEL_WIDTH =
+  RAIL_WIDTH_EXPANDED - BRAND_LABEL_LEFT - BRAND_ROW_PAD_RIGHT;
+
 function NavItemLink({
   item,
   active,
@@ -130,11 +179,10 @@ function NavItemLink({
     <Link
       aria-current={active ? "page" : undefined}
       className={cn(
-        "press-feedback group relative flex items-center gap-2 rounded-[6px] px-2.5 py-1.5 text-[13px] leading-tight",
+        "press-feedback group relative flex items-center rounded-[6px] py-1.5 pr-2 text-[13px] leading-tight",
         active
           ? "bg-primary/10 font-semibold text-primary"
-          : "font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground",
-        collapsed && "justify-center px-0 py-1.5"
+          : "font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground"
       )}
       data-label={item.label}
       onMouseEnter={onMouseEnter}
@@ -147,28 +195,43 @@ function NavItemLink({
           className="absolute top-1/2 left-0 h-3.5 w-[2.5px] -translate-y-1/2 rounded-r-full bg-primary"
         />
       ) : null}
-      <item.icon
+      {/* The icon is out of flow and pinned to the rail centre, so the fading
+          label below can never re-measure it (Apple §2, §7). */}
+      <span
         aria-hidden
-        className={cn(
-          "size-3.5 shrink-0 transition-colors",
-          active
-            ? "text-primary"
-            : "text-muted-foreground/80 group-hover:text-accent-foreground"
-        )}
-      />{" "}
-      {collapsed ? null : (
-        <span className="min-w-0 flex-1 truncate">{item.label}</span>
-      )}
-      {showBadge && badge ? (
-        <span
+        className="pointer-events-none absolute top-1/2 -translate-y-1/2"
+        style={{ left: TAB_ICON_LEFT }}
+      >
+        <item.icon
           className={cn(
-            "ml-auto shrink-0 rounded-full px-1.5 py-0.25 font-semibold text-[10px] tabular-nums leading-none",
-            badge.className
+            "size-3.5 transition-colors",
+            active
+              ? "text-primary"
+              : "text-muted-foreground/80 group-hover:text-accent-foreground"
           )}
-        >
-          {badge.count}
-        </span>
-      ) : null}
+        />
+      </span>
+      {/* Collapsing hides *only* the label — it keeps its box and fades, so the
+          rail clips it instead of the row reflowing around it. */}
+      <span
+        className={cn(
+          "flex shrink-0 items-center gap-2 transition-opacity duration-200",
+          collapsed && "opacity-0"
+        )}
+        style={{ paddingLeft: TAB_LABEL_LEFT, width: TAB_LABEL_WIDTH }}
+      >
+        <span className="min-w-0 flex-1 truncate">{item.label}</span>
+        {showBadge && badge ? (
+          <span
+            className={cn(
+              "shrink-0 rounded-full px-1.5 py-0.25 font-semibold text-[10px] tabular-nums leading-none",
+              badge.className
+            )}
+          >
+            {badge.count}
+          </span>
+        ) : null}
+      </span>
     </Link>
   );
 
@@ -237,6 +300,12 @@ export function AppSidebar({
     }
   }, [collapsed]);
 
+  /** Dropping the hover flag too, so the mark is back the next time it opens. */
+  const handleBrandToggle = useCallback(() => {
+    setBrandHovered(false);
+    onToggle();
+  }, [onToggle]);
+
   const handleItemMouseEnter = useCallback(
     (event: React.MouseEvent<HTMLAnchorElement>) => {
       if (collapsed) {
@@ -255,61 +324,35 @@ export function AppSidebar({
 
   return (
     <motion.aside
-      animate={{ width: collapsed ? 68 : 248 }}
+      animate={{
+        width: collapsed ? RAIL_WIDTH_COLLAPSED : RAIL_WIDTH_EXPANDED,
+      }}
       aria-label="Sidebar"
       className="material-sidebar relative z-10 flex h-full shrink-0 flex-col overflow-hidden border-border/60 border-r"
       transition={reduceMotion ? { duration: 0 } : chromeSpring}
     >
       {/* Brand — maroon mark so the identity reads before any nav label. */}
       <div
-        className={cn(
-          "flex h-14 shrink-0 items-center px-3",
-          collapsed ? "justify-center" : "gap-2.5"
-        )}
+        className="relative flex h-14 shrink-0 items-center pr-3"
         onMouseEnter={handleBrandMouseEnter}
         onMouseLeave={handleBrandMouseLeave}
         role="none"
       >
-        {collapsed ? (
-          <>
-            {/* Logo — cross-fades with expand icon on hover */}
-            <div
-              className={cn(
-                "flex items-center transition-opacity duration-200",
-                brandHovered && "pointer-events-none opacity-0"
-              )}
-            >
-              <img
-                alt="CMIS logo"
-                className="size-7 shrink-0 rounded-[0.5rem] dark:hidden"
-                height={28}
-                src="/cmis-dark-rounded.png"
-                width={28}
-              />
-              <img
-                alt="CMIS logo"
-                className="hidden size-7 shrink-0 rounded-[0.5rem] dark:block"
-                height={28}
-                src="/cmis-white-rounded.png"
-                width={28}
-              />
-            </div>
-            {/* Expand icon — revealed on hover */}
-            <Button
-              aria-label="Expand sidebar"
-              className={cn(
-                "press-feedback absolute transition-opacity duration-200",
-                brandHovered ? "opacity-100" : "pointer-events-none opacity-0"
-              )}
-              onClick={onToggle}
-              size="icon-sm"
-              variant="ghost"
-            >
-              <PanelLeftOpen className="size-4" />
-            </Button>
-          </>
-        ) : (
-          <>
+        {/*
+         * Apple §7 spatial consistency — the mark is pinned to the same centre
+         * column as every tab icon and is never unmounted, so collapsing can
+         * only hide the wordmark: it cannot blink the image or slide the mark.
+         */}
+        <div
+          className="pointer-events-none absolute inset-y-0 flex items-center justify-center"
+          style={BRAND_SLOT}
+        >
+          <div
+            className={cn(
+              "flex items-center transition-opacity duration-200",
+              collapsed && brandHovered && "opacity-0"
+            )}
+          >
             <img
               alt="CMIS logo"
               className="size-7 shrink-0 rounded-[0.5rem] dark:hidden"
@@ -324,24 +367,53 @@ export function AppSidebar({
               src="/cmis-white-rounded.png"
               width={28}
             />
-            <span className="min-w-0 flex-1">
-              <span className="block truncate font-semibold text-foreground text-xs leading-tight">
-                CMIS
-              </span>
-              <span className="block truncate text-[10.5px] text-muted-foreground leading-tight">
-                BukSU Clinic
-              </span>
-            </span>
+          </div>
+        </div>
+        {/* Expand affordance — the mark morphs into it in place on hover. */}
+        {collapsed ? (
+          <div
+            className={cn(
+              "absolute inset-y-0 flex items-center justify-center transition-opacity duration-200",
+              brandHovered ? "opacity-100" : "pointer-events-none opacity-0"
+            )}
+            style={BRAND_SLOT}
+          >
             <Button
-              aria-label="Collapse sidebar"
-              className="press-feedback -mr-1"
-              onClick={onToggle}
+              aria-label="Expand sidebar"
+              className="press-feedback"
+              onClick={handleBrandToggle}
               size="icon-sm"
               variant="ghost"
             >
-              <PanelLeftClose className="size-4" />
+              <PanelLeftOpen className="size-4" />
             </Button>
-          </>
+          </div>
+        ) : null}
+        {/* Wordmark — fills its fixed box and is clipped by the rail on close. */}
+        <span
+          className={cn(
+            "pointer-events-none flex shrink-0 flex-col justify-center transition-opacity duration-200",
+            collapsed && "opacity-0"
+          )}
+          style={{ paddingLeft: BRAND_LABEL_LEFT, width: BRAND_LABEL_WIDTH }}
+        >
+          <span className="truncate font-semibold text-foreground text-xs leading-tight">
+            CMIS
+          </span>
+          <span className="truncate text-[10.5px] text-muted-foreground leading-tight">
+            BukSU Clinic
+          </span>
+        </span>
+        {collapsed ? null : (
+          <Button
+            aria-label="Collapse sidebar"
+            className="press-feedback -mr-1 ml-auto"
+            onClick={handleBrandToggle}
+            size="icon-sm"
+            variant="ghost"
+          >
+            <PanelLeftClose className="size-4" />
+          </Button>
         )}
       </div>
 
@@ -350,19 +422,33 @@ export function AppSidebar({
           <div className="space-y-3.5">
             {sections.map((section) => (
               <div key={section.title}>
-                {collapsed ? (
-                  <div aria-hidden className="mx-2 mb-2 h-px bg-border/70" />
-                ) : (
-                  <p className="mb-1 px-2.5 font-semibold text-[10.5px] text-muted-foreground/70 uppercase tracking-[0.06em]">
+                {/*
+                 * Apple §7 spatial consistency — the heading and its collapsed
+                 * stand-in (a hairline rule) cross-fade inside one fixed-height
+                 * row, so the tabs below never shift when the panel closes.
+                 */}
+                <div className="relative">
+                  <div
+                    aria-hidden
+                    className={cn(
+                      "absolute inset-x-2 top-1/2 h-px -translate-y-1/2 bg-border/70 transition-opacity duration-200",
+                      collapsed ? "opacity-100" : "opacity-0"
+                    )}
+                  />
+                  <p
+                    className={cn(
+                      "mb-1 truncate px-2.5 font-semibold text-[10.5px] text-muted-foreground/70 uppercase tracking-[0.06em] transition-opacity duration-200",
+                      collapsed && "opacity-0"
+                    )}
+                  >
                     {section.title}
                   </p>
-                )}
+                </div>
                 <nav className="space-y-0.5">
                   {section.items.map((item) => {
                     const active = pathname === item.to;
                     const badge = resolveBadge(item.label, badgeCounts);
                     const showBadge =
-                      !collapsed &&
                       badge !== null &&
                       badge.count !== undefined &&
                       badge.count > 0;

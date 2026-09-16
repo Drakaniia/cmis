@@ -231,7 +231,14 @@ export function UpdaterProvider({ children }: { children: React.ReactNode }) {
     // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: orchestrator check flow per spec §3.1-§3.8
     async (opts?: { silent?: boolean }) => {
       const silent = opts?.silent ?? false;
+      // Dev has no Tauri updater plugin, but an explicit check must still give
+      // feedback — otherwise the Help/Settings action looks broken.
       if (devGuard) {
+        if (!silent) {
+          showUpToDateToast(
+            versionRef.current ?? state.currentVersion ?? "0.0.0"
+          );
+        }
         return;
       }
       if (state.status === "checking") {
@@ -357,7 +364,7 @@ export function UpdaterProvider({ children }: { children: React.ReactNode }) {
         });
       }
     },
-    [doDownload, state.status]
+    [doDownload, state.currentVersion, state.status]
   );
 
   // Deferred ready-toast: when blocking modal closes, show the queued ready toast

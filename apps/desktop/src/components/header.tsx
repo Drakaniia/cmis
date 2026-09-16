@@ -40,9 +40,6 @@ function resolveTitle(pathname: string): string {
   if (normalized.startsWith("/admin/data")) {
     return "Data Export / Import";
   }
-  if (normalized.startsWith("/admin/users")) {
-    return "User Management";
-  }
   if (normalized.startsWith("/admin/settings")) {
     return "System Settings";
   }

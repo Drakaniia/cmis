@@ -275,11 +275,6 @@ export const MENUS: MenuDef[] = [
         label: "Go to Data Export / Import",
       },
       {
-        action: { to: "/admin/users", type: "navigate" },
-        id: "view.go-users",
-        label: "Go to User Management",
-      },
-      {
         action: { to: "/admin/settings", type: "navigate" },
         id: "view.go-settings",
         label: "Go to Settings",
