@@ -6,8 +6,8 @@
   "keywords": [
     "cmis",
     "config",
-    "typescript",
-    "tooling"
+    "tooling",
+    "typescript"
   ],
   "homepage": "https://github.com/Drakaniia/cmis#readme",
   "bugs": {

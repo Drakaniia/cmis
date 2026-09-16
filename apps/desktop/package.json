@@ -5,10 +5,10 @@
   "description": "CMIS desktop frontend — TanStack Router + Tauri app for clinic inventory, requests, and dispensing",
   "keywords": [
     "cmis",
-    "tauri",
-    "tanstack-router",
     "desktop",
-    "inventory"
+    "inventory",
+    "tanstack-router",
+    "tauri"
   ],
   "homepage": "https://github.com/Drakaniia/cmis#readme",
   "bugs": {
