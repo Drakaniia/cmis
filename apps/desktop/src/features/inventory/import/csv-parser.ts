@@ -1,3 +1,9 @@
+import { identityKey } from "../domain/identity";
+import {
+  composeDisplayName,
+  isDetailsIncomplete,
+  normalizeText,
+} from "../domain/strength";
 import type { ImportWarning, ParsedInventoryRow, ParseResult } from "./types";
 
 const EXPECTED_COLUMNS = 41;
@@ -174,32 +180,28 @@ function coerceDailyCell(
   return coerced;
 }
 
-function assembleDosage(
+/**
+ * Composes the full label from the template's four strength columns.
+ *
+ * Kept as a thin, named wrapper over `domain/strength.ts` so the importer, the
+ * exporter, the creation form and the backfill cannot drift: they all render a
+ * row through the same rule, which is what makes a re-import match the row it
+ * came from instead of creating a second one (§7.1).
+ */
+export function assembleDisplayName(
+  name: string,
   strengthValue: string,
   strengthUnit: string,
   form: string,
   packSize: string
 ): string {
-  const sv = strengthValue.trim();
-  const su = strengthUnit.trim();
-  const f = form.trim();
-  const ps = packSize.trim();
-  // collapse strength_value + strength_unit with single space if both present
-  const parts: string[] = [];
-  if (sv && su) {
-    parts.push(`${sv} ${su}`);
-  } else if (sv) {
-    parts.push(sv);
-  } else if (su) {
-    parts.push(su);
-  }
-  if (f) {
-    parts.push(f);
-  }
-  if (ps) {
-    parts.push(ps);
-  }
-  return parts.join(" ").replace(/\s+/g, " ").trim();
+  return composeDisplayName({
+    form,
+    name,
+    packSize,
+    strengthUnit,
+    strengthValue,
+  });
 }
 
 /** Header echo vs the template contract (spec 5.1 #3). */
@@ -296,7 +298,7 @@ type RowDecision = { keep: true } | { keep: false; reason: string | null };
 /** Rows without a name are skipped; only ones carrying data earn a warning. */
 function classifyRow(
   name: string,
-  dosage: string,
+  strength: string,
   restAllBlank: boolean
 ): RowDecision {
   if (name !== "") {
@@ -308,8 +310,8 @@ function classifyRow(
   return {
     keep: false,
     reason:
-      dosage === ""
-        ? "row with blank name+dosage but has data — skipped"
+      strength === ""
+        ? "row with blank name+strength but has data — skipped"
         : "row with blank name — skipped",
   };
 }
@@ -346,9 +348,19 @@ function parseRow(
   const strengthUnit = cellAt(cells, 2).trim();
   const form = cellAt(cells, 3).trim();
   const packSize = cellAt(cells, 4).trim();
-  const dosage = assembleDosage(strengthValue, strengthUnit, form, packSize);
+  const displayName = assembleDisplayName(
+    name,
+    strengthValue,
+    strengthUnit,
+    form,
+    packSize
+  );
 
-  const decision = classifyRow(name, dosage, isRestAllBlank(cells));
+  const decision = classifyRow(
+    name,
+    normalizeText(`${strengthValue} ${strengthUnit} ${form} ${packSize}`),
+    isRestAllBlank(cells)
+  );
   if (!decision.keep) {
     if (decision.reason) {
       warnings.push({
@@ -423,14 +435,23 @@ function parseRow(
     category,
     daily,
     dailySum,
-    dosage,
-    dosageMissing: dosage === "",
+    detailsIncomplete: isDetailsIncomplete({
+      form,
+      packSize,
+      strengthUnit,
+      strengthValue,
+    }),
+    displayName,
+    form,
     // The strict template has no NO STOCK text: blank/0 stock always means qty 0.
     isNoStock: false,
     name,
+    packSize,
     row: rowNum,
     stockOnHand,
     stockRemaining,
+    strengthUnit,
+    strengthValue,
     supplier,
     totalDispensed,
     totalMismatch,
@@ -452,7 +473,7 @@ export function parseInventoryCsv(
     (rawLines.length === 1 && rawLines[0].trim() === "")
   ) {
     return {
-      dosageMissingCount: 0,
+      detailsIncompleteCount: 0,
       mismatchCount: 0,
       rows,
       skippedEmptyRows,
@@ -483,15 +504,17 @@ export function parseInventoryCsv(
     rows.push(row);
   }
 
-  // Post-process duplicate keys within file: warn last wins
+  // Post-process duplicate keys within file: warn last wins. The key is the same
+  // `name + four fields` identity the importer dedupes against the database on,
+  // so a file cannot warn about one pair and then insert against another.
   const seen = new Map<string, number>();
   for (const r of rows) {
-    const key = `${r.name.toLowerCase().trim()}|${r.dosage.toLowerCase().trim()}`;
+    const key = identityKey(r);
     if (seen.has(key)) {
       warnings.push({
         coerced: null,
         column: "name",
-        raw: `${r.name} / ${r.dosage}`,
+        raw: r.displayName || r.name,
         reason: `duplicate key ${key} — last row wins`,
         row: r.row,
       });
@@ -499,11 +522,11 @@ export function parseInventoryCsv(
     seen.set(key, r.row);
   }
 
-  const dosageMissingCount = rows.filter((r) => r.dosageMissing).length;
+  const detailsIncompleteCount = rows.filter((r) => r.detailsIncomplete).length;
   const mismatchCount = rows.filter((r) => r.totalMismatch).length;
 
   return {
-    dosageMissingCount,
+    detailsIncompleteCount,
     mismatchCount,
     rows,
     skippedEmptyRows,

@@ -69,7 +69,13 @@ function createMockDb(
     if (sql.includes("SELECT sku FROM inventory_items")) {
       return [];
     }
-    if (sql.includes("SELECT id, name, dosage")) {
+    // The importer selects the strength columns plus the legacy `dosage` the
+    // fallback key is built from.
+    if (
+      sql.includes("SELECT id, name, dosage") ||
+      sql.includes("FROM inventory_items\n") ||
+      sql.includes("display_name, strength_value")
+    ) {
       return existing;
     }
     if (sql.includes("SELECT COUNT")) {
@@ -309,8 +315,9 @@ describe("importInventoryCsv", () => {
       String(c[0]).includes("INSERT INTO inventory_items")
     );
     const params = insert?.[1] as unknown[];
-    // category param index 13
-    expect(params[13]).toBe("Analgesic");
+    // The INSERT now carries the four strength columns and `display_name` ahead
+    // of `category`, which sits at index 17.
+    expect(params[17]).toBe("Analgesic");
   });
 
   it("creates backup table and keeps last 3", async () => {

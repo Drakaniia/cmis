@@ -18,10 +18,13 @@ function row(overrides: Partial<InventoryExportRow> = {}): InventoryExportRow {
   return {
     category: "Analgesic",
     daily,
-    dosage: "500 mg tabs (100/box)",
+    form: "tabs",
     name: "Paracetamol",
+    packSize: "(100/box)",
     stockOnHand: 100,
     stockRemaining: 90,
+    strengthUnit: "mg",
+    strengthValue: "500",
     supplier: "Acme Pharma",
     totalDispensed: 10,
     ...overrides,
@@ -42,7 +45,13 @@ describe("inventory export → import round trip", () => {
     expect(parsed.rows).toHaveLength(1);
     const [item] = parsed.rows;
     expect(item?.name).toBe("Paracetamol");
-    expect(item?.dosage).toBe("500 mg tabs (100/box)");
+    // The four columns come back verbatim — the writer no longer guesses them
+    // from a composed string (decision 14).
+    expect(item?.strengthValue).toBe("500");
+    expect(item?.strengthUnit).toBe("mg");
+    expect(item?.form).toBe("tabs");
+    expect(item?.packSize).toBe("(100/box)");
+    expect(item?.displayName).toBe("Paracetamol 500 mg tabs (100/box)");
     expect(item?.stockOnHand).toBe(100);
     expect(item?.dailySum).toBe(10);
     // Regression: formula-only cells read back as blank → totals were lost.

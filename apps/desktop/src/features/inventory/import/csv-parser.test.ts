@@ -58,10 +58,17 @@ describe("parseInventoryCsv", () => {
     const result = parseInventoryCsv(csv);
     expect(result.rows).toHaveLength(1);
     expect(result.rows[0].name).toBe("Ascorbic Acid Syrup");
-    // assembled dosage is "100 mg/5ml syrup 120 ml" per spec §4.4
-    expect(result.rows[0].dosage).toBe("100 mg/5ml syrup 120 ml");
+    // The four columns are carried as parsed, not collapsed into a `dosage`
+    // string (decision 5); the label is composed from them.
+    expect(result.rows[0].strengthValue).toBe("100");
+    expect(result.rows[0].strengthUnit).toBe("mg/5ml");
+    expect(result.rows[0].form).toBe("syrup");
+    expect(result.rows[0].packSize).toBe("120 ml");
+    expect(result.rows[0].displayName).toBe(
+      "Ascorbic Acid Syrup 100 mg/5ml syrup 120 ml"
+    );
     expect(result.rows[0].stockOnHand).toBeNull();
-    expect(result.rows[0].dosageMissing).toBe(false);
+    expect(result.rows[0].detailsIncomplete).toBe(false);
   });
 
   it("coerces 14a to 14 with warning and 440 (April) via numeric extractor", () => {
@@ -163,7 +170,7 @@ describe("parseInventoryCsv", () => {
     expect(result.skippedEmptyRows).toBe(1);
   });
 
-  it("flags blank dosage with dosageMissing and dosageMissingCount", () => {
+  it("flags blank strength columns with detailsIncomplete and its count", () => {
     const line = build41Row({
       daily: new Array(31).fill(""),
       name: "Ciprofloxacin",
@@ -171,9 +178,9 @@ describe("parseInventoryCsv", () => {
     });
     const csv = [HEADER, line].join("\n");
     const result = parseInventoryCsv(csv);
-    expect(result.rows[0].dosageMissing).toBe(true);
-    expect(result.rows[0].dosage).toBe("");
-    expect(result.dosageMissingCount).toBe(1);
+    expect(result.rows[0].detailsIncomplete).toBe(true);
+    expect(result.rows[0].displayName).toBe("Ciprofloxacin");
+    expect(result.detailsIncompleteCount).toBe(1);
   });
 
   it("detects total vs daily sum mismatch and sets totalMismatch", () => {
@@ -307,7 +314,7 @@ describe("parseInventoryCsv", () => {
     expect(result.rows[0].supplier).toBe("Acme Pharma");
   });
 
-  it("assembles dosage per spec §4.4 examples", () => {
+  it("composes the display label per spec §4.4 examples", () => {
     const cases: Array<{
       input: Parameters<typeof build41Row>[0];
       expected: string;
@@ -354,7 +361,7 @@ describe("parseInventoryCsv", () => {
       });
       const csv = [HEADER, line].join("\n");
       const result = parseInventoryCsv(csv);
-      expect(result.rows[0].dosage).toBe(c.expected);
+      expect(result.rows[0].displayName).toBe(`Probe ${c.expected}`.trim());
     }
   });
 });

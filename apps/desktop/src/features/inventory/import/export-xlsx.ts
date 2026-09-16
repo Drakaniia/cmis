@@ -1,146 +1,30 @@
 import { utils, writeFile } from "xlsx";
 import { INVENTORY_TEMPLATE_HEADERS } from "./csv-parser";
 
+/**
+ * Template export (spec §10, decision 14).
+ *
+ * The four strength columns are written **from the stored values**, verbatim.
+ * The exporter used to run regex heuristics over a flattened `dosage` string to
+ * reconstruct columns the importer had thrown away, which is why
+ * export → import → export could not be guaranteed stable: the split was
+ * guessed twice, by two different implementations. There is exactly one splitter
+ * now (`domain/strength.ts`) and it runs once, at backfill time — by the time
+ * anything reaches this module the answer is already in the row.
+ */
+
 export interface InventoryExportRow {
   category: string | null;
   daily: number[]; // length 31
-  dosage: string;
+  form: string;
   name: string;
+  packSize: string;
   stockOnHand: number | null;
   stockRemaining: number | null;
-  supplier: string | null;
-  totalDispensed: number | null;
-}
-
-const STRENGTH_UNITS = [
-  "mg",
-  "g",
-  "mcg",
-  "ml",
-  "mg/ml",
-  "mg/5ml",
-  "%",
-  "IU",
-  "units",
-];
-const FORMS = [
-  "tablet",
-  "capsule",
-  "cap",
-  "sachet",
-  "syrup",
-  "suspension",
-  "susp",
-  "ointment",
-  "cream",
-  "drops",
-  "vial",
-  "ampule",
-  "nebule",
-  "injection",
-  "suppository",
-  "box",
-  "piece",
-  "tabs",
-  "tab",
-];
-
-/** Leading numeric strength, e.g. "200" in "200mg/200mg/5ml". */
-const LEADING_STRENGTH = /^\s*(\d+(?:\.\d+)?(?:\/\d+(?:\.\d+)?)?)\s*/;
-const LEADING_COMMA = /^,/;
-
-/** A token only counts as a unit/form when a separator (or end) follows it. */
-function tokenEndsHere(text: string, token: string): boolean {
-  const after = text.slice(token.length, token.length + 1);
-  return after === "" || after === " " || after === "," || after === "(";
-}
-
-/** Splits the leading numeric strength off the dosage text. */
-function takeStrength(trimmed: string): {
-  rest: string;
-  strengthValue: string;
-} {
-  const match = trimmed.match(LEADING_STRENGTH);
-  if (!match) {
-    return { rest: trimmed, strengthValue: "" };
-  }
-  const [, strengthValue = ""] = match;
-  return {
-    rest: trimmed.slice(match[0].length).trim(),
-    strengthValue,
-  };
-}
-
-/**
- * Splits the leading strength unit off, when it is one of the template's units.
- *
- * Units may sit flush against the number ("500mg tabs"), which is why the check
- * is on the character that follows rather than on whitespace.
- */
-function takeUnit(rest: string): { rest: string; strengthUnit: string } {
-  const lower = rest.toLowerCase();
-  for (const unit of STRENGTH_UNITS) {
-    if (!lower.startsWith(unit.toLowerCase())) {
-      continue;
-    }
-    if (tokenEndsHere(rest, unit)) {
-      return { rest: rest.slice(unit.length).trim(), strengthUnit: unit };
-    }
-  }
-  return { rest, strengthUnit: "" };
-}
-
-/** Splits the leading dosage form off, when it is one of the template's forms. */
-function takeForm(rest: string): { form: string; rest: string } {
-  const lower = rest.toLowerCase();
-  for (const form of FORMS) {
-    if (!lower.startsWith(form.toLowerCase())) {
-      continue;
-    }
-    if (tokenEndsHere(rest, form)) {
-      return {
-        form,
-        rest: rest.slice(form.length).trim().replace(LEADING_COMMA, "").trim(),
-      };
-    }
-  }
-  return { form: "", rest };
-}
-
-function splitDosageForExport(dosage: string): {
-  form: string;
-  packSize: string;
   strengthUnit: string;
   strengthValue: string;
-} {
-  const trimmed = dosage.trim();
-  if (trimmed === "") {
-    return { form: "", packSize: "", strengthUnit: "", strengthValue: "" };
-  }
-
-  // Try to parse: <number> <unit> <form> <pack>
-  const strength = takeStrength(trimmed);
-  const unit = takeUnit(strength.rest);
-  const form = takeForm(unit.rest);
-
-  const { form: formToken, rest: packSize } = form;
-  // Nothing recognisable came out, so the whole text is the dosage: keep it in
-  // one slot ("cream", "60ml susp") rather than scattering it across four.
-  if (!(strength.strengthValue || unit.strengthUnit || formToken) && packSize) {
-    return {
-      form: packSize,
-      packSize: "",
-      strengthUnit: "",
-      strengthValue: "",
-    };
-  }
-
-  return {
-    form: formToken,
-    packSize,
-    strengthUnit: unit.strengthUnit,
-    strengthValue: strength.strengthValue,
-  };
+  supplier: string | null;
+  totalDispensed: number | null;
 }
 
 export function buildInventoryXlsxRows(
@@ -149,8 +33,6 @@ export function buildInventoryXlsxRows(
   const header = [...INVENTORY_TEMPLATE_HEADERS] as string[];
   const out: (string | number | null)[][] = [header];
   for (const r of rows) {
-    const { strengthValue, strengthUnit, form, packSize } =
-      splitDosageForExport(r.dosage);
     const daily =
       r.daily.length === 31
         ? r.daily
@@ -163,10 +45,10 @@ export function buildInventoryXlsxRows(
         : r.stockOnHand - totalDispensed);
     out.push([
       r.name,
-      strengthValue,
-      strengthUnit,
-      form,
-      packSize,
+      r.strengthValue.trim(),
+      r.strengthUnit.trim(),
+      r.form.trim(),
+      r.packSize.trim(),
       r.stockOnHand ?? "",
       ...daily.map((d) => (d === 0 ? "" : d)),
       totalDispensed,

@@ -1,3 +1,15 @@
+import {
+  backupSuffix,
+  pruneBackups,
+  snapshotTable,
+} from "../creation/snapshot";
+import {
+  allIdentityKeys,
+  identityKey,
+  identityKeysOf,
+  legacyIdentityKey,
+} from "../domain/identity";
+import { isDetailsIncomplete, strengthLabel } from "../domain/strength";
 import { guessCategory } from "./category-mapper";
 import { parseInventoryCsv } from "./csv-parser";
 import { deriveStatus } from "./inventory-status";
@@ -6,7 +18,7 @@ import type { ImportWarning, ParsedInventoryRow } from "./types";
 
 export interface ImportResult {
   backupsKept: number;
-  dosageMissingCount: number;
+  detailsIncompleteCount: number;
   imported: number;
   inserted: number;
   mismatchCount: number;
@@ -46,27 +58,37 @@ function nowIso(): string {
   return new Date().toISOString();
 }
 
-function normalizeKey(name: string, dosage: string): string {
-  return `${name.toLowerCase().trim()}|${dosage.toLowerCase().trim()}`;
+/**
+ * Columns an imported row's strength split lives in, as the importer reads them.
+ * Kept in one list so the SELECT and the row type cannot drift apart.
+ */
+const EXISTING_COLUMNS =
+  "id, name, dosage, sku, category, display_name, strength_value, strength_unit, form, pack_size";
+
+interface ExistingItemRow {
+  category: string | null;
+  display_name: string | null;
+  /** Backfill input, still present until the deferred drop ships (§6.2 B). */
+  dosage: string | null;
+  form: string | null;
+  id: string;
+  name: string;
+  pack_size: string | null;
+  sku: string;
+  strength_unit: string | null;
+  strength_value: string | null;
 }
 
 function placeholders(count: number): string {
   return new Array(count).fill("?").join(", ");
 }
 
-/**
- * Backup tables are pruned in name order, so the timestamp leads. The random
- * tail matters: two imports inside the same millisecond would otherwise share a
- * name, and `CREATE TABLE IF NOT EXISTS` would silently keep the *stale*
- * snapshot — leaving a rollback with nothing to restore.
- */
-function backupSuffix(): string {
-  const stamp = nowIso().replace(/[:.]/g, "-");
-  return `${stamp}-${Math.random().toString(36).slice(2, 8)}`;
-}
-
 function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function text(value: unknown): string {
+  return typeof value === "string" ? value : "";
 }
 
 /** Columns the import overwrites on an existing row — the ones a restore puts back. */
@@ -209,6 +231,17 @@ async function rollBackImport(
   }
 }
 
+/**
+ * Every column a snapshot is restored from, named rather than `SELECT *`.
+ *
+ * Named because a snapshot may hold a schema the live table no longer has: the
+ * strength backfill leaves `dosage` in place for now (spec §6.2 option B), and
+ * the follow-up `0006_drop_dosage.sql` will have to remove it from this list at
+ * the same time as it drops the column.
+ */
+const RESTORABLE_COLUMNS =
+  "id, sku, name, dosage, strength_value, strength_unit, form, pack_size, display_name, dosage_missing, stock_on_hand, total_dispensed, stock_remaining, daily_sum, total_mismatch, qty, status, needs_batch, category, supplier, threshold, is_no_stock, notes, created_at, updated_at";
+
 let activeImport: Promise<unknown> | null = null;
 
 /**
@@ -256,26 +289,41 @@ async function runInventoryImport(
   );
   const existingSkus = new Set(existingSkuRows.map((r) => r.sku));
 
-  // Load existing items by composite key
-  const existingRows = await db.select<
-    {
-      id: string;
-      name: string;
-      dosage: string;
-      sku: string;
-      category: string | null;
-    }[]
-  >("SELECT id, name, dosage, sku, category FROM inventory_items");
+  // Load existing items by every identity key they could be recognised by. Rows
+  // already on this device have been backfilled by the time an import can run, so
+  // their four columns describe them exactly; the label key is the forgiving
+  // half, for the case where the backfill's split and the template's columns
+  // placed a token in different slots (spec §7.1).
+  const existingRows = await db.select<ExistingItemRow[]>(
+    `SELECT ${EXISTING_COLUMNS} FROM inventory_items`
+  );
   const keyToRow = new Map<
     string,
     { id: string; sku: string; category: string | null }
   >();
   for (const r of existingRows) {
-    keyToRow.set(normalizeKey(r.name, r.dosage), {
-      category: r.category,
-      id: r.id,
-      sku: r.sku,
-    });
+    const match = { category: r.category, id: r.id, sku: r.sku };
+    const storedDosage = text(r.dosage);
+    const keys = [
+      ...identityKeysOf({
+        form: r.form ?? "",
+        name: r.name,
+        packSize: r.pack_size ?? "",
+        strengthUnit: r.strength_unit ?? "",
+        strengthValue: r.strength_value ?? "",
+      }),
+      // A row the backfill has not rewritten is only described by its legacy
+      // text, and missing it would insert a duplicate rather than update. The
+      // stored text is used as-is rather than recomposed, because a row that
+      // predates the split may not have been spaced the way the composer does.
+      ...(storedDosage === "" ? [] : [legacyIdentityKey(r.name, storedDosage)]),
+    ];
+    for (const key of keys) {
+      // First row wins, matching `loadIdentityIndex`.
+      if (!keyToRow.has(key)) {
+        keyToRow.set(key, match);
+      }
+    }
   }
 
   const ctx: ImportContext = {
@@ -300,7 +348,7 @@ async function runInventoryImport(
 
   return {
     backupsKept,
-    dosageMissingCount: parsed.dosageMissingCount,
+    detailsIncompleteCount: parsed.detailsIncompleteCount,
     imported: parsed.rows.length,
     inserted: ctx.mutationLog.insertedIds.length,
     mismatchCount: parsed.mismatchCount,
@@ -322,49 +370,6 @@ interface ImportContext {
   keyToRow: Map<string, { category: string | null; id: string; sku: string }>;
   month: string;
   mutationLog: ImportMutationLog;
-}
-
-/**
- * Clones `table` into a timestamped backup so a failed import can be rolled back.
- *
- * `CREATE TABLE AS SELECT` needs its source to exist, and a fresh database has
- * no `inventory_items` yet, so the fallback clones the empty shape instead.
- */
-async function snapshotTable(
-  db: DbLike,
-  table: string,
-  suffix: string
-): Promise<string> {
-  const backupTable = `${table}_backup_${suffix}`;
-  try {
-    await db.execute(
-      `CREATE TABLE IF NOT EXISTS "${backupTable}" AS SELECT * FROM ${table}`
-    );
-  } catch {
-    // fallback: create empty backup table from schema if source empty/missing
-    await db.execute(
-      `CREATE TABLE IF NOT EXISTS "${backupTable}" AS SELECT * FROM ${table} WHERE 1=0`
-    );
-  }
-  return backupTable;
-}
-
-/**
- * Drops every `pattern` backup except the three newest, so a clinic that imports
- * monthly never accumulates snapshots. Returns how many were kept.
- */
-async function pruneBackups(db: DbLike, pattern: string): Promise<number> {
-  const rows = await db.select<{ name: string }[]>(
-    `SELECT name FROM sqlite_master WHERE type='table' AND name LIKE '${pattern}_%' ORDER BY name DESC`
-  );
-  if (rows.length <= 3) {
-    return rows.length;
-  }
-  // Independent DROP TABLEs — the order they land in cannot matter.
-  await Promise.all(
-    rows.slice(3).map((r) => db.execute(`DROP TABLE IF EXISTS "${r.name}"`))
-  );
-  return 3;
 }
 
 /**
@@ -390,16 +395,26 @@ async function applyRow(
   row: ParsedInventoryRow
 ): Promise<void> {
   const { db, existingSkus, keyToRow, month, mutationLog } = ctx;
-  const ck = normalizeKey(row.name, row.dosage);
+  const parts = {
+    form: row.form,
+    name: row.name,
+    packSize: row.packSize,
+    strengthUnit: row.strengthUnit,
+    strengthValue: row.strengthValue,
+  };
+  const keys = allIdentityKeys(parts);
+  const ck = identityKey(parts);
+  const { displayName } = row;
   const qty = row.stockOnHand ?? 0;
   const status = deriveStatus(qty, 20);
-  const dosageMissing = row.dosageMissing ? 1 : 0;
+  const detailsIncomplete = isDetailsIncomplete(parts) ? 1 : 0;
   const isNoStock = qty === 0 ? 1 : 0;
   const totalDispensed = row.totalDispensed ?? 0;
   const { dailySum, stockRemaining } = row;
   const totalMismatch = row.totalMismatch ? 1 : 0;
+
   const needsBatch = 1; // no batches on import, spec §3.7
-  const guessed = guessCategory(row.name, row.dosage);
+  const guessed = guessCategory(row.name, strengthLabel(parts));
   // Spec §5.3: category from sheet overrides guessCategory if non-blank and not "Other"
   const effectiveCategory =
     row.category !== null &&
@@ -412,7 +427,7 @@ async function applyRow(
       ? row.supplier.trim()
       : null;
 
-  const existing = keyToRow.get(ck);
+  const existing = keys.map((key) => keyToRow.get(key)).find(Boolean);
 
   if (existing) {
     // Preserve existing category if effective is null, else use effective
@@ -423,10 +438,10 @@ async function applyRow(
             dosage_missing = ?, stock_on_hand = ?, total_dispensed = ?, stock_remaining = ?,
             daily_sum = ?, total_mismatch = ?, qty = ?, status = ?, needs_batch = ?,
             category = COALESCE(?, category), supplier = COALESCE(?, supplier), threshold = threshold,
-            is_no_stock = ?, updated_at = ?
+            is_no_stock = ?, display_name = ?, updated_at = ?
            WHERE id = ?`,
       [
-        dosageMissing,
+        detailsIncomplete,
         row.stockOnHand,
         totalDispensed,
         stockRemaining,
@@ -438,6 +453,7 @@ async function applyRow(
         categoryToSet,
         effectiveSupplier,
         isNoStock,
+        displayName,
         nowIso(),
         existing.id,
       ]
@@ -457,19 +473,23 @@ async function applyRow(
     typeof crypto !== "undefined" && "randomUUID" in crypto
       ? crypto.randomUUID()
       : `id-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  const sku = deriveSku(row.name, row.dosage, existingSkus);
+  const sku = deriveSku(row.name, row.strengthValue, existingSkus);
   existingSkus.add(sku);
 
   await db.execute(
     `INSERT INTO inventory_items
-            (id, sku, name, dosage, dosage_missing, stock_on_hand, total_dispensed, stock_remaining, daily_sum, total_mismatch, qty, status, needs_batch, category, supplier, threshold, is_no_stock, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            (id, sku, name, strength_value, strength_unit, form, pack_size, display_name, dosage_missing, stock_on_hand, total_dispensed, stock_remaining, daily_sum, total_mismatch, qty, status, needs_batch, category, supplier, threshold, is_no_stock, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       id,
       sku,
       row.name.trim(),
-      row.dosage.trim(),
-      dosageMissing,
+      row.strengthValue.trim(),
+      row.strengthUnit.trim(),
+      row.form.trim(),
+      row.packSize.trim(),
+      displayName,
+      detailsIncomplete,
       row.stockOnHand,
       totalDispensed,
       stockRemaining,
@@ -487,7 +507,11 @@ async function applyRow(
     ]
   );
   mutationLog.insertedIds.push(id);
-  keyToRow.set(ck, { category: effectiveCategory, id, sku });
+  const match = { category: effectiveCategory, id, sku };
+  for (const key of keys) {
+    keyToRow.set(key, match);
+  }
+  keyToRow.set(ck, match);
 
   await insertDispensingEvents(db, id, row.daily, month);
 }
@@ -500,8 +524,14 @@ export async function restoreLastBackup(db: DbLike): Promise<void> {
     throw new Error("No backup found");
   }
   const latest = rows[0].name;
+  // Columns are named rather than `SELECT *`: a snapshot taken before the
+  // strength backfill dropped `dosage` has one column more than the live table,
+  // and a positional copy would fail on exactly the backups worth restoring.
   await db.execute("DELETE FROM inventory_items");
-  await db.execute(`INSERT INTO inventory_items SELECT * FROM "${latest}"`);
+  await db.execute(
+    `INSERT INTO inventory_items (${RESTORABLE_COLUMNS})
+       SELECT ${RESTORABLE_COLUMNS} FROM "${latest}"`
+  );
   const dispRows = await db.select<{ name: string }[]>(
     "SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'dispensing_events_backup_%' ORDER BY name DESC LIMIT 1"
   );
