@@ -97,8 +97,16 @@ const KEYWORD_MAP: Array<{ category: Category; keywords: string[] }> = [
   },
 ];
 
-export function guessCategory(name: string, dosage: string): Category | null {
-  const haystack = `${name} ${dosage}`.toLowerCase();
+/**
+ * `name` plus the recomposed strength label — what the importer passes is the
+ * four stored columns joined in template order, not a `dosage` string, but the
+ * keywords are matched against the same text either way.
+ */
+export function guessCategory(
+  name: string,
+  strengthLabel: string
+): Category | null {
+  const haystack = `${name} ${strengthLabel}`.toLowerCase();
   for (const entry of KEYWORD_MAP) {
     for (const kw of entry.keywords) {
       if (haystack.includes(kw)) {
