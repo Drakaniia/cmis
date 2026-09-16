@@ -1,12 +1,16 @@
 /**
  * CMIS-UI-09 §2 — System Settings domain types.
  * Settings are global defaults plus per-item overrides; every save is audited
- * ("Settings changed: [section] by [Admin]") because it affects all roles.
+ * ("Settings changed: [section] by [Admin]") because it applies app-wide.
+ *
+ * Categories are deliberately *not* part of this state. They are stored rows
+ * (migration 0006) that the inventory forms read directly — see
+ * `features/inventory/domain/categories.ts` — so a second copy in a React state
+ * would be a copy that silently disagrees with them.
  */
 
 export type SettingsTabId =
   | "general"
-  | "users"
   | "thresholds"
   | "suppliers"
   | "categories"
@@ -27,11 +31,6 @@ export const SETTINGS_TABS: SettingsTabMeta[] = [
     description: "App identity and date/time format",
     id: "general",
     label: "General",
-  },
-  {
-    description: "Create, edit and deactivate accounts",
-    id: "users",
-    label: "Users",
   },
   {
     description: "Global defaults and per-item overrides",
@@ -86,12 +85,6 @@ export interface Supplier {
   name: string;
 }
 
-export interface Category {
-  id: string;
-  itemCount: number;
-  name: string;
-}
-
 export type ExpiryWindowDays = 30 | 60 | 90;
 
 export interface ThresholdOverride {
@@ -105,6 +98,8 @@ export interface ThresholdOverride {
 export interface GeneralSettings {
   appName: string;
   dateFormat: "MM/DD/YYYY" | "DD/MM/YYYY";
+  /** Credited as the actor on every audit row; blank falls back to "Local user". */
+  operatorName: string;
   timeFormat: "12-hour" | "24-hour";
 }
 
@@ -124,7 +119,6 @@ export interface BackupSettings {
 export interface SettingsState {
   alerts: AlertSettings;
   backup: BackupSettings;
-  categories: Category[];
   general: GeneralSettings;
   suppliers: Supplier[];
 }

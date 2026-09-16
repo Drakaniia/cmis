@@ -1,11 +1,7 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
-import type {
-  Category,
-  ExpiryWindowDays,
-  SettingsState,
-  Supplier,
-} from "../types";
+import { setOperatorName } from "@/features/admin/audit/operator";
+import type { ExpiryWindowDays, SettingsState, Supplier } from "../types";
 
 /**
  * Factory defaults for every settings section. The settings page reads these
@@ -24,10 +20,10 @@ export const DEFAULT_SETTINGS: SettingsState = {
     path: "%APPDATA%/com.cmis.app/backups",
     schedule: "off",
   },
-  categories: [],
   general: {
     appName: "cmis",
     dateFormat: "MM/DD/YYYY",
+    operatorName: "",
     timeFormat: "12-hour",
   },
   suppliers: [],
@@ -35,11 +31,18 @@ export const DEFAULT_SETTINGS: SettingsState = {
 
 /**
  * CMIS-UI-09 §2 — settings mutations. Every section save is global and
- * immediately visible to all roles, so the caller toasts + the audit log
+ * immediately visible app-wide, so the caller toasts + the audit log
  * records "Settings changed: [section] by [Admin]" (§2.3 persistence).
  */
 export function useSettings(initial: SettingsState = DEFAULT_SETTINGS) {
   const [state, setState] = useState<SettingsState>(initial);
+
+  // Every audit writer reads the name from the module store, so settings keeps
+  // it in step the moment the field is saved (spec §8.3).
+  const operator = state.general.operatorName;
+  useEffect(() => {
+    setOperatorName(operator);
+  }, [operator]);
 
   const updateGeneral = useCallback(
     (patch: Partial<SettingsState["general"]>) => {
@@ -92,29 +95,6 @@ export function useSettings(initial: SettingsState = DEFAULT_SETTINGS) {
     }));
   }, []);
 
-  const addCategory = useCallback((category: Category) => {
-    setState((prev) => ({
-      ...prev,
-      categories: [...prev.categories, category],
-    }));
-  }, []);
-
-  const updateCategory = useCallback((id: string, patch: Partial<Category>) => {
-    setState((prev) => ({
-      ...prev,
-      categories: prev.categories.map((category) =>
-        category.id === id ? { ...category, ...patch } : category
-      ),
-    }));
-  }, []);
-
-  const removeCategory = useCallback((id: string) => {
-    setState((prev) => ({
-      ...prev,
-      categories: prev.categories.filter((category) => category.id !== id),
-    }));
-  }, []);
-
   const triggerBackup = useCallback(() => {
     const at = new Date().toISOString();
     setState((prev) => ({
@@ -132,16 +112,13 @@ export function useSettings(initial: SettingsState = DEFAULT_SETTINGS) {
   );
 
   return {
-    addCategory,
     addSupplier,
-    removeCategory,
     removeSupplier,
     setAlerts,
     setBackupSchedule,
     setOverride,
     state,
     triggerBackup,
-    updateCategory,
     updateGeneral,
     updateSupplier,
   } as const;

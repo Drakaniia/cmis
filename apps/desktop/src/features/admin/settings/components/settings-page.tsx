@@ -15,7 +15,6 @@ import { SettingsTabBar } from "./settings-tab-bar";
 import { SuppliersTab } from "./suppliers-tab";
 import { ThresholdsTab } from "./thresholds-tab";
 import { UpdatesTab } from "./updates-tab";
-import { UsersTab } from "./users-tab";
 
 function tabFromHash(): SettingsTabId {
   if (typeof window === "undefined") {
@@ -32,8 +31,8 @@ function tabFromHash(): SettingsTabId {
  * than a mega-form (00 §16 Simplicity). Deep links land on a tab via the URL
  * hash so the palette and Backup card can jump straight in (§6).
  *
- * Administration tabs (Users, Audit, Data, Health) are now embedded here
- * instead of being separate sidebar pages.
+ * Administration tabs (Audit, Data, Health) are now embedded here instead of
+ * being separate sidebar pages.
  */
 export function SettingsPage() {
   const settings = useSettings();
@@ -75,7 +74,6 @@ export function SettingsPage() {
                   onChange={settings.updateGeneral}
                 />
               ) : null}
-              {tab === "users" ? <UsersTab /> : null}
               {tab === "thresholds" ? (
                 <ThresholdsTab
                   alerts={settings.state.alerts}
@@ -91,14 +89,7 @@ export function SettingsPage() {
                   suppliers={settings.state.suppliers}
                 />
               ) : null}
-              {tab === "categories" ? (
-                <CategoriesTab
-                  categories={settings.state.categories}
-                  onAdd={settings.addCategory}
-                  onRemove={settings.removeCategory}
-                  onUpdate={settings.updateCategory}
-                />
-              ) : null}
+              {tab === "categories" ? <CategoriesTab /> : null}
               {tab === "audit" ? <AuditTab /> : null}
               {tab === "data" ? <DataTab /> : null}
               {tab === "health" ? <HealthTab /> : null}
