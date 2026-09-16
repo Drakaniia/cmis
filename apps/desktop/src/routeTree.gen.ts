@@ -21,8 +21,8 @@ import { Route as AdminInventoryRouteImport } from './routes/admin.inventory'
 import { Route as AdminReportsRouteImport } from './routes/admin.reports'
 import { Route as AdminRequestsRouteImport } from './routes/admin.requests'
 import { Route as AdminSettingsRouteImport } from './routes/admin.settings'
-import { Route as AdminUsersRouteImport } from './routes/admin.users'
 import { Route as AdminInventoryIndexRouteImport } from './routes/admin.inventory.index'
+import { Route as AdminInventoryAddRouteImport } from './routes/admin.inventory.add'
 import { Route as AdminInventoryExpiryRouteImport } from './routes/admin.inventory.expiry'
 import { Route as AdminInventoryLowStockRouteImport } from './routes/admin.inventory.low-stock'
 
@@ -86,14 +86,14 @@ const AdminSettingsRoute = AdminSettingsRouteImport.update({
   path: '/admin/settings',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AdminUsersRoute = AdminUsersRouteImport.update({
-  id: '/admin/users',
-  path: '/admin/users',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const AdminInventoryIndexRoute = AdminInventoryIndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => AdminInventoryRoute,
+} as any)
+const AdminInventoryAddRoute = AdminInventoryAddRouteImport.update({
+  id: '/add',
+  path: '/add',
   getParentRoute: () => AdminInventoryRoute,
 } as any)
 const AdminInventoryExpiryRoute = AdminInventoryExpiryRouteImport.update({
@@ -119,8 +119,8 @@ export interface FileRoutesByFullPath {
   '/admin/reports': typeof AdminReportsRoute
   '/admin/requests': typeof AdminRequestsRoute
   '/admin/settings': typeof AdminSettingsRoute
-  '/admin/users': typeof AdminUsersRoute
   '/admin/': typeof AdminIndexRoute
+  '/admin/inventory/add': typeof AdminInventoryAddRoute
   '/admin/inventory/expiry': typeof AdminInventoryExpiryRoute
   '/admin/inventory/low-stock': typeof AdminInventoryLowStockRoute
   '/admin/inventory/': typeof AdminInventoryIndexRoute
@@ -136,8 +136,8 @@ export interface FileRoutesByTo {
   '/admin/reports': typeof AdminReportsRoute
   '/admin/requests': typeof AdminRequestsRoute
   '/admin/settings': typeof AdminSettingsRoute
-  '/admin/users': typeof AdminUsersRoute
   '/admin': typeof AdminIndexRoute
+  '/admin/inventory/add': typeof AdminInventoryAddRoute
   '/admin/inventory/expiry': typeof AdminInventoryExpiryRoute
   '/admin/inventory/low-stock': typeof AdminInventoryLowStockRoute
   '/admin/inventory': typeof AdminInventoryIndexRoute
@@ -155,8 +155,8 @@ export interface FileRoutesById {
   '/admin/reports': typeof AdminReportsRoute
   '/admin/requests': typeof AdminRequestsRoute
   '/admin/settings': typeof AdminSettingsRoute
-  '/admin/users': typeof AdminUsersRoute
   '/admin/': typeof AdminIndexRoute
+  '/admin/inventory/add': typeof AdminInventoryAddRoute
   '/admin/inventory/expiry': typeof AdminInventoryExpiryRoute
   '/admin/inventory/low-stock': typeof AdminInventoryLowStockRoute
   '/admin/inventory/': typeof AdminInventoryIndexRoute
@@ -175,8 +175,8 @@ export interface FileRouteTypes {
     | '/admin/reports'
     | '/admin/requests'
     | '/admin/settings'
-    | '/admin/users'
     | '/admin/'
+    | '/admin/inventory/add'
     | '/admin/inventory/expiry'
     | '/admin/inventory/low-stock'
     | '/admin/inventory/'
@@ -192,8 +192,8 @@ export interface FileRouteTypes {
     | '/admin/reports'
     | '/admin/requests'
     | '/admin/settings'
-    | '/admin/users'
     | '/admin'
+    | '/admin/inventory/add'
     | '/admin/inventory/expiry'
     | '/admin/inventory/low-stock'
     | '/admin/inventory'
@@ -210,8 +210,8 @@ export interface FileRouteTypes {
     | '/admin/reports'
     | '/admin/requests'
     | '/admin/settings'
-    | '/admin/users'
     | '/admin/'
+    | '/admin/inventory/add'
     | '/admin/inventory/expiry'
     | '/admin/inventory/low-stock'
     | '/admin/inventory/'
@@ -229,7 +229,6 @@ export interface RootRouteChildren {
   AdminReportsRoute: typeof AdminReportsRoute
   AdminRequestsRoute: typeof AdminRequestsRoute
   AdminSettingsRoute: typeof AdminSettingsRoute
-  AdminUsersRoute: typeof AdminUsersRoute
   AdminIndexRoute: typeof AdminIndexRoute
 }
 
@@ -319,18 +318,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminSettingsRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/admin/users': {
-      id: '/admin/users'
-      path: '/admin/users'
-      fullPath: '/admin/users'
-      preLoaderRoute: typeof AdminUsersRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/admin/inventory/': {
       id: '/admin/inventory/'
       path: '/'
       fullPath: '/admin/inventory/'
       preLoaderRoute: typeof AdminInventoryIndexRouteImport
+      parentRoute: typeof AdminInventoryRoute
+    }
+    '/admin/inventory/add': {
+      id: '/admin/inventory/add'
+      path: '/add'
+      fullPath: '/admin/inventory/add'
+      preLoaderRoute: typeof AdminInventoryAddRouteImport
       parentRoute: typeof AdminInventoryRoute
     }
     '/admin/inventory/expiry': {
@@ -351,12 +350,14 @@ declare module '@tanstack/react-router' {
 }
 
 interface AdminInventoryRouteChildren {
+  AdminInventoryAddRoute: typeof AdminInventoryAddRoute
   AdminInventoryExpiryRoute: typeof AdminInventoryExpiryRoute
   AdminInventoryLowStockRoute: typeof AdminInventoryLowStockRoute
   AdminInventoryIndexRoute: typeof AdminInventoryIndexRoute
 }
 
 const AdminInventoryRouteChildren: AdminInventoryRouteChildren = {
+  AdminInventoryAddRoute: AdminInventoryAddRoute,
   AdminInventoryExpiryRoute: AdminInventoryExpiryRoute,
   AdminInventoryLowStockRoute: AdminInventoryLowStockRoute,
   AdminInventoryIndexRoute: AdminInventoryIndexRoute,
@@ -378,7 +379,6 @@ const rootRouteChildren: RootRouteChildren = {
   AdminReportsRoute: AdminReportsRoute,
   AdminRequestsRoute: AdminRequestsRoute,
   AdminSettingsRoute: AdminSettingsRoute,
-  AdminUsersRoute: AdminUsersRoute,
   AdminIndexRoute: AdminIndexRoute,
 }
 export const routeTree = rootRouteImport
