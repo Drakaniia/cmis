@@ -1,4 +1,5 @@
 import type Database from "@tauri-apps/plugin-sql";
+import { isTauriRuntime } from "./open-external";
 
 const DB_URL = "sqlite:cmis.db";
 
@@ -13,6 +14,21 @@ let databasePromise: Promise<Database> | null = null;
 export function getDb(): Promise<Database> {
   if (!databasePromise) {
     databasePromise = (async () => {
+      // The browser preview has no Tauri, so the SQL plugin cannot load and every
+      // query would throw. There the dev server's own SQLite answers instead.
+      //
+      // A `tauri dev` window is served by that same dev server, so the Tauri
+      // check is what keeps the desktop app on its real database; the Vitest
+      // check keeps mocked-database tests off the network.
+      if (
+        import.meta.env.DEV &&
+        import.meta.env.MODE !== "test" &&
+        !isTauriRuntime()
+      ) {
+        const { default: PreviewDatabase } = await import("./preview-db");
+        return (await PreviewDatabase.load(DB_URL)) as unknown as Database;
+      }
+
       const { default: SqlDatabase } = await import("@tauri-apps/plugin-sql");
       return SqlDatabase.load(DB_URL) as Promise<Database>;
     })().catch((error) => {

@@ -3,6 +3,7 @@ import tailwindcss from "@tailwindcss/vite";
 import { tanstackRouter } from "@tanstack/router-plugin/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
+import { previewSql } from "./dev/preview-sql";
 
 export default defineConfig({
   plugins: [
@@ -12,6 +13,9 @@ export default defineConfig({
       target: "react",
     }),
     react(),
+    // Gives the browser preview a real SQLite database, so the data flows are
+    // walkable outside Tauri. `apply: "serve"` keeps it out of release builds.
+    previewSql(),
   ],
   resolve: {
     tsconfigPaths: true,
