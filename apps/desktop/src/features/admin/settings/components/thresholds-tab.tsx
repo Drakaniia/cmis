@@ -1,4 +1,5 @@
 import { Button } from "@cmis/ui/components/button";
+import { QuantityStepper } from "@cmis/ui/components/quantity-stepper";
 import { cn } from "@cmis/ui/lib/utils";
 import { Check, RotateCcw, Search, X } from "lucide-react";
 import { type ChangeEvent, useCallback, useState } from "react";
@@ -58,8 +59,8 @@ function ThresholdRow({
   const overridden = row.override !== null;
 
   const handleDraftChange = useCallback(
-    (event: ChangeEvent<HTMLInputElement>) => {
-      onDraftChange(event.target.value);
+    (next: number | "") => {
+      onDraftChange(next === "" ? "" : String(next));
     },
     [onDraftChange]
   );
@@ -81,11 +82,11 @@ function ThresholdRow({
       </span>
       <span>
         {editing ? (
-          <input
-            className="h-7 w-16 rounded-md border border-input bg-background px-2 text-sm outline-none focus:border-ring focus:ring-1 focus:ring-ring"
+          <QuantityStepper
+            aria-label={`Threshold for ${row.itemName}`}
+            className="h-7 w-24"
             min={1}
             onChange={handleDraftChange}
-            type="number"
             value={draft}
           />
         ) : (
@@ -168,8 +169,11 @@ export function ThresholdsTab({
   );
 
   const handleGlobalChange = useCallback(
-    (event: ChangeEvent<HTMLInputElement>) => {
-      onSetAlerts({ globalLowStock: Number(event.target.value) });
+    (next: number | "") => {
+      if (next === "") {
+        return;
+      }
+      onSetAlerts({ globalLowStock: next });
     },
     [onSetAlerts]
   );
@@ -233,13 +237,17 @@ export function ThresholdsTab({
             </div>
           </fieldset>
 
-          <label className="block text-caption text-foreground">
+          <label
+            className="block text-caption text-foreground"
+            htmlFor="global-low-stock-threshold"
+          >
             Low-stock global threshold
-            <input
-              className="mt-1 h-8 w-28 rounded-md border border-input bg-background px-3 text-sm outline-none focus:border-ring focus:ring-1 focus:ring-ring"
+            <QuantityStepper
+              aria-label="Low-stock global threshold"
+              className="mt-1 h-8 w-32"
+              id="global-low-stock-threshold"
               min={1}
               onChange={handleGlobalChange}
-              type="number"
               value={alerts.globalLowStock}
             />
             <span className="mt-1 block text-caption text-muted-foreground">
