@@ -5,10 +5,10 @@
   "description": "Shared UI components and design system for CMIS (Tailwind + Base UI + shadcn)",
   "keywords": [
     "cmis",
-    "ui",
     "design-system",
+    "react",
     "tailwind",
-    "react"
+    "ui"
   ],
   "homepage": "https://github.com/Drakaniia/cmis#readme",
   "bugs": {

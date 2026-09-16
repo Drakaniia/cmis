@@ -1,18 +1,6 @@
 import { defineConfig } from "vite-plus";
 
 export default defineConfig({
-  fmt: {
-    ignorePatterns: [
-      "node_modules/**",
-      "**/node_modules/**",
-      "apps/desktop/dist/**",
-      "apps/desktop/.tanstack/**",
-      "apps/desktop/src/routeTree.gen.ts",
-    ],
-    semi: true,
-    singleQuote: false,
-    sortPackageJson: true,
-  },
   lint: {
     ignorePatterns: [
       "node_modules/**",
@@ -27,6 +15,6 @@ export default defineConfig({
     },
   },
   staged: {
-    "*.{js,ts,jsx,tsx,vue,svelte,json,jsonc,css,md}": "vp check --fix",
+    "*.{js,ts,jsx,tsx,vue,svelte,json,jsonc,css,md}": "ultracite fix",
   },
 });

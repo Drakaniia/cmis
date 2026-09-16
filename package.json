@@ -4,14 +4,14 @@
   "private": true,
   "description": "Clinic Management Information System — Tauri desktop app for inventory, dispensing, and analytics built with TanStack Router, Vite, and TypeScript",
   "keywords": [
-    "cmis",
     "clinic-management",
+    "cmis",
+    "desktop",
     "inventory",
-    "tauri",
     "tanstack-router",
-    "vite",
+    "tauri",
     "typescript",
-    "desktop"
+    "vite"
   ],
   "homepage": "https://github.com/Drakaniia/cmis#readme",
   "bugs": {
@@ -37,8 +37,8 @@
     "dev": "vp run -r dev",
     "dev:desktop": "vp run --filter desktop dev",
     "fix": "ultracite fix",
-    "format": "vp fmt",
-    "format:check": "vp fmt --check",
+    "format": "ultracite fix",
+    "format:check": "ultracite check",
     "format:prettier": "prettier --write .",
     "hooks:setup": "vp config",
     "lint": "vp lint",

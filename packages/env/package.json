@@ -6,8 +6,8 @@
   "keywords": [
     "cmis",
     "env",
-    "zod",
-    "t3-env"
+    "t3-env",
+    "zod"
   ],
   "homepage": "https://github.com/Drakaniia/cmis#readme",
   "bugs": {
