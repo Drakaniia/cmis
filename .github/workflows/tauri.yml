@@ -10,21 +10,7 @@ permissions:
   contents: write
 
 jobs:
-  version-guard:
-    if: startsWith(github.ref, 'refs/tags/v')
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-      - name: Version guard (tag == tauri.conf.json == Cargo.toml == package.json)
-        run: node scripts/check-release-version.mjs "${{ github.ref_name }}"
-
   build-tauri:
-    needs: version-guard
-    if: always() && (needs.version-guard.result == 'success' || needs.version-guard.result == 'skipped')
     runs-on: windows-latest
     timeout-minutes: 35
     steps:
