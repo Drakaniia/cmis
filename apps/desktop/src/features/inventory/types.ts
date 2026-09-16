@@ -62,13 +62,33 @@ export interface InventoryItem {
   barcode?: string;
   batches: InventoryBatch[];
   category: string; // Analgesic, Antibiotic...
+  /**
+   * True while any of the four strength fields is blank (§6.4). This is the
+   * stored `dosage_missing` flag, repurposed to mean "details incomplete".
+   */
+  detailsIncomplete: boolean;
   dispensingHistory: DispensingRecord[];
+  /**
+   * The full label — `Paracetamol 500 mg tablet (100/box)` — exactly as stored.
+   * Dispense requests match on this string, so the UI renders it rather than
+   * rebuilding a label of its own.
+   */
+  displayName: string;
   expiry: string; // nearest expiry ISO
+  /** Dose form, from the canonical `domain/vocabulary.ts` list. May be blank. */
+  form: string;
   id: string;
-  name: string; // e.g., "Paracetamol 500mg"
+  /** The bare medication name; the strength lives in its own fields (§10). */
+  name: string;
+  /** Pack size token, e.g. "10". May be blank. */
+  packSize: string;
   qty: number; // total across batches
   sku: string; // SKU-001
   status: InventoryStatus;
+  /** Strength unit, from the canonical `domain/vocabulary.ts` list. May be blank. */
+  strengthUnit: string;
+  /** Free text so compound strengths ("500/125") survive. May be blank. */
+  strengthValue: string;
   supplier: string;
   threshold: number; // low stock threshold
 }
@@ -109,16 +129,27 @@ export const INVENTORY_STATUSES: { label: string; value: string }[] = [
   { label: "Expiring", value: "expiring" },
 ];
 
+/**
+ * What the stock-in wizard hands the mutation.
+ *
+ * The old `unit` field is gone (decision 8): it was a `tablet`/`capsule`/`bottle`
+ * dropdown with no column behind it, so every value the operator picked was
+ * discarded. The four strength fields replace it, and all four are optional
+ * (decision 7) — a delivery is never blocked on a strength nobody recorded.
+ */
 export interface StockInPayload {
   batch: string;
   category: string;
   expiry: string;
+  form: string;
   identifier: string; // SKU or barcode
   name: string;
   notes?: string;
+  packSize: string;
   qty: number;
-  supplier: string;
-  unit: string;
+  strengthUnit: string;
+  strengthValue: string;
+  supplier: string | null;
 }
 
 export interface StockOutPayload {

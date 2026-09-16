@@ -7,6 +7,7 @@ import {
   useRouterState,
 } from "@tanstack/react-router";
 import { useCallback, useEffect, useState } from "react";
+import { toast } from "sonner";
 
 import { AppSidebar } from "@/components/app-sidebar";
 import Header from "@/components/header";
@@ -15,15 +16,36 @@ import { TitleBar } from "@/components/titlebar";
 import { DocsHeader } from "@/features/help/components/docs/docs-header";
 import { HelpDialogsProvider } from "@/features/help/help-dialogs-context";
 import { useFirstRunHint } from "@/features/help/use-first-run-hint";
+import {
+  ensureStrengthBackfill,
+  type StrengthBackfillReport,
+} from "@/features/inventory/data/strength-backfill";
 import { UpdaterProvider } from "@/features/updater/use-updater";
 
 import "../index.css";
 
 export interface RouterAppContext {
   queryClient: QueryClient;
+  /**
+   * The run-once strength split's outcome, or `null` when there is no database
+   * behind this window (the browser preview). See `StrengthBackfillNotice`.
+   *
+   * Optional on the router's context, because it is produced by this route's own
+   * `beforeLoad` rather than passed in when the router is created.
+   */
+  strengthBackfill?: StrengthBackfillReport | null;
 }
 
+/**
+ * The startup hook the strength spec asks for (§6.3, decision 21): the split
+ * runs **before any route renders**, so the first inventory query cannot race it
+ * and read a half-migrated table. It is guarded to run exactly once per device
+ * by its own `app_meta` marker.
+ */
 export const Route = createRootRouteWithContext<RouterAppContext>()({
+  beforeLoad: async () => ({
+    strengthBackfill: await ensureStrengthBackfill(),
+  }),
   component: RootComponent,
   head: () => ({
     meta: [
@@ -43,6 +65,46 @@ export const Route = createRootRouteWithContext<RouterAppContext>()({
     ],
   }),
 });
+
+/**
+ * Reports what the backfill did, once (§6.3 decision 22).
+ *
+ * The counts matter less than the review list: a row whose strength text could
+ * not be placed is a row the operator should look at, so the warning names the
+ * first few and points at where they can be fixed — the Edit form reachable from
+ * Stock Management, Expiry Alerts and Low-Stock Alerts.
+ */
+function StrengthBackfillNotice() {
+  const { strengthBackfill } = Route.useRouteContext();
+
+  useEffect(() => {
+    if (!strengthBackfill || strengthBackfill.written === 0) {
+      return;
+    }
+    toast.message(
+      `Inventory strengths updated — ${strengthBackfill.written} items`,
+      {
+        description: `${strengthBackfill.uncertain.length} need a review, ${strengthBackfill.blank} had no strength recorded`,
+        id: "strength-backfill",
+      }
+    );
+    if (strengthBackfill.uncertain.length > 0) {
+      const names = strengthBackfill.uncertain
+        .slice(0, 3)
+        .map((row) => row.name)
+        .join(", ");
+      toast.warning(
+        `${strengthBackfill.uncertain.length} items have an uncertain strength split`,
+        {
+          description: `${names}${strengthBackfill.uncertain.length > 3 ? "…" : ""} — review them from Stock Management`,
+          id: "strength-backfill-review",
+        }
+      );
+    }
+  }, [strengthBackfill]);
+
+  return null;
+}
 
 function RootComponent() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
@@ -116,6 +178,7 @@ function RootComponent() {
                 </div>
               </div>
             )}
+            <StrengthBackfillNotice />
             <Toaster position="bottom-right" richColors />
           </HelpDialogsProvider>
         </UpdaterProvider>
