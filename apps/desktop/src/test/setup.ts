@@ -46,3 +46,13 @@ if (typeof window !== "undefined") {
       };
   }
 }
+
+// jsdom has no Web Animations API. Without this stub Base UI keeps popovers in
+// their "starting style" and polls every animation frame, which slows a test
+// with an open popover from milliseconds to tens of seconds.
+if (typeof Element !== "undefined" && !Element.prototype.getAnimations) {
+  Object.defineProperty(Element.prototype, "getAnimations", {
+    value: () => [] as unknown as Animation[],
+    writable: true,
+  });
+}
