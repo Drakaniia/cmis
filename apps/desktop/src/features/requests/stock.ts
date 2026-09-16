@@ -4,6 +4,10 @@
  */
 
 import { daysUntilExpiry } from "@/features/inventory/domain/expiry";
+import {
+  MEDICINE_WHERE_SQL,
+  medicineMatchParams,
+} from "@/features/inventory/domain/medicine-match";
 import { getDb } from "@/lib/db";
 import type { RequestItem } from "./types";
 
@@ -48,8 +52,8 @@ export async function batchOptionsForAsync(
   const db = await getDb();
   // medicine is display name "Name Dosage"; match via name or name+dosage
   const itemRows = await db.select<InventoryItemRow[]>(
-    "SELECT id, name, dosage, qty FROM inventory_items WHERE lower(trim(name || ' ' || dosage)) = lower(trim(?)) OR lower(trim(name)) = lower(trim(?)) LIMIT 1",
-    [medicine, medicine]
+    `SELECT id, name, dosage, qty FROM inventory_items WHERE ${MEDICINE_WHERE_SQL} LIMIT 1`,
+    medicineMatchParams(medicine)
   );
   if (itemRows.length === 0) {
     return [];
@@ -75,8 +79,8 @@ export async function hasInventoryItemAsync(
 ): Promise<boolean> {
   const db = await getDb();
   const rows = await db.select<{ c: number }[]>(
-    "SELECT COUNT(*) as c FROM inventory_items WHERE lower(trim(name || ' ' || dosage)) = lower(trim(?)) OR lower(trim(name)) = lower(trim(?))",
-    [medicine, medicine]
+    `SELECT COUNT(*) as c FROM inventory_items WHERE ${MEDICINE_WHERE_SQL}`,
+    medicineMatchParams(medicine)
   );
   return (rows[0]?.c ?? 0) > 0;
 }
@@ -87,8 +91,8 @@ export function hasInventoryItem(_medicine: string): boolean {
 export async function onHandForAsync(medicine: string): Promise<number> {
   const db = await getDb();
   const rows = await db.select<{ qty: number }[]>(
-    "SELECT qty FROM inventory_items WHERE lower(trim(name || ' ' || dosage)) = lower(trim(?)) OR lower(trim(name)) = lower(trim(?)) LIMIT 1",
-    [medicine, medicine]
+    `SELECT qty FROM inventory_items WHERE ${MEDICINE_WHERE_SQL} LIMIT 1`,
+    medicineMatchParams(medicine)
   );
   return rows[0]?.qty ?? 0;
 }
@@ -107,8 +111,8 @@ export function batchOptionsForSync(_medicine: string): BatchOption[] {
 export async function checkStockAsync(item: RequestItem): Promise<StockCheck> {
   const db = await getDb();
   const itemRows = await db.select<InventoryItemRow[]>(
-    "SELECT id, name, dosage, qty FROM inventory_items WHERE lower(trim(name || ' ' || dosage)) = lower(trim(?)) OR lower(trim(name)) = lower(trim(?)) LIMIT 1",
-    [item.medicine, item.medicine]
+    `SELECT id, name, dosage, qty FROM inventory_items WHERE ${MEDICINE_WHERE_SQL} LIMIT 1`,
+    medicineMatchParams(item.medicine)
   );
   const options = await batchOptionsForAsync(item.medicine);
   const inventoryItem = itemRows[0] ?? null;

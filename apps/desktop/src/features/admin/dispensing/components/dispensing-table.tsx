@@ -1,5 +1,7 @@
+import { Button } from "@cmis/ui/components/button";
 import {
   Empty,
+  EmptyContent,
   EmptyDescription,
   EmptyHeader,
   EmptyMedia,
@@ -334,32 +336,37 @@ export function DispensingTable({
   if (rows.length === 0) {
     const hasFilters = totalUnfiltered > 0;
     return (
-      <Empty className="border border-dashed bg-muted/20">
-        <EmptyHeader>
-          <EmptyMedia variant="icon">
-            <Copy />
-          </EmptyMedia>
-          <EmptyTitle>
-            {hasFilters
-              ? "No records match filters"
-              : "No dispensing records yet"}
-          </EmptyTitle>
-          <EmptyDescription>
-            {hasFilters
-              ? "No records match these filters."
-              : "Claims from the Request Queue will appear here."}
-          </EmptyDescription>
+      <div className="flex h-full min-h-[420px] w-full items-center justify-center p-6">
+        <Empty className="w-full max-w-md border border-dashed bg-muted/20">
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <Copy />
+            </EmptyMedia>
+            <EmptyTitle>
+              {hasFilters
+                ? "No records match filters"
+                : "No dispensing records yet"}
+            </EmptyTitle>
+            <EmptyDescription>
+              {hasFilters
+                ? "No records match these filters."
+                : "Claims from the Request Queue will appear here."}
+            </EmptyDescription>
+          </EmptyHeader>
           {hasFilters && onClearFilters ? (
-            <button
-              className="mt-2 text-caption text-primary hover:underline"
-              onClick={onClearFilters}
-              type="button"
-            >
-              Clear filters
-            </button>
+            <EmptyContent>
+              <Button
+                className="press-feedback"
+                onClick={onClearFilters}
+                size="sm"
+                variant="outline"
+              >
+                Clear filters
+              </Button>
+            </EmptyContent>
           ) : null}
-        </EmptyHeader>
-      </Empty>
+        </Empty>
+      </div>
     );
   }
 
