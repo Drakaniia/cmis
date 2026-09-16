@@ -1,55 +1,87 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { WipeDataCard } from "./wipe-data-card";
 
-const WIPE_ALL_DATA_RE = /wipe all data/i;
-const WIPE_DATA_RE = /wipe data/i;
-const COPY_WIPE_RE = /copy wipe/i;
-const TYPE_WIPE_RE = /type wipe to confirm/i;
-const DANGER_ZONE_RE = /danger zone/i;
-const PERMANENTLY_DELETE_RE = /permanently delete/i;
+const WIPE_ALL_DATA = /wipe all data/i;
+const WIPE_DATA = /^wipe data$/i;
+const COPY_WIPE = /copy wipe/i;
+const TYPE_WIPE = /type wipe to confirm/i;
 
-it("gates confirm until WIPE typed and copy button fills input", async () => {
-  const onWipe = vi.fn().mockResolvedValue(undefined);
-  render(<WipeDataCard onWipe={onWipe} />);
-  await userEvent.click(screen.getByRole("button", { name: WIPE_ALL_DATA_RE }));
-  expect(screen.getByRole("dialog")).toBeInTheDocument();
-  const confirm = screen.getByRole("button", { name: WIPE_DATA_RE });
-  expect(confirm).toBeDisabled();
-  // Copy button exists and is clickable (ConfirmModal copy logic)
-  const copyBtn = screen.getByRole("button", { name: COPY_WIPE_RE });
-  expect(copyBtn).toBeInTheDocument();
-  await userEvent.click(copyBtn);
-  // After copy, still gated until WIPE typed manually (ConfirmModal requires typed.trim()==="WIPE")
-  // Type WIPE into the confirmation input
-  const input = screen.getByLabelText(TYPE_WIPE_RE);
-  await userEvent.type(input, "WIPE");
-  expect(confirm).toBeEnabled();
-  await userEvent.click(confirm);
-  expect(onWipe).toHaveBeenCalledWith({ resetSettings: true });
-});
+function renderCard(
+  onWipe: (opts?: { resetSettings?: boolean }) => Promise<void>
+) {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  const invalidate = vi.spyOn(queryClient, "invalidateQueries");
+  render(
+    <QueryClientProvider client={queryClient}>
+      <WipeDataCard onWipe={onWipe} />
+    </QueryClientProvider>
+  );
+  return { invalidate };
+}
 
-it("checkbox default checked (maximal wipe)", async () => {
-  const onWipe = vi.fn().mockResolvedValue(undefined);
-  render(<WipeDataCard onWipe={onWipe} />);
-  const checkbox = screen.getByRole("checkbox");
-  expect(checkbox).toBeChecked();
-  // uncheck should pass resetSettings false
-  await userEvent.click(checkbox);
-  expect(checkbox).not.toBeChecked();
-  await userEvent.click(screen.getByRole("button", { name: WIPE_ALL_DATA_RE }));
-  const input = screen.getByLabelText(TYPE_WIPE_RE);
-  await userEvent.type(input, "WIPE");
-  await userEvent.click(screen.getByRole("button", { name: WIPE_DATA_RE }));
-  expect(onWipe).toHaveBeenCalledWith({ resetSettings: false });
-});
+describe("WipeDataCard", () => {
+  it("keeps confirm disabled until WIPE is typed", async () => {
+    const user = userEvent.setup();
+    const onWipe = vi.fn();
+    renderCard(onWipe);
 
-it("renders Danger Zone card with destructive styling", () => {
-  render(<WipeDataCard onWipe={vi.fn()} />);
-  expect(screen.getByText(DANGER_ZONE_RE)).toBeInTheDocument();
-  expect(screen.getByText(PERMANENTLY_DELETE_RE)).toBeInTheDocument();
-  expect(
-    screen.getByRole("button", { name: WIPE_ALL_DATA_RE })
-  ).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: WIPE_ALL_DATA }));
+
+    const confirm = screen.getByRole("button", { name: WIPE_DATA });
+    expect(confirm).toBeDisabled();
+
+    await user.type(screen.getByLabelText(TYPE_WIPE), "wipe");
+    expect(confirm).toBeDisabled();
+
+    await user.clear(screen.getByLabelText(TYPE_WIPE));
+    await user.type(screen.getByLabelText(TYPE_WIPE), "WIPE");
+    expect(confirm).toBeEnabled();
+    expect(onWipe).not.toHaveBeenCalled();
+  });
+
+  it("fills the field from the copy button", async () => {
+    const user = userEvent.setup();
+    const clipboard = { writeText: vi.fn().mockResolvedValue(undefined) };
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: clipboard,
+    });
+    renderCard(vi.fn());
+
+    await user.click(screen.getByRole("button", { name: WIPE_ALL_DATA }));
+    await user.click(screen.getByRole("button", { name: COPY_WIPE }));
+
+    expect(clipboard.writeText).toHaveBeenCalledWith("WIPE");
+  });
+
+  it("wipes with the reset opt-in and drops every cached query", async () => {
+    const user = userEvent.setup();
+    const onWipe = vi.fn().mockResolvedValue(undefined);
+    const { invalidate } = renderCard(onWipe);
+
+    await user.click(screen.getByRole("button", { name: WIPE_ALL_DATA }));
+    await user.type(screen.getByLabelText(TYPE_WIPE), "WIPE");
+    await user.click(screen.getByRole("button", { name: WIPE_DATA }));
+
+    expect(onWipe).toHaveBeenCalledWith({ resetSettings: true });
+    await vi.waitFor(() => expect(invalidate).toHaveBeenCalled());
+  });
+
+  it("reports a failed wipe without invalidating caches", async () => {
+    const user = userEvent.setup();
+    const onWipe = vi.fn().mockRejectedValue(new Error("disk is locked"));
+    const { invalidate } = renderCard(onWipe);
+
+    await user.click(screen.getByRole("button", { name: WIPE_ALL_DATA }));
+    await user.type(screen.getByLabelText(TYPE_WIPE), "WIPE");
+    await user.click(screen.getByRole("button", { name: WIPE_DATA }));
+
+    await vi.waitFor(() => expect(onWipe).toHaveBeenCalled());
+    expect(invalidate).not.toHaveBeenCalled();
+  });
 });

@@ -7,6 +7,7 @@ import {
   CardTitle,
 } from "@cmis/ui/components/card";
 import { Checkbox } from "@cmis/ui/components/checkbox";
+import { useQueryClient } from "@tanstack/react-query";
 import { ShieldAlert } from "lucide-react";
 import { useCallback, useState } from "react";
 import { toast } from "sonner";
@@ -18,18 +19,23 @@ export function WipeDataCard({
 }: {
   onWipe?: typeof wipeAllData;
 }) {
+  const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [alsoReset, setAlsoReset] = useState(true);
 
   const handleConfirm = useCallback(async () => {
     try {
       await onWipe({ resetSettings: alsoReset });
+      // The wipe empties every table at once, so no cached query can still
+      // describe the app — refetching only the inventory keys would leave the
+      // dashboard, requests and Trash showing rows that no longer exist.
+      await queryClient.invalidateQueries();
       toast.success("All data wiped");
       setOpen(false);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Wipe failed");
     }
-  }, [alsoReset, onWipe]);
+  }, [alsoReset, onWipe, queryClient]);
 
   const handleCheckedChange = useCallback(
     (v: boolean | "indeterminate") => setAlsoReset(Boolean(v)),
@@ -49,7 +55,6 @@ export function WipeDataCard({
             Permanently delete all inventory, dispensing, and queue data. This
             cannot be undone.
           </CardDescription>
-          {/* biome-ignore lint/a11y/noLabelWithoutControl: custom Checkbox is inside label */}
           <label className="flex items-center gap-2 text-sm">
             <Checkbox
               checked={alsoReset}

@@ -44,9 +44,22 @@ export function resetDbForTesting(): void {
   databasePromise = null;
 }
 
+/**
+ * Wipe order is FK-safe: children before parents.
+ *
+ * `requests` is the real table name: the previous `request_queue` was a label no
+ * migration ever created, so that statement was a silent no-op and Wipe All Data
+ * never actually cleared the queue.
+ *
+ * `trash_records` is cleared with the operational data (a restorable Trash would
+ * contradict a deliberate clean slate) while `audit_log` is deliberately absent:
+ * the log is the record *that* the wipe happened, so destroying it would erase
+ * the only account of a destructive action.
+ */
 export const WIPE_STATEMENTS = [
   "DELETE FROM dispensing_events",
-  "DELETE FROM request_queue",
+  "DELETE FROM requests",
+  "DELETE FROM trash_records",
   "DELETE FROM inventory_items",
   "VACUUM",
 ] as const;
@@ -58,6 +71,42 @@ const CMIS_KEYS = [
   "cmis-panel-ratio",
   "cmis-help-hint",
 ] as const;
+
+/**
+ * Puts the shipped taxonomy back after a settings reset.
+ *
+ * "Also reset categories" has to actually reach them: they are rows now
+ * (migration 0006), not React state that a reload would drop. The defaults are
+ * written back in the same breath, so the dropdowns are not left empty — a wipe
+ * should return the app to a first launch, not to a state no launch can produce.
+ *
+ * Best-effort: a database from before that migration has no table to clear, and
+ * that must not turn a completed wipe into a failure.
+ */
+async function reseedCategories(db: unknown): Promise<void> {
+  try {
+    const { DEFAULT_CATEGORY_NAMES, seedCategoryId } = await import(
+      "@/features/inventory/domain/categories"
+    );
+    const conn = db as {
+      execute: (sql: string, params?: unknown[]) => Promise<unknown>;
+    };
+    const now = new Date().toISOString();
+    const marks = DEFAULT_CATEGORY_NAMES.map(() => "(?, ?, ?, ?)").join(", ");
+    await conn.execute("DELETE FROM categories");
+    await conn.execute(
+      `INSERT OR IGNORE INTO categories (id, name, created_at, updated_at) VALUES ${marks}`,
+      DEFAULT_CATEGORY_NAMES.flatMap((name) => [
+        seedCategoryId(name),
+        name,
+        now,
+        now,
+      ])
+    );
+  } catch {
+    // ignore - the categories table may not exist yet
+  }
+}
 
 export async function wipeAllData(opts?: {
   resetSettings?: boolean;
@@ -87,6 +136,22 @@ export async function wipeAllData(opts?: {
   for (const k of CMIS_KEYS) {
     localStorage.removeItem(k);
   }
+  // Written after the tables are empty, so the log explains the empty database
+  // rather than being blank itself. Best-effort: the wipe already happened, and
+  // failing here would report a data loss that did not occur.
+  const { recordAudit } = await import("@/features/admin/audit/write-audit");
+  await recordAudit(
+    db as unknown as {
+      execute: (s: string, p?: unknown[]) => Promise<unknown>;
+    },
+    {
+      action: "settings",
+      detail:
+        "Wiped all data — inventory, requests, dispensing and Trash cleared; audit log preserved",
+      targetKind: "settings",
+    },
+    { bestEffort: true }
+  );
   try {
     const { LazyStore } = await import("@tauri-apps/plugin-store");
     const store = new LazyStore("updater.json");
@@ -114,5 +179,6 @@ export async function wipeAllData(opts?: {
     } catch {
       // ignore - settings hook is handled by caller resetting DEFAULT_SETTINGS
     }
+    await reseedCategories(db);
   }
 }
