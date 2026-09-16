@@ -1,13 +1,8 @@
 import { Button } from "@cmis/ui/components/button";
 import { Checkbox } from "@cmis/ui/components/checkbox";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@cmis/ui/components/dropdown-menu";
-import {
   Empty,
+  EmptyContent,
   EmptyDescription,
   EmptyHeader,
   EmptyMedia,
@@ -23,21 +18,32 @@ import {
   ArrowUp,
   ArrowUpDown,
   CheckCircle2,
-  MoreHorizontal,
   Package,
   ShoppingCart,
 } from "lucide-react";
 import { motion } from "motion/react";
-import { type MouseEvent, type ReactElement, useCallback, useRef } from "react";
-
+import {
+  type KeyboardEvent,
+  type MouseEvent,
+  type ReactElement,
+  useCallback,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { densitySpring } from "@/lib/motion";
 import { getLeadTime, LOW_STOCK_STATUS_CONFIG } from "../domain/low-stock";
+import { composeListLabel } from "../domain/strength";
 import type { LowStockRow, LowStockSortKey } from "../types";
+import { StockDetailMenu } from "./stock-detail-menu";
 
 const SKELETON_ROW_KEYS = Array.from(
   { length: 8 },
   (_, index) => `low-stock-skeleton-${index}`
 );
+
+/** Anything inside a control subtree must not also open the detail modal. */
+const ROW_CONTROL_SELECTOR = "[data-row-control]";
 
 function gridColsFor(
   showSku: boolean | undefined,
@@ -53,6 +59,14 @@ function gridColsFor(
     return "grid-cols-[32px_1.4fr_1.2fr_0.6fr_0.5fr_0.6fr_0.9fr_80px]";
   }
   return "grid-cols-[32px_1.4fr_1.2fr_0.6fr_0.5fr_0.9fr_80px]";
+}
+
+/** §6.4 — announce item, quantity, threshold and status, not just the name. */
+function rowAriaLabel(row: LowStockRow): string {
+  const config = LOW_STOCK_STATUS_CONFIG[row.lowStockStatus];
+  const gap =
+    row.gap > 0 ? `${row.gap} below threshold` : `${Math.abs(row.gap)} above`;
+  return `${row.item.displayName}, ${row.currentQty} on hand, threshold ${row.threshold}, ${gap}, ${config.label}`;
 }
 
 function ariaSortFor(
@@ -224,29 +238,37 @@ function SupplierCell({ row }: { row: LowStockRow }) {
 }
 
 interface LowStockRowItemProps {
+  ariaLabel: string;
   gridCols: string;
-  isHighlighted: boolean;
   isSelected: boolean;
+  onActivate: (row: LowStockRow, originRect: DOMRect | null) => void;
   onAdjustThreshold: (row: LowStockRow, originRect: DOMRect | null) => void;
+  onKeyDown: (event: KeyboardEvent<HTMLElement>) => void;
+  onOpenInStockManagement: (row: LowStockRow) => void;
   onReorder: (row: LowStockRow, originRect: DOMRect | null) => void;
-  onSelect: (id: string, rect: DOMRect | null) => void;
   onToggleItem: (id: string) => void;
   onView: (row: LowStockRow, originRect: DOMRect | null) => void;
   row: LowStockRow;
+  rowRef: (element: HTMLDivElement | null) => void;
   showSku: boolean | undefined;
   showSupplier: boolean | undefined;
+  tabIndex: number;
 }
 
 function LowStockRowItem({
+  ariaLabel,
   gridCols,
-  isHighlighted,
   isSelected,
   row,
+  rowRef,
   showSku,
   showSupplier,
+  tabIndex,
+  onActivate,
   onAdjustThreshold,
+  onKeyDown,
+  onOpenInStockManagement,
   onReorder,
-  onSelect,
   onToggleItem,
   onView,
 }: LowStockRowItemProps) {
@@ -257,11 +279,15 @@ function LowStockRowItem({
     [onToggleItem, row.item.id]
   );
 
-  const handleSelectItem = useCallback(
-    (event: MouseEvent<HTMLElement>) => {
-      onSelect(row.item.id, event.currentTarget.getBoundingClientRect());
+  const handleActivate = useCallback(
+    (event: MouseEvent<HTMLDivElement>) => {
+      const target = event.target as HTMLElement | null;
+      if (target?.closest(ROW_CONTROL_SELECTOR)) {
+        return;
+      }
+      onActivate(row, event.currentTarget.getBoundingClientRect());
     },
-    [onSelect, row.item.id]
+    [onActivate, row]
   );
 
   const handleReorder = useCallback(
@@ -276,47 +302,50 @@ function LowStockRowItem({
     [onAdjustThreshold, row]
   );
 
-  const handleView = useCallback(
-    (event: MouseEvent<HTMLElement>) =>
-      onView(row, event.currentTarget.getBoundingClientRect()),
-    [onView, row]
+  const handleView = useCallback(() => onView(row, null), [onView, row]);
+  const handleOpenInStockManagement = useCallback(
+    () => onOpenInStockManagement(row),
+    [onOpenInStockManagement, row]
   );
 
   return (
     <div
+      aria-label={ariaLabel}
       className={cn(
-        "group grid h-full items-center gap-2 border-border/50 border-b px-2 transition-colors",
+        "group grid h-full cursor-pointer items-center gap-2 border-border/50 border-b px-2 transition-colors",
+        "outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
         gridCols,
-        isHighlighted && "bg-accent/50",
         row.lowStockStatus === "out-of-stock" && "bg-destructive/5"
       )}
+      onClick={handleActivate}
+      onKeyDown={onKeyDown}
+      ref={rowRef}
       role="row"
       style={{ paddingRight: 16 }}
+      tabIndex={tabIndex}
     >
       {/* Checkbox */}
-      <div className="flex items-center justify-center">
+      <div className="flex items-center justify-center" data-row-control>
         <Checkbox
-          aria-label={`Select ${row.item.name}`}
+          aria-label={`Select ${row.item.displayName}`}
           checked={isSelected}
           onCheckedChange={handleToggle}
         />
       </div>
 
-      {/* Item name + 4px status edge bar — CMIS-UI-04 §2 */}
-      <button
-        className="flex min-w-0 items-center gap-2 text-left"
-        onClick={handleSelectItem}
-        type="button"
-      >
+      {/* Item name + 4px status edge bar — CMIS-UI-04 §2. §6.2 — no nested
+       * control: the row itself is the activator. */}
+      <span className="flex min-w-0 items-center gap-2 text-left">
         <span
           aria-hidden
           className="h-8 w-1 shrink-0 rounded-full"
           style={{ backgroundColor: config.edgeColor }}
         />
+        {/* §8.1 — same short label as Stock Management: name + strength. */}
         <span className="min-w-0 truncate font-medium text-sm">
-          {row.item.name}
+          {composeListLabel(row.item)}
         </span>
-      </button>
+      </span>
 
       {/* SKU — hidden at narrower widths per §6 */}
       {showSku ? (
@@ -348,11 +377,11 @@ function LowStockRowItem({
       {/* Supplier — CMIS-UI-04 §3.2 with lead time hint */}
       {showSupplier ? <SupplierCell row={row} /> : null}
 
-      {/* Actions — always visible */}
-      <div className="flex items-center justify-end gap-1">
+      {/* Actions — always visible, and always swallowing the row click */}
+      <div className="flex items-center justify-end gap-1" data-row-control>
         {/* Reorder — CMIS-UI-04 §3.1 primary action */}
         <Button
-          aria-label={`Reorder ${row.item.name}`}
+          aria-label={`Reorder ${row.item.displayName}`}
           className="press-feedback"
           onClick={handleReorder}
           size="icon-xs"
@@ -361,7 +390,7 @@ function LowStockRowItem({
         </Button>
         {/* Adjust threshold — CMIS-UI-04 §3.1 */}
         <Button
-          aria-label={`Adjust threshold for ${row.item.name}`}
+          aria-label={`Adjust threshold for ${row.item.displayName}`}
           className="press-feedback"
           onClick={handleAdjustThreshold}
           size="icon-xs"
@@ -369,17 +398,13 @@ function LowStockRowItem({
         >
           <Package className="size-3.5" />
         </Button>
-        {/* More menu */}
-        <DropdownMenu>
-          <DropdownMenuTrigger className="press-feedback inline-flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground">
-            <MoreHorizontal className="size-3.5" />
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={handleView}>
-              View details
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        {/* More menu — shared with Expiry Alerts (spec §12.1, option B) */}
+        <StockDetailMenu
+          itemName={row.item.displayName}
+          onOpenInStockManagement={handleOpenInStockManagement}
+          onView={handleView}
+          sku={row.item.sku}
+        />
       </div>
     </div>
   );
@@ -389,8 +414,6 @@ function LowStockRowItem({
 
 export function LowStockList({
   rows,
-  selectedId,
-  onSelect,
   sortKey,
   sortDir,
   onSort,
@@ -403,6 +426,7 @@ export function LowStockList({
   onToggleAll,
   onReorder,
   onAdjustThreshold,
+  onOpenInStockManagement,
   onView,
   showSku = true,
   showSupplier = true,
@@ -411,15 +435,15 @@ export function LowStockList({
   loading?: boolean;
   onAdjustThreshold: (row: LowStockRow, originRect: DOMRect | null) => void;
   onClearFilters?: () => void;
+  /** Decision 14 — jump to Stock Management with this item preselected. */
+  onOpenInStockManagement: (row: LowStockRow) => void;
   onReorder: (row: LowStockRow, originRect: DOMRect | null) => void;
-  onRowRect?: (rect: DOMRect | null) => void;
-  onSelect: (id: string, rect: DOMRect | null) => void;
   onSort: (k: LowStockSortKey) => void;
   onToggleAll: () => void;
   onToggleItem: (id: string) => void;
+  /** Decision 1 — the whole row opens the detail modal. */
   onView: (row: LowStockRow, originRect: DOMRect | null) => void;
   rows: LowStockRow[];
-  selectedId: string | null;
   selectedIds: Set<string>;
   showSku?: boolean;
   showSupplier?: boolean;
@@ -428,6 +452,8 @@ export function LowStockList({
   totalUnfiltered?: number;
 }) {
   const parentRef = useRef<HTMLDivElement>(null);
+  const rowRefs = useRef(new Map<string, HTMLDivElement>());
+  const [focusIndex, setFocusIndex] = useState(0);
   const rowHeight = density === "compact" ? 44 : 56;
 
   // CMIS-UI-04 §6 — grid columns adapt at breakpoints
@@ -442,6 +468,69 @@ export function LowStockList({
     getScrollElement: () => parentRef.current,
     overscan: 8,
   });
+
+  // Clamped rather than reset in an effect: re-filtering or re-sorting while a
+  // row is focused must never leave the roving index pointing at nothing.
+  const activeIndex =
+    rows.length === 0 ? -1 : Math.min(focusIndex, rows.length - 1);
+
+  const focusRow = useCallback(
+    (index: number) => {
+      const clamped = Math.max(0, Math.min(index, rows.length - 1));
+      setFocusIndex(clamped);
+      const target = rows[clamped];
+      if (target) {
+        rowRefs.current.get(target.item.id)?.focus();
+      }
+    },
+    [rows]
+  );
+
+  const handleRowKeyDown = useCallback(
+    (event: KeyboardEvent<HTMLElement>, index: number) => {
+      if (event.key === "ArrowDown") {
+        event.preventDefault();
+        focusRow(index + 1);
+        return;
+      }
+      if (event.key === "ArrowUp") {
+        event.preventDefault();
+        focusRow(index - 1);
+        return;
+      }
+      if (event.key === "Home") {
+        event.preventDefault();
+        focusRow(0);
+        return;
+      }
+      if (event.key === "End") {
+        event.preventDefault();
+        focusRow(rows.length - 1);
+        return;
+      }
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        const row = rows[index];
+        if (row) {
+          onView(row, event.currentTarget.getBoundingClientRect());
+        }
+      }
+    },
+    [focusRow, onView, rows]
+  );
+
+  const registerRow = useCallback(
+    (key: string, element: HTMLDivElement | null) => {
+      if (element) {
+        rowRefs.current.set(key, element);
+        return;
+      }
+      rowRefs.current.delete(key);
+    },
+    []
+  );
+
+  const labels = useMemo(() => rows.map(rowAriaLabel), [rows]);
 
   if (loading) {
     return (
@@ -485,33 +574,49 @@ export function LowStockList({
 
   if (rows.length === 0) {
     const hasFilters = totalUnfiltered > 0;
+    if (!hasFilters) {
+      return (
+        <div className="flex h-full min-h-[420px] w-full items-center justify-center p-6">
+          <Empty className="w-full max-w-md border-0 bg-transparent">
+            <EmptyHeader>
+              <EmptyMedia variant="icon">
+                <CheckCircle2 />
+              </EmptyMedia>
+              <EmptyTitle>All items are well-stocked.</EmptyTitle>
+              <EmptyDescription>
+                No low-stock or out-of-stock items detected.
+              </EmptyDescription>
+            </EmptyHeader>
+          </Empty>
+        </div>
+      );
+    }
     return (
-      <Empty className="border border-dashed bg-muted/20">
-        <EmptyHeader>
-          <EmptyMedia variant="icon">
-            <CheckCircle2 />
-          </EmptyMedia>
-          <EmptyTitle>
-            {hasFilters
-              ? "No items match filters"
-              : "All items are well-stocked."}
-          </EmptyTitle>
-          <EmptyDescription>
-            {hasFilters
-              ? "Try different filters or clear them to see all items."
-              : "No low-stock or out-of-stock items detected."}
-          </EmptyDescription>
-          {hasFilters && onClearFilters ? (
-            <button
-              className="mt-2 text-caption text-primary hover:underline"
-              onClick={onClearFilters}
-              type="button"
-            >
-              Clear filters
-            </button>
+      <div className="flex h-full min-h-[420px] w-full items-center justify-center p-6">
+        <Empty className="w-full max-w-md border border-dashed bg-muted/20">
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <CheckCircle2 />
+            </EmptyMedia>
+            <EmptyTitle>No items match filters</EmptyTitle>
+            <EmptyDescription>
+              Try different filters or clear them to see all items.
+            </EmptyDescription>
+          </EmptyHeader>
+          {onClearFilters ? (
+            <EmptyContent>
+              <Button
+                className="press-feedback"
+                onClick={onClearFilters}
+                size="sm"
+                variant="outline"
+              >
+                Clear filters
+              </Button>
+            </EmptyContent>
           ) : null}
-        </EmptyHeader>
-      </Empty>
+        </Empty>
+      </div>
     );
   }
 
@@ -594,17 +699,23 @@ export function LowStockList({
                 }}
               >
                 <LowStockRowItem
+                  ariaLabel={labels[virtualRow.index] ?? ""}
                   gridCols={gridCols}
-                  isHighlighted={row.item.id === selectedId}
                   isSelected={selectedIds.has(row.item.id)}
+                  onActivate={onView}
                   onAdjustThreshold={onAdjustThreshold}
+                  onKeyDown={(event) =>
+                    handleRowKeyDown(event, virtualRow.index)
+                  }
+                  onOpenInStockManagement={onOpenInStockManagement}
                   onReorder={onReorder}
-                  onSelect={onSelect}
                   onToggleItem={onToggleItem}
                   onView={onView}
                   row={row}
+                  rowRef={(element) => registerRow(row.item.id, element)}
                   showSku={showSku}
                   showSupplier={showSupplier}
+                  tabIndex={virtualRow.index === activeIndex ? 0 : -1}
                 />
               </div>
             );

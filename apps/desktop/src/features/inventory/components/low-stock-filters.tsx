@@ -13,6 +13,7 @@ import { type ChangeEvent, type KeyboardEvent, useCallback } from "react";
 import { densitySpring } from "@/lib/motion";
 
 import type { LowStockFilters as LowStockFiltersType } from "../types";
+import { CategoryPicker } from "./category-picker";
 
 const STATUS_OPTIONS: {
   label: string;
@@ -121,13 +122,11 @@ export function LowStockFiltersBar({
   onRemoveChip,
   density,
   distinctSuppliers,
-  distinctCategories,
   selectedCount = 0,
   onBulkReorder,
 }: {
   activeChips: { key: string; label: string; value: string }[];
   density: "compact" | "comfortable";
-  distinctCategories: string[];
   distinctSuppliers: string[];
   filters: LowStockFiltersType;
   onBulkReorder?: () => void;
@@ -231,28 +230,16 @@ export function LowStockFiltersBar({
           </DropdownMenuContent>
         </DropdownMenu>
 
-        {/* Category dropdown */}
-        <DropdownMenu>
-          <DropdownMenuTrigger className="press-feedback inline-flex h-7 shrink-0 items-center gap-1 rounded-md border border-input bg-background px-2.5 font-medium text-xs hover:bg-accent hover:text-accent-foreground">
-            {filters.category === "All" ? "Category" : filters.category}
-            <ChevronDown className="size-3" />
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="min-w-[160px]">
-            <ValueOption
-              label="All categories"
-              onSelect={onCategoryChange}
-              value="All"
-            />
-            {distinctCategories.map((c) => (
-              <ValueOption
-                key={c}
-                label={c}
-                onSelect={onCategoryChange}
-                value={c}
-              />
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
+        {/* Category dropdown — the shared picker, so it can create and edit the
+            list it filters by, exactly like the forms do. */}
+        <CategoryPicker
+          allLabel="All categories"
+          aria-label="Category filter"
+          onChange={onCategoryChange}
+          placeholder="Category"
+          value={filters.category}
+          variant="filter"
+        />
 
         {/* Active filter chips — inline, not a separate row */}
         {activeChips.map((chip) => (

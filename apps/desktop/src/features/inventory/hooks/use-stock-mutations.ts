@@ -1,5 +1,11 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { recordAudit } from "@/features/admin/audit/write-audit";
 import { getDb } from "@/lib/db";
+import {
+  composeDisplayName,
+  isDetailsIncomplete,
+  type StrengthParts,
+} from "../domain/strength";
 import { deriveStatus } from "../import/inventory-status";
 import type { StockInPayload, StockOutPayload } from "../types";
 
@@ -74,8 +80,8 @@ export function useStockInMutation() {
       const rows = await db.select<
         { id: string; qty: number; threshold: number }[]
       >(
-        "SELECT id, qty, threshold FROM inventory_items WHERE sku = ? OR lower(name) = lower(trim(?)) LIMIT 1",
-        [payload.identifier, payload.name]
+        "SELECT id, qty, threshold FROM inventory_items WHERE sku = ? OR lower(trim(name)) = lower(trim(?)) OR lower(trim(display_name)) = lower(trim(?)) LIMIT 1",
+        [payload.identifier, payload.name, payload.name]
       );
       if (rows.length === 0) {
         throw new Error(`Item not found: ${payload.identifier}`);
@@ -83,11 +89,19 @@ export function useStockInMutation() {
       const [item] = rows;
       const newQty = item.qty + payload.qty;
       const newStatus = deriveStatus(newQty, item.threshold);
+      const parts: StrengthParts = {
+        form: payload.form,
+        packSize: payload.packSize,
+        strengthUnit: payload.strengthUnit,
+        strengthValue: payload.strengthValue,
+      };
       const batchId =
         typeof crypto !== "undefined" && "randomUUID" in crypto
           ? crypto.randomUUID()
           : `batch-${Date.now()}`;
 
+      const supplierValue =
+        payload.supplier === "" ? null : (payload.supplier ?? null);
       await db.execute(
         "INSERT INTO inventory_batches (id, item_id, batch, expiry, qty, supplier) VALUES (?, ?, ?, ?, ?, ?)",
         [
@@ -96,17 +110,35 @@ export function useStockInMutation() {
           payload.batch,
           payload.expiry,
           payload.qty,
-          payload.supplier,
+          supplierValue,
         ]
       );
+      // The strength fields are written alongside the quantity: Step 2 prefills
+      // them from the item and the operator may correct them, so a stock-in is
+      // also the moment a row stops being "details incomplete" (spec §8.4).
       await db.execute(
-        "UPDATE inventory_items SET qty = ?, status = ?, needs_batch = 0, updated_at = ? WHERE id = ?",
-        [newQty, newStatus, nowIso(), item.id]
+        `UPDATE inventory_items SET qty = ?, status = ?, needs_batch = 0,
+              strength_value = ?, strength_unit = ?, form = ?, pack_size = ?,
+              display_name = ?, dosage_missing = ?, updated_at = ?
+         WHERE id = ?`,
+        [
+          newQty,
+          newStatus,
+          parts.strengthValue,
+          parts.strengthUnit,
+          parts.form,
+          parts.packSize,
+          composeDisplayName({ ...parts, name: payload.name }),
+          isDetailsIncomplete(parts) ? 1 : 0,
+          nowIso(),
+          item.id,
+        ]
       );
       return { id: item.id, qty: newQty };
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["inventory_items"] });
+      qc.invalidateQueries({ queryKey: ["inventory_items_count"] });
       qc.invalidateQueries({ queryKey: ["dashboard-stats"] });
     },
   });
@@ -118,10 +150,17 @@ export function useStockOutMutation() {
     mutationFn: async (payload: StockOutPayload) => {
       const db = await getDb();
       const itemRows = await db.select<
-        { id: string; qty: number; threshold: number }[]
-      >("SELECT id, qty, threshold FROM inventory_items WHERE id = ? LIMIT 1", [
-        payload.itemId,
-      ]);
+        {
+          display_name: string | null;
+          id: string;
+          name: string;
+          qty: number;
+          threshold: number;
+        }[]
+      >(
+        "SELECT id, name, display_name, qty, threshold FROM inventory_items WHERE id = ? LIMIT 1",
+        [payload.itemId]
+      );
       if (itemRows.length === 0) {
         throw new Error("Item not found");
       }
@@ -153,10 +192,29 @@ export function useStockOutMutation() {
         await recordDispensing(db, payload.itemId, payload.qty);
       }
 
+      // A disposal's free-text reason has no other home — `dispensing_events`
+      // records what left the shelf as a dispense, and no table records why
+      // stock was thrown away. Best effort, so a broken log never loses the
+      // write.
+      const freeText = payload.reasonOther?.trim();
+      await recordAudit(
+        db,
+        {
+          action: "stock-out",
+          after: { qty: newQty, status: newStatus },
+          before: { qty: item.qty },
+          detail: `${item.display_name || item.name}: ${payload.reason} ${payload.qty} ${payload.qty === 1 ? "unit" : "units"}${freeText ? ` — ${freeText}` : ""}${payload.batch ? ` (batch ${payload.batch})` : ""}, ${newQty} left`,
+          targetId: payload.itemId,
+          targetKind: "item",
+        },
+        { bestEffort: true }
+      );
+
       return { id: payload.itemId, qty: newQty };
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["inventory_items"] });
+      qc.invalidateQueries({ queryKey: ["inventory_items_count"] });
       qc.invalidateQueries({ queryKey: ["dashboard-stats"] });
     },
   });

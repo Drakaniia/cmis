@@ -27,8 +27,23 @@ function applyFilters(
       return false;
     }
     if (q) {
-      const hay =
-        `${it.name} ${it.sku} ${it.barcode ?? ""} ${it.batches.map((b) => b.batch).join(" ")}`.toLowerCase();
+      // Search covers all four strength fields plus the stored label (decision
+      // 17), so "500", "mg", "tablet", "100/box" and "Paracetamol 500 mg" all
+      // find the row — the operator does not have to know which field a token
+      // was filed under.
+      const hay = [
+        it.name,
+        it.displayName,
+        it.sku,
+        it.barcode ?? "",
+        it.strengthValue,
+        it.strengthUnit,
+        it.form,
+        it.packSize,
+        it.batches.map((b) => b.batch).join(" "),
+      ]
+        .join(" ")
+        .toLowerCase();
       if (!hay.includes(q)) {
         return false;
       }

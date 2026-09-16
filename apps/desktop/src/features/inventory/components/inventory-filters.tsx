@@ -1,19 +1,13 @@
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@cmis/ui/components/dropdown-menu";
 import { cn } from "@cmis/ui/lib/utils";
-import { ChevronDown, Search, X } from "lucide-react";
+import { Search, X } from "lucide-react";
 import { motion } from "motion/react";
 import { type ChangeEvent, type KeyboardEvent, useCallback } from "react";
 
 import { densitySpring } from "@/lib/motion";
 
 import type { InventoryFilters } from "../types";
-import { INVENTORY_CATEGORIES } from "../types";
 import { BarcodeInput } from "./barcode-input";
+import { CategoryPicker } from "./category-picker";
 
 const STATUS_TOGGLE_OPTIONS = [
   { label: "All", value: "All" },
@@ -59,20 +53,6 @@ function SegmentedOption({
       <span className="relative">{label}</span>
     </button>
   );
-}
-
-/** A dropdown item that reports the value it represents. */
-function ValueOption({
-  label,
-  value,
-  onSelect,
-}: {
-  label: string;
-  value: string;
-  onSelect: (value: string) => void;
-}) {
-  const handleSelect = useCallback(() => onSelect(value), [onSelect, value]);
-  return <DropdownMenuItem onClick={handleSelect}>{label}</DropdownMenuItem>;
 }
 
 function ChipItem({
@@ -188,27 +168,16 @@ export function InventoryFiltersBar({
 
       {/* Filter dropdowns row */}
       <div className="flex flex-wrap items-center gap-2 px-3 pb-2">
-        <DropdownMenu>
-          <DropdownMenuTrigger className="press-feedback inline-flex h-7 items-center gap-1 rounded-md border border-input bg-background px-2.5 font-medium text-xs hover:bg-accent hover:text-accent-foreground">
-            {filters.category === "All" ? "Category" : filters.category}
-            <ChevronDown className="size-3" />
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="min-w-[160px]">
-            <ValueOption
-              label="All categories"
-              onSelect={onCategoryChange}
-              value="All"
-            />
-            {INVENTORY_CATEGORIES.map((c) => (
-              <ValueOption
-                key={c}
-                label={c}
-                onSelect={onCategoryChange}
-                value={c}
-              />
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
+        {/* The same picker the forms use, so a category can be added or
+            corrected while filtering without leaving the list. */}
+        <CategoryPicker
+          allLabel="All categories"
+          aria-label="Category filter"
+          onChange={onCategoryChange}
+          placeholder="Category"
+          value={filters.category}
+          variant="filter"
+        />
 
         {/* Status segmented toggle per spec — using buttons not dropdown */}
         <fieldset className="m-0 inline-flex min-w-0 items-center rounded-full border border-input bg-muted p-0.5">

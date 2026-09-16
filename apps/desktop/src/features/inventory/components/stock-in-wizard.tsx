@@ -1,4 +1,7 @@
+import { AppleDatePicker } from "@cmis/ui/components/apple-date-picker";
 import { Button } from "@cmis/ui/components/button";
+import { QuantityStepper } from "@cmis/ui/components/quantity-stepper";
+import { todayIso } from "@cmis/ui/lib/date";
 import { cn } from "@cmis/ui/lib/utils";
 import { motion, useReducedMotion } from "motion/react";
 import {
@@ -11,14 +14,10 @@ import {
 } from "react";
 import { toast } from "sonner";
 import { expiryLabel } from "../domain/expiry";
-import { SUPPLIER_LEAD_TIMES } from "../domain/low-stock";
-
-const mockSuppliers = SUPPLIER_LEAD_TIMES.map(
-  (s) => s.name
-) as unknown as readonly string[];
-
+import { composeDisplayName } from "../domain/strength";
+import { MEDICINE_FORMS, STRENGTH_UNITS } from "../domain/vocabulary";
 import type { InventoryItem } from "../types";
-import { INVENTORY_CATEGORIES } from "../types";
+import { CategoryPicker } from "./category-picker";
 import { WizardShell } from "./wizard-shell";
 
 /** Apple Design §6: field shake — 4px spring, damping 0.6 / response 0.25s */
@@ -33,21 +32,35 @@ const shakeVariants = {
 const FIELD_CLASS =
   "mt-1 w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-1 focus:ring-ring";
 
-type InventoryCategory = (typeof INVENTORY_CATEGORIES)[number];
-type Supplier = (typeof mockSuppliers)[number];
+/**
+ * A category is a name, not a fixed union: the list is data now (migration
+ * 0006), so the wizard can offer one the operator added a moment ago.
+ */
+type InventoryCategory = string;
 
+/**
+ * The wizard's own draft.
+ *
+ * `unit` is gone (decision 8): the old dropdown offered `tablet`/`capsule`/… and
+ * went nowhere, because no column existed for it. The four strength fields
+ * replace it, and Step 4's review shows their composed label so the operator can
+ * see what will be stored.
+ */
 interface StockInDraft {
   batch: string;
   category: InventoryCategory;
   expiry: string;
+  form: string;
   identifier: string;
   isNew: boolean;
   itemId: string | null;
   name: string;
   notes: string;
+  packSize: string;
   qty: number;
-  supplier: Supplier;
-  unit: string;
+  strengthUnit: string;
+  strengthValue: string;
+  supplier: string | null;
 }
 
 interface StockInWizardProps {
@@ -75,8 +88,7 @@ function validateStep(s: number, draft: StockInDraft): boolean {
       draft.batch.trim().length > 0 &&
       future &&
       Number.isFinite(draft.qty) &&
-      draft.qty >= 1 &&
-      draft.supplier.trim().length > 0
+      draft.qty >= 1
     );
   }
   return true;
@@ -187,38 +199,110 @@ function StepIdentify({
   );
 }
 
+const SELECT_CLASS =
+  "mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-1 focus:ring-ring";
+
+/** Step 2 fields as one value, so "prefill from an item" is stated once. */
+function detailsFromItem(item: InventoryItem): StepDetailsState {
+  return {
+    category: item.category,
+    form: item.form,
+    name: item.name,
+    packSize: item.packSize,
+    strengthUnit: item.strengthUnit,
+    strengthValue: item.strengthValue,
+  };
+}
+
+interface StepDetailsState {
+  category: InventoryCategory;
+  form: string;
+  name: string;
+  packSize: string;
+  strengthUnit: string;
+  strengthValue: string;
+}
+
+const EMPTY_DETAILS: StepDetailsState = {
+  category: "",
+  form: "",
+  name: "",
+  packSize: "",
+  strengthUnit: "",
+  strengthValue: "",
+};
+
+/** §9 — `pack_size` is capped at 40 characters, mirroring the template rule. */
+export const PACK_SIZE_MAX_LENGTH = 40;
+
+/**
+ * Step 2 — Item Details, replacing the dead Unit dropdown with the four fields
+ * the template actually stores (decision 15).
+ *
+ * All four are optional and never block Next (decision 7): a delivery arrives
+ * with a lot number and a count, and refusing to record it because nobody typed
+ * a pack size would be worse than an incomplete row. Rows that stay incomplete
+ * are flagged through `dosage_missing` instead.
+ */
 function StepDetails({
   itemName,
   preFilled,
   category,
-  unit,
+  form,
+  packSize,
+  strengthUnit,
+  strengthValue,
   showErrors,
   onNameChange,
   onCategoryChange,
-  onUnitChange,
+  onFormChange,
+  onPackSizeChange,
+  onStrengthUnitChange,
+  onStrengthValueChange,
 }: {
   itemName: string;
   preFilled: boolean;
   category: InventoryCategory;
-  unit: string;
+  form: string;
+  packSize: string;
+  strengthUnit: string;
+  strengthValue: string;
   showErrors: boolean;
   onNameChange: (value: string) => void;
   onCategoryChange: (value: InventoryCategory) => void;
-  onUnitChange: (value: string) => void;
+  onFormChange: (value: string) => void;
+  onPackSizeChange: (value: string) => void;
+  onStrengthUnitChange: (value: string) => void;
+  onStrengthValueChange: (value: string) => void;
 }) {
   const nameMissing = showErrors && itemName.trim().length === 0;
+  const packTooLong = packSize.trim().length > PACK_SIZE_MAX_LENGTH;
 
   const handleNameChange = useCallback(
     (event: ChangeEvent<HTMLInputElement>) => onNameChange(event.target.value),
     [onNameChange]
   );
-  const handleUnitChange = useCallback(
-    (event: ChangeEvent<HTMLSelectElement>) => onUnitChange(event.target.value),
-    [onUnitChange]
+  const handleStrengthValueChange = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) =>
+      onStrengthValueChange(event.target.value),
+    [onStrengthValueChange]
+  );
+  const handleStrengthUnitChange = useCallback(
+    (event: ChangeEvent<HTMLSelectElement>) =>
+      onStrengthUnitChange(event.target.value),
+    [onStrengthUnitChange]
+  );
+  const handleFormChange = useCallback(
+    (event: ChangeEvent<HTMLSelectElement>) => onFormChange(event.target.value),
+    [onFormChange]
+  );
+  const handlePackSizeChange = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) =>
+      onPackSizeChange(event.target.value),
+    [onPackSizeChange]
   );
   const handleCategoryChange = useCallback(
-    (event: ChangeEvent<HTMLSelectElement>) =>
-      onCategoryChange(event.target.value as InventoryCategory),
+    (value: string) => onCategoryChange(value),
     [onCategoryChange]
   );
 
@@ -230,48 +314,82 @@ function StepDetails({
       <label className="block font-medium text-caption text-foreground">
         Item name
         <input
-          className={cn(
-            FIELD_CLASS,
-            preFilled && "bg-muted",
-            nameMissing && "border-destructive"
-          )}
+          className={cn(FIELD_CLASS, nameMissing && "border-destructive")}
           onChange={handleNameChange}
-          placeholder="e.g., Paracetamol 500mg"
-          readOnly={preFilled}
+          placeholder="e.g., Paracetamol"
           value={itemName}
         />
         {nameMissing ? <ValidationMessage message="Name required." /> : null}
       </label>
-      <div className="grid grid-cols-2 gap-3">
-        <label className="block font-medium text-caption text-foreground">
-          Category
-          <select
-            className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-1 focus:ring-ring"
-            onChange={handleCategoryChange}
-            value={category}
-          >
-            {INVENTORY_CATEGORIES.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="block font-medium text-caption text-foreground">
-          Unit
-          <select
-            className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-1 focus:ring-ring"
-            onChange={handleUnitChange}
-            value={unit}
-          >
-            <option value="tablet">tablet</option>
-            <option value="capsule">capsule</option>
-            <option value="bottle">bottle</option>
-            <option value="sachet">sachet</option>
-            <option value="strip">strip</option>
-          </select>
-        </label>
-      </div>
+      {/* The list is editable from here, so a delivery that introduces a new
+          grouping does not have to be recorded as the wrong one (§7.3). */}
+      <CategoryPicker
+        label="Category"
+        name="stock-in-category"
+        onChange={handleCategoryChange}
+        placeholder="Select category"
+        value={category}
+      />
+      <fieldset className="space-y-2 rounded-md border border-border/50 p-3">
+        <legend className="px-1 text-caption text-muted-foreground">
+          Strength &amp; form <span>(all optional)</span>
+        </legend>
+        <div className="grid grid-cols-2 gap-3">
+          <label className="block font-medium text-caption text-foreground">
+            Strength value
+            <input
+              className={FIELD_CLASS}
+              onChange={handleStrengthValueChange}
+              placeholder="500 or 200/200/5"
+              value={strengthValue}
+            />
+          </label>
+          <label className="block font-medium text-caption text-foreground">
+            Strength unit
+            <select
+              className={SELECT_CLASS}
+              onChange={handleStrengthUnitChange}
+              value={strengthUnit}
+            >
+              <option value="">—</option>
+              {STRENGTH_UNITS.map((unit) => (
+                <option key={unit} value={unit}>
+                  {unit}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="block font-medium text-caption text-foreground">
+            Form
+            <select
+              className={SELECT_CLASS}
+              onChange={handleFormChange}
+              value={form}
+            >
+              <option value="">—</option>
+              {MEDICINE_FORMS.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="block font-medium text-caption text-foreground">
+            Pack size
+            <input
+              className={cn(FIELD_CLASS, packTooLong && "border-destructive")}
+              onChange={handlePackSizeChange}
+              placeholder="(100/box)"
+              value={packSize}
+            />
+            {packTooLong ? (
+              <ValidationMessage
+                message={`Pack size must be ${PACK_SIZE_MAX_LENGTH} characters or fewer.`}
+              />
+            ) : null}
+          </label>
+        </div>
+      </fieldset>
     </div>
   );
 }
@@ -280,27 +398,23 @@ function StepBatch({
   batchNo,
   expiry,
   qty,
-  supplier,
   notes,
   showErrors,
   duplicateBatch,
   onBatchChange,
   onExpiryChange,
   onQtyChange,
-  onSupplierChange,
   onNotesChange,
 }: {
   batchNo: string;
   expiry: string;
   qty: string;
-  supplier: Supplier;
   notes: string;
   showErrors: boolean;
   duplicateBatch: boolean;
   onBatchChange: (value: string) => void;
   onExpiryChange: (value: string) => void;
   onQtyChange: (value: string) => void;
-  onSupplierChange: (value: Supplier) => void;
   onNotesChange: (value: string) => void;
 }) {
   const batchMissing = showErrors && batchNo.trim().length === 0;
@@ -314,19 +428,9 @@ function StepBatch({
     (event: ChangeEvent<HTMLInputElement>) => onBatchChange(event.target.value),
     [onBatchChange]
   );
-  const handleExpiryChange = useCallback(
-    (event: ChangeEvent<HTMLInputElement>) =>
-      onExpiryChange(event.target.value),
-    [onExpiryChange]
-  );
-  const handleQtyChange = useCallback(
-    (event: ChangeEvent<HTMLInputElement>) => onQtyChange(event.target.value),
+  const handleQtyStep = useCallback(
+    (next: number | "") => onQtyChange(next === "" ? "" : String(next)),
     [onQtyChange]
-  );
-  const handleSupplierChange = useCallback(
-    (event: ChangeEvent<HTMLSelectElement>) =>
-      onSupplierChange(event.target.value as Supplier),
-    [onSupplierChange]
   );
   const handleNotesChange = useCallback(
     (event: ChangeEvent<HTMLTextAreaElement>) =>
@@ -356,13 +460,11 @@ function StepBatch({
         </label>
         <label className="block font-medium text-caption text-foreground">
           Expiry date
-          <input
-            className={cn(
-              FIELD_CLASS,
-              showErrors && !expiry && "border-destructive"
-            )}
-            onChange={handleExpiryChange}
-            type="date"
+          <AppleDatePicker
+            className="mt-1 h-9"
+            min={todayIso()}
+            onChange={onExpiryChange}
+            placeholder="Select expiry date"
             value={expiry}
           />
           {expiryInPast ? (
@@ -370,31 +472,18 @@ function StepBatch({
           ) : null}
         </label>
       </div>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 gap-3">
         <label className="block font-medium text-caption text-foreground">
           Quantity
-          <input
-            className={cn(FIELD_CLASS, qtyInvalid && "border-destructive")}
+          <QuantityStepper
+            aria-label="Quantity"
+            className="mt-1 h-9"
+            invalid={qtyInvalid}
             min={1}
-            onChange={handleQtyChange}
+            onChange={handleQtyStep}
             placeholder="0"
-            type="number"
             value={qty}
           />
-        </label>
-        <label className="block font-medium text-caption text-foreground">
-          Supplier
-          <select
-            className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-1 focus:ring-ring"
-            onChange={handleSupplierChange}
-            value={supplier}
-          >
-            {mockSuppliers.map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
-          </select>
         </label>
       </div>
       <label className="block font-medium text-caption text-foreground">
@@ -417,6 +506,16 @@ function StepReview({
   draft: StockInDraft;
   allValid: boolean;
 }) {
+  // The review shows the composed label rather than the raw parts, so the
+  // operator sees the medication the way the lists and the dispense lookup will
+  // read it back (decision 18).
+  const label = composeDisplayName({
+    form: draft.form,
+    name: draft.name || draft.identifier,
+    packSize: draft.packSize,
+    strengthUnit: draft.strengthUnit,
+    strengthValue: draft.strengthValue,
+  });
   return (
     <div className="space-y-3">
       <h3 className="font-semibold text-foreground text-sm">
@@ -427,12 +526,9 @@ function StepReview({
           <div>
             <p className="text-caption text-muted-foreground">Item</p>
             <p className="font-medium">
-              {draft.name || draft.identifier || "—"}{" "}
-              {draft.isNew ? "(new)" : ""}
+              {label || "—"} {draft.isNew ? "(new)" : ""}
             </p>
-            <p className="text-caption">
-              {draft.category} · {draft.unit}
-            </p>
+            <p className="text-caption">{draft.category}</p>
           </div>
           <div>
             <p className="text-caption text-muted-foreground">Batch</p>
@@ -441,7 +537,6 @@ function StepReview({
               Expiry: {draft.expiry ? expiryLabel(draft.expiry) : "—"} · Qty:{" "}
               {draft.qty || "—"}
             </p>
-            <p className="text-caption">Supplier: {draft.supplier}</p>
           </div>
         </div>
         {draft.notes ? (
@@ -474,18 +569,19 @@ export function StockInWizard({
   const [foundItem, setFoundItem] = useState<InventoryItem | null>(null);
   const [isNew, setIsNew] = useState(false);
 
-  // Step 2: item details
+  // Step 2: item details. The four strength fields are prefilled from an
+  // existing item on lookup and never block Next (decision 7).
   const [name, setName] = useState("");
-  const [category, setCategory] = useState<InventoryCategory>(
-    INVENTORY_CATEGORIES[0]
-  );
-  const [unit, setUnit] = useState("tablet");
+  const [category, setCategory] = useState<InventoryCategory>("");
+  const [strengthValue, setStrengthValue] = useState("");
+  const [strengthUnit, setStrengthUnit] = useState("");
+  const [form, setForm] = useState("");
+  const [packSize, setPackSize] = useState("");
 
   // Step 3: batch
   const [batch, setBatch] = useState("");
   const [expiry, setExpiry] = useState("");
   const [qty, setQty] = useState("");
-  const [supplier, setSupplier] = useState<Supplier>(mockSuppliers[0]);
   const [notes, setNotes] = useState("");
 
   const [attemptedNext, setAttemptedNext] = useState(false);
@@ -496,22 +592,19 @@ export function StockInWizard({
       setStep(1);
       setDirection(1);
       setAttemptedNext(false);
-      if (initialItemId) {
-        const found = items.find((i) => i.id === initialItemId) ?? null;
-        setFoundItem(found);
-        if (found) {
-          setIdentifier(found.sku);
-          setName(found.name);
-          setCategory(found.category as InventoryCategory);
-          setSupplier(found.supplier as Supplier);
-          setIsNew(false);
-        }
-      } else {
-        setIdentifier("");
-        setFoundItem(null);
-        setIsNew(false);
-        setName("");
-      }
+      const found = initialItemId
+        ? (items.find((i) => i.id === initialItemId) ?? null)
+        : null;
+      setFoundItem(found);
+      setIsNew(false);
+      setIdentifier(found ? found.sku : "");
+      const details = found ? detailsFromItem(found) : EMPTY_DETAILS;
+      setCategory(details.category);
+      setForm(details.form);
+      setName(details.name);
+      setPackSize(details.packSize);
+      setStrengthUnit(details.strengthUnit);
+      setStrengthValue(details.strengthValue);
       setBatch("");
       setExpiry("");
       setQty("");
@@ -524,27 +617,32 @@ export function StockInWizard({
       batch: batch.trim(),
       category,
       expiry,
+      form: form.trim(),
       identifier,
       isNew,
       itemId: foundItem?.id ?? null,
       name: name.trim(),
       notes: notes.trim(),
+      packSize: packSize.trim(),
       qty: Number(qty),
-      supplier,
-      unit,
+      strengthUnit,
+      strengthValue: strengthValue.trim(),
+      supplier: null,
     }),
     [
       batch,
       category,
       expiry,
+      form,
       foundItem,
       identifier,
       isNew,
       name,
       notes,
+      packSize,
       qty,
-      supplier,
-      unit,
+      strengthUnit,
+      strengthValue,
     ]
   );
 
@@ -582,25 +680,38 @@ export function StockInWizard({
     if (!q) {
       return;
     }
+    // The display label is matched as well as the bare name: `name` is now the
+    // bare medication, so "Paracetamol 500 mg" — what the operator reads on the
+    // shelf — would otherwise stop resolving.
     const found =
       items.find(
         (i) =>
           i.sku.toLowerCase() === q ||
           i.barcode?.toLowerCase() === q ||
-          i.name.toLowerCase() === q
+          i.name.toLowerCase() === q ||
+          i.displayName.toLowerCase() === q
       ) ?? null;
     setFoundItem(found);
     if (found) {
       setIsNew(false);
-      setName(found.name);
-      setCategory(found.category as InventoryCategory);
-      setSupplier(found.supplier as Supplier);
-      toast.success(`Found: ${found.name}`);
+      const details = detailsFromItem(found);
+      setCategory(details.category);
+      setForm(details.form);
+      setName(details.name);
+      setPackSize(details.packSize);
+      setStrengthUnit(details.strengthUnit);
+      setStrengthValue(details.strengthValue);
+      toast.success(`Found: ${found.displayName}`);
       // jump to step 3 per spec if scan hits existing → jump to Step 3
       goNext(true);
     } else {
       setIsNew(true);
-      setName("");
+      setCategory(EMPTY_DETAILS.category);
+      setForm(EMPTY_DETAILS.form);
+      setName(EMPTY_DETAILS.name);
+      setPackSize(EMPTY_DETAILS.packSize);
+      setStrengthUnit(EMPTY_DETAILS.strengthUnit);
+      setStrengthValue(EMPTY_DETAILS.strengthValue);
       toast.message("Not found — Create new item?", {
         description: `No match for "${identifier}". Fill details to create.`,
       });
@@ -660,13 +771,19 @@ export function StockInWizard({
       {step === 2 ? (
         <StepDetails
           category={category}
+          form={form}
           itemName={name}
           onCategoryChange={setCategory}
+          onFormChange={setForm}
           onNameChange={setName}
-          onUnitChange={setUnit}
+          onPackSizeChange={setPackSize}
+          onStrengthUnitChange={setStrengthUnit}
+          onStrengthValueChange={setStrengthValue}
+          packSize={packSize}
           preFilled={foundItem !== null}
           showErrors={attemptedNext}
-          unit={unit}
+          strengthUnit={strengthUnit}
+          strengthValue={strengthValue}
         />
       ) : null}
 
@@ -680,10 +797,8 @@ export function StockInWizard({
           onExpiryChange={setExpiry}
           onNotesChange={setNotes}
           onQtyChange={setQty}
-          onSupplierChange={setSupplier}
           qty={qty}
           showErrors={attemptedNext}
-          supplier={supplier}
         />
       ) : null}
 
