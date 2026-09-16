@@ -27,8 +27,14 @@ export default defineConfig({
     environment: "jsdom",
     exclude: ["node_modules", "dist", ".tanstack"],
     globals: true,
+    // Any test that opens a Base UI popup spends 15-30s in React's act flush
+    // under jsdom (the component work itself is sub-second), so the 5s default
+    // reports timeouts on popup tests that are in fact passing. The same cost
+    // lands in the unmount hook, hence the matching hookTimeout.
+    hookTimeout: 30_000,
     include: ["src/**/*.{test,spec}.{ts,tsx}"],
     passWithNoTests: true,
     setupFiles: ["./src/test/setup.ts"],
+    testTimeout: 30_000,
   },
 });
