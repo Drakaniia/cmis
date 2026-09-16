@@ -35,6 +35,24 @@ fn db_migrations() -> Vec<Migration> {
             sql: include_str!("../migrations/0003_dispensing_events.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 4,
+            description: "inventory_creation",
+            sql: include_str!("../migrations/0004_inventory_creation.sql"),
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 5,
+            description: "strength_fields",
+            sql: include_str!("../migrations/0005_strength_fields.sql"),
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 6,
+            description: "categories",
+            sql: include_str!("../migrations/0006_categories.sql"),
+            kind: MigrationKind::Up,
+        },
     ]
 }
 
