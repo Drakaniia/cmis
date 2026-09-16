@@ -2,27 +2,32 @@ import { Button } from "@cmis/ui/components/button";
 import { Download } from "lucide-react";
 import { useCallback, useState } from "react";
 import { toast } from "sonner";
-
 import { downloadAuditCsv } from "../export-audit";
+import { useAuditCorrection } from "../hooks/use-audit-correction";
 import { useAuditFilters } from "../hooks/use-audit-filters";
-import type { AuditRow } from "../types";
+import { useAuditLog } from "../hooks/use-audit-log";
 import { AuditFilterBar } from "./audit-filter-bar";
 import { AuditTable } from "./audit-table";
 import { CorrectionModal } from "./correction-modal";
 
-/** The signed-in Admin authoring corrections (§3.4). */
-const ACTOR = "A. Lim";
-
 /**
  * CMIS-UI-09 §3 — Audit Logs.
  *
- * The table is the tool: expand a row for the diff, hit the ⋯ for a correction
- * that appends rather than overwrites, and export exactly what's on screen.
+ * Rows are read from the append-only `audit_log`; a correction is *written*
+ * rather than appended to local state, so it survives a restart and shows up in
+ * the export like every other entry.
  */
 export function AuditPage() {
-  const [rows, setRows] = useState<AuditRow[]>([]);
+  const { data } = useAuditLog();
+  const rows = data ?? [];
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [correctionRow, setCorrectionRow] = useState<AuditRow | null>(null);
+  const {
+    correctionRow,
+    handleOpenChange,
+    open: correctionOpen,
+    setCorrectionRow,
+    submit: submitCorrection,
+  } = useAuditCorrection({ onWritten: setExpandedId });
 
   const {
     activeChips,
@@ -57,49 +62,8 @@ export function AuditPage() {
     /* noop */
   }, []);
 
-  const handleCorrectionSubmit = useCallback(
-    (payload: { corrected: Record<string, string>; reason: string }) => {
-      if (!correctionRow) {
-        return;
-      }
-      const at = new Date().toISOString();
-      const correction: AuditRow = {
-        action: "correction",
-        after: payload.corrected,
-        at,
-        before: { ...correctionRow.after },
-        branch: correctionRow.branch,
-        correctionOf: correctionRow.id,
-        detail: `Correction of [${correctionRow.id}] by ${ACTOR}: ${payload.reason}`,
-        id: `AUD-${String(Date.now()).slice(-6)}`,
-        reason: payload.reason,
-        user: ACTOR,
-      };
-      setRows((prev) => [
-        correction,
-        ...prev.map((row) =>
-          row.id === correctionRow.id
-            ? { ...row, corrected: true, correctionId: correction.id }
-            : row
-        ),
-      ]);
-      setExpandedId(correction.id);
-      setCorrectionRow(null);
-      toast.success("Correction appended", {
-        description: `Original ${correctionRow.id} stays intact.`,
-      });
-    },
-    [correctionRow]
-  );
-
   const handleToggleExpand = useCallback((id: string) => {
     setExpandedId((prev) => (prev === id ? null : id));
-  }, []);
-
-  const handleCorrectionOpenChange = useCallback((open: boolean) => {
-    if (!open) {
-      setCorrectionRow(null);
-    }
   }, []);
 
   return (
@@ -141,9 +105,9 @@ export function AuditPage() {
       </div>
 
       <CorrectionModal
-        onOpenChange={handleCorrectionOpenChange}
-        onSubmit={handleCorrectionSubmit}
-        open={correctionRow !== null}
+        onOpenChange={handleOpenChange}
+        onSubmit={submitCorrection}
+        open={correctionOpen}
         row={correctionRow}
       />
     </div>

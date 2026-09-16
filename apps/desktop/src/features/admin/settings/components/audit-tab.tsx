@@ -6,12 +6,10 @@ import { AuditFilterBar } from "../../audit/components/audit-filter-bar";
 import { AuditTable } from "../../audit/components/audit-table";
 import { CorrectionModal } from "../../audit/components/correction-modal";
 import { downloadAuditCsv } from "../../audit/export-audit";
+import { useAuditCorrection } from "../../audit/hooks/use-audit-correction";
 import { useAuditFilters } from "../../audit/hooks/use-audit-filters";
-import type { AuditRow } from "../../audit/types";
+import { useAuditLog } from "../../audit/hooks/use-audit-log";
 import { SettingsCard } from "./settings-card";
-
-/** The signed-in Admin authoring corrections (§3.4). */
-const ACTOR = "A. Lim";
 
 function noop() {
   // no-op: request flow is not wired up in the settings tab yet
@@ -22,9 +20,16 @@ function noop() {
  * Simplified version that doesn't depend on router search params.
  */
 export function AuditTab() {
-  const [rows, setRows] = useState<AuditRow[]>([] as AuditRow[]);
+  const { data } = useAuditLog();
+  const rows = data ?? [];
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [correctionRow, setCorrectionRow] = useState<AuditRow | null>(null);
+  const {
+    correctionRow,
+    handleOpenChange,
+    open: correctionOpen,
+    setCorrectionRow,
+    submit: submitCorrection,
+  } = useAuditCorrection({ onWritten: setExpandedId });
 
   const {
     activeChips,
@@ -58,47 +63,6 @@ export function AuditTab() {
   const handleToggleExpand = useCallback((id: string) => {
     setExpandedId((prev) => (prev === id ? null : id));
   }, []);
-
-  const handleCorrectionDialogChange = useCallback((open: boolean) => {
-    if (!open) {
-      setCorrectionRow(null);
-    }
-  }, []);
-
-  const handleCorrectionSubmit = useCallback(
-    (payload: { corrected: Record<string, string>; reason: string }) => {
-      if (!correctionRow) {
-        return;
-      }
-      const at = new Date().toISOString();
-      const correction: AuditRow = {
-        action: "correction",
-        after: payload.corrected,
-        at,
-        before: { ...correctionRow.after },
-        branch: correctionRow.branch,
-        correctionOf: correctionRow.id,
-        detail: `Correction of [${correctionRow.id}] by ${ACTOR}: ${payload.reason}`,
-        id: `AUD-${String(Date.now()).slice(-6)}`,
-        reason: payload.reason,
-        user: ACTOR,
-      };
-      setRows((prev) => [
-        correction,
-        ...prev.map((row) =>
-          row.id === correctionRow.id
-            ? { ...row, corrected: true, correctionId: correction.id }
-            : row
-        ),
-      ]);
-      setExpandedId(correction.id);
-      setCorrectionRow(null);
-      toast.success("Correction appended", {
-        description: `Original ${correctionRow.id} stays intact.`,
-      });
-    },
-    [correctionRow]
-  );
 
   return (
     <div className="space-y-4">
@@ -143,9 +107,9 @@ export function AuditTab() {
       </SettingsCard>
 
       <CorrectionModal
-        onOpenChange={handleCorrectionDialogChange}
-        onSubmit={handleCorrectionSubmit}
-        open={correctionRow !== null}
+        onOpenChange={handleOpenChange}
+        onSubmit={submitCorrection}
+        open={correctionOpen}
         row={correctionRow}
       />
     </div>
