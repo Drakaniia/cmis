@@ -23,7 +23,8 @@ const dbSelect = vi.fn().mockImplementation((sql: string) => {
   if (sql.includes("SELECT sku FROM inventory_items")) {
     return [];
   }
-  if (sql.includes("SELECT id, name, dosage")) {
+  // The preview reads the strength columns now, not a composed `dosage`.
+  if (sql.includes("SELECT name, display_name")) {
     return [];
   }
   return [];

@@ -126,25 +126,33 @@ export function ExportCard() {
           "@/features/inventory/import/export-xlsx"
         );
         const db = await getDb();
+        // The four strength columns are read as stored and written verbatim, so
+        // export → import → export is lossless (decision 14).
         const items = (await db.select<
           {
             category: string | null;
-            dosage: string;
+            form: string | null;
             name: string;
+            pack_size: string | null;
             stock_on_hand: number | null;
             stock_remaining: number | null;
+            strength_unit: string | null;
+            strength_value: string | null;
             supplier: string | null;
             total_dispensed: number | null;
             id: string;
           }[]
         >(
-          "SELECT id, name, dosage, stock_on_hand, total_dispensed, stock_remaining, category, supplier FROM inventory_items ORDER BY name"
+          "SELECT id, name, strength_value, strength_unit, form, pack_size, stock_on_hand, total_dispensed, stock_remaining, category, supplier FROM inventory_items ORDER BY name"
         )) as unknown as {
           category: string | null;
-          dosage: string;
+          form: string | null;
           name: string;
+          pack_size: string | null;
           stock_on_hand: number | null;
           stock_remaining: number | null;
+          strength_unit: string | null;
+          strength_value: string | null;
           supplier: string | null;
           total_dispensed: number | null;
           id: string;
@@ -164,10 +172,13 @@ export function ExportCard() {
             return {
               category: it.category,
               daily,
-              dosage: it.dosage ?? "",
+              form: it.form ?? "",
               name: it.name,
+              packSize: it.pack_size ?? "",
               stockOnHand: it.stock_on_hand,
               stockRemaining: it.stock_remaining,
+              strengthUnit: it.strength_unit ?? "",
+              strengthValue: it.strength_value ?? "",
               supplier: it.supplier,
               totalDispensed: it.total_dispensed,
             };

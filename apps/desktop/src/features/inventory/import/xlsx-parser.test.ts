@@ -60,7 +60,13 @@ describe("parseInventoryXlsx", () => {
 
     expect(result.rows).toHaveLength(1);
     expect(result.rows[0].name).toBe("Paracetamol");
-    expect(result.rows[0].dosage).toBe("500 mg tabs (100/tab)");
+    expect(result.rows[0].strengthValue).toBe("500");
+    expect(result.rows[0].strengthUnit).toBe("mg");
+    expect(result.rows[0].form).toBe("tabs");
+    expect(result.rows[0].packSize).toBe("(100/tab)");
+    expect(result.rows[0].displayName).toBe(
+      "Paracetamol 500 mg tabs (100/tab)"
+    );
     expect(result.rows[0].stockOnHand).toBe(120);
     expect(result.rows[0].totalDispensed).toBe(0);
     expect(result.rows[0].dailySum).toBe(0);
@@ -91,7 +97,7 @@ describe("parseInventoryXlsx", () => {
     expect(result.rows[0].totalMismatch).toBe(false);
   });
 
-  it("handles stock 0 and blank dosage like the CSV parser (strict template has no NO STOCK text)", () => {
+  it("handles stock 0 and blank strength columns like the CSV parser (strict template has no NO STOCK text)", () => {
     const bytes = buildWorkbook([
       build41Row({
         name: "Aluminum Mag Hydroxide",
@@ -102,8 +108,8 @@ describe("parseInventoryXlsx", () => {
     const result = parseInventoryXlsx(bytes);
 
     expect(result.rows[0].stockOnHand).toBe(0);
-    expect(result.rows[0].dosageMissing).toBe(true);
-    expect(result.dosageMissingCount).toBe(1);
+    expect(result.rows[0].detailsIncomplete).toBe(true);
+    expect(result.detailsIncompleteCount).toBe(1);
   });
 
   it("produces the same result as parsing the equivalent CSV text", () => {

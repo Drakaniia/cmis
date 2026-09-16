@@ -16,8 +16,16 @@ function extractPrefix(name: string): string | null {
 
 const STRENGTH_NUMBER = /-?\d+/;
 
-function extractStrength(dosage: string): string | null {
-  const match = dosage.match(STRENGTH_NUMBER);
+/**
+ * The numeric half of `strength_value`, which is now a stored column rather than
+ * something parsed out of a flattened `dosage` (spec §5, decision 10).
+ *
+ * Compound values contribute their first number — `200/200/5` was `SKU-…-200`
+ * before the strength split existed and stays that way: **existing SKUs are never
+ * renumbered**, so only newly derived ones are affected at all.
+ */
+function extractStrength(strengthValue: string): string | null {
+  const match = strengthValue.match(STRENGTH_NUMBER);
   return match ? match[0] : null;
 }
 
@@ -32,11 +40,11 @@ function randomHex(len: number): string {
 
 export function deriveSku(
   name: string,
-  dosage: string,
+  strengthValue: string,
   existingSkus?: Set<string>
 ): string {
   const prefix = extractPrefix(name.trim());
-  const strength = extractStrength(dosage);
+  const strength = extractStrength(strengthValue);
 
   let base: string;
   if (!prefix) {

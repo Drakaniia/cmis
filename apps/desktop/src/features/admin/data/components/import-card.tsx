@@ -12,10 +12,18 @@ import {
 import { toast } from "sonner";
 
 import {
+  allIdentityKeys,
+  identityKeysOf,
+  legacyIdentityKey,
+} from "@/features/inventory/domain/identity";
+import {
   deriveImportMonth,
   describeImportMonth,
 } from "@/features/inventory/import/import-month";
-import type { ParseResult } from "@/features/inventory/import/types";
+import type {
+  ParsedInventoryRow,
+  ParseResult,
+} from "@/features/inventory/import/types";
 import { dragSpring } from "@/lib/motion";
 import { ConfirmModal } from "../../components/confirm-modal";
 import { SettingsCard } from "../../settings/components/settings-card";
@@ -44,24 +52,50 @@ declare global {
  * sees which dispensing month the grid is about to land in *before* confirming
  * a destructive write — the workbook itself never states it.
  */
-/** The key `importInventoryCsv` dedupes on — `name|dosage`, both normalised. */
-function matchKey(name: string, dosage: string): string {
-  return `${name.toLowerCase().trim()}|${dosage.toLowerCase().trim()}`;
-}
-
 /**
- * `name|dosage` keys already in the database, so the preview can tell an update
+ * Every identity key already in the database, so the preview can tell an update
  * from an insert before a destructive confirm. A preview that reports "85
  * inserts" over 85 matching rows is worse than no preview.
+ *
+ * The keys come from `domain/identity.ts` — the very same helper
+ * `importInventoryCsv` dedupes with, so the preview cannot promise an update that
+ * the import then treats as an insert (spec §7.1, decision 9).
  */
 async function loadExistingKeys(): Promise<ReadonlySet<string>> {
   try {
     const { getDb } = await import("@/lib/db");
     const db = await getDb();
-    const rows = await db.select<{ dosage: string; name: string }[]>(
-      "SELECT name, dosage FROM inventory_items"
+    const rows = await db.select<
+      {
+        display_name: string | null;
+        dosage: string | null;
+        form: string | null;
+        name: string;
+        pack_size: string | null;
+        strength_unit: string | null;
+        strength_value: string | null;
+      }[]
+    >(
+      "SELECT name, dosage, display_name, strength_value, strength_unit, form, pack_size FROM inventory_items"
     );
-    return new Set(rows.map((row) => matchKey(row.name, row.dosage)));
+    const keys = new Set<string>();
+    for (const row of rows) {
+      for (const key of identityKeysOf({
+        form: row.form ?? "",
+        name: row.name,
+        packSize: row.pack_size ?? "",
+        strengthUnit: row.strength_unit ?? "",
+        strengthValue: row.strength_value ?? "",
+      })) {
+        keys.add(key);
+      }
+      // Rows the backfill has not rewritten carry only their legacy text.
+      const dosage = (row.dosage ?? "").trim();
+      if (dosage !== "") {
+        keys.add(legacyIdentityKey(row.name, dosage));
+      }
+    }
+    return keys;
   } catch {
     // No database behind this window (web preview): every row is an insert.
     return new Set();
@@ -85,8 +119,10 @@ function inventoryDiff(
       `No month in the file name — grid days will be recorded under ${derived.month}.`
     );
   }
-  const changeOf = (row: { dosage: string; name: string }) =>
-    existingKeys.has(matchKey(row.name, row.dosage))
+  // The same key set the importer itself compares, so the preview cannot promise
+  // an update the import then treats as an insert (§7.1).
+  const changeOf = (row: ParsedInventoryRow) =>
+    allIdentityKeys(row).some((key) => existingKeys.has(key))
       ? ("update" as const)
       : ("insert" as const);
   const updates = parsed.rows.filter(
@@ -108,7 +144,7 @@ function inventoryDiff(
     sample: parsed.rows.slice(0, 3).map((r) => ({
       change: changeOf(r),
       id: r.name,
-      label: `${r.name} ${r.dosage}`.trim(),
+      label: r.displayName,
     })),
     warnings,
   };
@@ -299,13 +335,13 @@ export function ImportCard() {
         toast.success(
           `Imported ${result.imported} medications into ${staged.month} — ${result.inserted} new, ${result.updated} updated`,
           {
-            description: `${diff.fileName} · ${result.dosageMissingCount} need dosage, ${result.mismatchCount} mismatches, ${result.warnings.length} warnings`,
+            description: `${diff.fileName} · ${result.detailsIncompleteCount} need details, ${result.mismatchCount} mismatches, ${result.warnings.length} warnings`,
             id: IMPORT_TOAST_ID,
           }
         );
-        if (result.dosageMissingCount > 0) {
+        if (result.detailsIncompleteCount > 0) {
           toast.warning(
-            `${result.dosageMissingCount} items need dosage — review in inventory filters`
+            `${result.detailsIncompleteCount} items have incomplete strength details — edit them from Stock Management`
           );
         }
         window.__inventoryImportCsv = undefined;
