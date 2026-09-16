@@ -4,6 +4,8 @@ from openpyxl.formatting.rule import CellIsRule
 from openpyxl.worksheet.datavalidation import DataValidation
 from openpyxl.utils import get_column_letter
 
+from inventory_vocabulary import form_list_formula, unit_list_formula
+
 OUTPUT = r"C:\Users\Qwenzy\Desktop\CMIS\AUGUST 2026 inventory - TEMPLATE.xlsx"
 
 HEADERS = [
@@ -93,9 +95,12 @@ for r in range(2, 102):
 
 # Data validations — strict blocking Stop style to row 501
 
-# B2:B501 decimal 0–10000 or blank
-dv_b = DataValidation(type="decimal", operator="between", formula1="0", formula2="10000", allow_blank=True)
-dv_b.error = "Strength must be 0–10000 or blank"
+# B2:B501 free text, bounded — deliberately *not* decimal 0–10000.
+# A compound strength ("200/200/5") is a legal, stored value and the old decimal
+# rule rejected it, which made the app unable to write back a row it had read
+# (strength spec §9). Length is still capped so the column cannot run away.
+dv_b = DataValidation(type="textLength", operator="between", formula1="0", formula2="20", allow_blank=True)
+dv_b.error = "Strength must be 20 characters or fewer"
 dv_b.errorTitle = "Invalid strength"
 dv_b.prompt = INPUT_MSGS["B"]
 dv_b.promptTitle = "Strength"
@@ -105,7 +110,7 @@ dv_b.sqref = "B2:B501"
 ws.add_data_validation(dv_b)
 
 # C list
-dv_c = DataValidation(type="list", formula1='"mg,g,mcg,ml,mg/ml,mg/5ml,%,IU,units"', allow_blank=True)
+dv_c = DataValidation(type="list", formula1=unit_list_formula(), allow_blank=True)
 dv_c.error = "Pick a unit or leave blank"
 dv_c.errorTitle = "Invalid unit"
 dv_c.prompt = INPUT_MSGS["C"]
@@ -116,7 +121,7 @@ dv_c.sqref = "C2:C501"
 ws.add_data_validation(dv_c)
 
 # D list
-dv_d = DataValidation(type="list", formula1='"tablet,capsule,cap,sachet,syrup,suspension,susp,ointment,cream,drops,vial,ampule,nebule,injection,suppository,box,piece"', allow_blank=True)
+dv_d = DataValidation(type="list", formula1=form_list_formula(), allow_blank=True)
 dv_d.error = "Pick a form or leave blank"
 dv_d.errorTitle = "Invalid form"
 dv_d.prompt = INPUT_MSGS["D"]

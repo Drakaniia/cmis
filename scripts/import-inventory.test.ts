@@ -171,17 +171,46 @@ it("imports the monthly workbook into the desktop database", async () => {
     //    here rather than as a silently empty card.
     log("\nPAGE QUERIES");
 
+    // Mirrors the app's own query, which orders by the strength pair because
+    // `dosage` is no longer read anywhere (strength spec §6.2 option B: the
+    // column is left in place but inert).
     const inventory = db.all<{
+      display_name: string;
+      form: string;
       name: string;
-      dosage: string;
+      pack_size: string;
       qty: number;
       status: string;
+      strength_unit: string;
+      strength_value: string;
     }>(
-      "SELECT * FROM inventory_items ORDER BY name COLLATE NOCASE, dosage COLLATE NOCASE"
+      "SELECT * FROM inventory_items ORDER BY name COLLATE NOCASE, strength_value COLLATE NOCASE, form COLLATE NOCASE"
     );
     log(
       `  Stock Management      ${inventory.length} rows (ORDER BY name NOCASE)`
     );
+
+    // The four stored columns are the whole point of the change: assert the
+    // import actually filled them and composed a label from them.
+    const incomplete = inventory.filter(
+      (row) =>
+        row.strength_value.trim() === "" ||
+        row.strength_unit.trim() === "" ||
+        row.form.trim() === "" ||
+        row.pack_size.trim() === ""
+    ).length;
+    const unlabelled = inventory.filter(
+      (row) => row.display_name.trim() === ""
+    ).length;
+    log(
+      `  strength columns      ${inventory.length - incomplete} complete, ${incomplete} incomplete`
+    );
+    log(`  display_name blank    ${unlabelled}`);
+    for (const row of inventory.slice(0, 5)) {
+      log(`      · ${row.display_name || "(none)"}`);
+    }
+    expect(unlabelled).toBe(0);
+    expect(incomplete).toBeLessThan(inventory.length);
 
     const statuses = db.all<{ status: string; c: number }>(
       "SELECT status, COUNT(*) AS c FROM inventory_items GROUP BY status ORDER BY c DESC"
@@ -221,7 +250,7 @@ it("imports the monthly workbook into the desktop database", async () => {
     );
 
     const top = db.all<{ name: string; qty: number }>(
-      "SELECT i.id as id, i.name || ' ' || i.dosage as name, i.sku as sku, i.category as category, SUM(d.qty) as qty FROM dispensing_events d JOIN inventory_items i ON d.item_id=i.id WHERE d.month=? GROUP BY i.id ORDER BY qty DESC LIMIT 5",
+      "SELECT i.id as id, COALESCE(NULLIF(trim(i.display_name), ''), i.name || ' ' || i.dosage) as name, i.sku as sku, i.category as category, SUM(d.qty) as qty FROM dispensing_events d JOIN inventory_items i ON d.item_id=i.id WHERE d.month=? GROUP BY i.id ORDER BY qty DESC LIMIT 5",
       [MONTH]
     );
     log("  Top dispensed         ");
