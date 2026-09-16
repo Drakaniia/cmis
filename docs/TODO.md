@@ -3,4 +3,6 @@ backup data is still .json or .db,  i want to to also have manual option, backup
 so when i fillup template,, and try to import it, will it now work?
 
 
-you are  on latest versoin taost when i click check for update in the help navbar
+"you are  on latest versoin" taost when i click check for update in the help navbar and in settings
+
+
