@@ -1,29 +1,10 @@
 import {
-  DocsCallout,
   DocsKey,
   DocsP,
   DocsRoute,
   DocsSection,
   DocsSubHeading,
 } from "../docs-primitives";
-
-const ROLES = [
-  {
-    description:
-      "runs the clinic side of CMIS — records stock in and out, answers requests, dispenses medicines, watches expiry and low-stock lists.",
-    label: "Staff",
-  },
-  {
-    description:
-      "everything Staff can do, plus user management, thresholds, system settings, data import/export, audit logs and health checks.",
-    label: "Admin",
-  },
-  {
-    description:
-      "read-only access to dashboards, stock levels, the dispensing log and reports. Viewers cannot change or dispense anything.",
-    label: "Viewer",
-  },
-];
 
 export function WelcomeSection() {
   return (
@@ -34,22 +15,6 @@ export function WelcomeSection() {
         dispensed and how that trends over time. It runs on the clinic computer,
         so every page in this guide works without an internet connection.
       </DocsP>
-      <DocsSubHeading>What your role lets you do</DocsSubHeading>
-      <ul className="space-y-1.5">
-        {ROLES.map((role) => (
-          <li
-            className="text-[13px] text-muted-foreground leading-relaxed"
-            key={role.label}
-          >
-            <span className="font-medium text-foreground">{role.label}</span> —{" "}
-            {role.description}
-          </li>
-        ))}
-      </ul>
-      <DocsCallout title="Missing a page or button?">
-        Your role decides what you can open, not the app being broken. Ask an
-        administrator to check your account if you expected a page to be there.
-      </DocsCallout>
       <DocsSubHeading>Three ways to get somewhere</DocsSubHeading>
       <ul className="space-y-1.5">
         <li className="text-[13px] text-muted-foreground leading-relaxed">

@@ -18,11 +18,11 @@ export const Route = createFileRoute("/admin/")({
   component: AdminIndex,
 });
 
-const links = dashboardLinks("admin");
+const links = dashboardLinks();
 
 function AdminIndex() {
   const { data: stats } = useDashboardStats();
-  const { data: inventory } = useInventoryItems();
+  const { data: inventory, isLoading: inventoryLoading } = useInventoryItems();
   const { data: velocity } = useDispensingVelocity("2026-08");
   const { data: hourly } = useHourlyActivity();
 
@@ -127,6 +127,7 @@ function AdminIndex() {
           <AlertsBand
             expiry={expiryAlerts}
             links={links}
+            loading={inventoryLoading}
             lowStock={lowStockAlerts}
           />
         </section>
