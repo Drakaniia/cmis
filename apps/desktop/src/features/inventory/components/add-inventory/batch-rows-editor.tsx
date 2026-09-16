@@ -30,6 +30,8 @@ interface BatchRowsEditorProps {
   /** @deprecated supplier UI removed — kept for type compatibility */
   inheritedSupplier?: string;
   onChange: (batches: BatchDraft[]) => void;
+  /** When true all validation errors are forced visible (after Review click). */
+  showErrors?: boolean;
   /** @deprecated supplier UI removed — kept for type compatibility */
   suppliers?: string[];
   validation: DraftValidation;
@@ -59,7 +61,10 @@ function BatchRow({
   onPatch,
   onRemove,
   row,
+  showErrors,
+  touched,
   validation,
+  onTouched,
 }: {
   canRemove: boolean;
   duplicated: boolean;
@@ -73,24 +78,45 @@ function BatchRow({
   onPatch: (rowId: string, patch: Partial<BatchDraft>) => void;
   onRemove: (rowId: string) => void;
   row: BatchDraft;
+  showErrors?: boolean;
+  touched: Set<string>;
   validation: DraftValidation;
+  onTouched: (rowId: string, column: string) => void;
 }) {
   const label = row.batch.trim() || `row ${index + 1}`;
-  const batchError = issueFor(validation, row.id, "batch");
-  const expiryError = issueFor(validation, row.id, "expiry");
-  const qtyError = issueFor(validation, row.id, "qty");
+  const shouldShow = (column: string) =>
+    Boolean(showErrors) || touched.has(`${row.id}:${column}`);
+  const batchError = shouldShow("batch")
+    ? issueFor(validation, row.id, "batch")
+    : null;
+  const expiryError = shouldShow("expiry")
+    ? issueFor(validation, row.id, "expiry")
+    : null;
+  const qtyError = shouldShow("qty")
+    ? issueFor(validation, row.id, "qty")
+    : null;
+  const showDuplicated = shouldShow("batch") && duplicated;
 
   const handleBatch = useCallback(
-    (value: string) => onPatch(row.id, { batch: value }),
-    [onPatch, row.id]
+    (value: string) => {
+      onTouched(row.id, "batch");
+      onPatch(row.id, { batch: value });
+    },
+    [onPatch, onTouched, row.id]
   );
   const handleExpiry = useCallback(
-    (value: string) => onPatch(row.id, { expiry: value }),
-    [onPatch, row.id]
+    (value: string) => {
+      onTouched(row.id, "expiry");
+      onPatch(row.id, { expiry: value });
+    },
+    [onPatch, onTouched, row.id]
   );
   const handleQty = useCallback(
-    (value: number | "") => onPatch(row.id, { qty: value }),
-    [onPatch, row.id]
+    (value: number | "") => {
+      onTouched(row.id, "qty");
+      onPatch(row.id, { qty: value });
+    },
+    [onPatch, onTouched, row.id]
   );
   const handleNotes = useCallback(
     (value: string) => onPatch(row.id, { notes: value }),
@@ -116,7 +142,7 @@ function BatchRow({
           autoFocus={focus}
           error={
             batchError ??
-            (duplicated ? "Duplicate batch number on this product." : null)
+            (showDuplicated ? "Duplicate batch number on this product." : null)
           }
           label="Batch / Lot"
           name={`batch-${row.id}`}
@@ -204,9 +230,22 @@ export function BatchRowsEditor({
   batches,
   highlightRowId,
   onChange,
+  showErrors,
   validation,
 }: BatchRowsEditorProps) {
   const [focusRowId, setFocusRowId] = useState<string | null>(null);
+  const [touched, setTouched] = useState<Set<string>>(() => new Set<string>());
+  const handleTouched = useCallback((rowId: string, column: string) => {
+    const key = `${rowId}:${column}`;
+    setTouched((prev) => {
+      if (prev.has(key)) {
+        return prev;
+      }
+      const next = new Set(prev);
+      next.add(key);
+      return next;
+    });
+  }, []);
   // Client-side only: the message comes from validation, so the two cannot drift.
   const duplicateIndexes = useMemo(
     () => new Set(duplicateBatchIndexes(batches)),
@@ -307,7 +346,10 @@ export function BatchRowsEditor({
             onMove={move}
             onPatch={patch}
             onRemove={remove}
+            onTouched={handleTouched}
             row={row}
+            showErrors={showErrors}
+            touched={touched}
             validation={validation}
           />
         ))}

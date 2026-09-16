@@ -1,6 +1,6 @@
 import { Button } from "@cmis/ui/components/button";
 import { cn } from "@cmis/ui/lib/utils";
-import { type FormEvent, useCallback, useMemo } from "react";
+import { type FormEvent, useCallback, useMemo, useState } from "react";
 import type { BatchDraft } from "../../creation/draft";
 import { validateAddition } from "../../creation/validate-draft";
 import type { InventoryItem } from "../../types";
@@ -54,12 +54,24 @@ export function AddBatchesForm({
     [batches, item]
   );
 
+  const [submitAttempted, setSubmitAttempted] = useState(false);
+  const showBatchesErrors = submitAttempted;
+
+  const handleSelectItemWrapped = useCallback(
+    (itemId: string) => {
+      onSelectItem(itemId);
+    },
+    [onSelectItem]
+  );
+
   const handleSubmit = useCallback(
     (event: FormEvent) => {
       event.preventDefault();
       if (validation.errors.length === 0) {
         onSubmit();
+        return;
       }
+      setSubmitAttempted(true);
     },
     [onSubmit, validation.errors.length]
   );
@@ -70,9 +82,15 @@ export function AddBatchesForm({
 
       <ProductPicker
         items={items}
-        onSelect={onSelectItem}
+        onSelect={handleSelectItemWrapped}
         selectedId={selectedId}
       />
+      {submitAttempted &&
+      validation.errors.some((e) => e.field === "itemId") ? (
+        <p className="text-caption text-destructive" role="alert">
+          {validation.errors.find((e) => e.field === "itemId")?.message}
+        </p>
+      ) : null}
 
       {item ? (
         <BatchRowsEditor
@@ -81,6 +99,7 @@ export function AddBatchesForm({
           highlightRowId={highlightRowId}
           inheritedSupplier={item.supplier}
           onChange={onChange}
+          showErrors={showBatchesErrors}
           suppliers={suppliers}
           validation={validation}
         />
@@ -90,11 +109,7 @@ export function AddBatchesForm({
         <Button onClick={onCancel} type="button" variant="ghost">
           Back
         </Button>
-        <Button
-          className="press-feedback"
-          disabled={validation.errors.length > 0}
-          type="submit"
-        >
+        <Button className="press-feedback" type="submit">
           Review
         </Button>
       </div>
