@@ -209,6 +209,8 @@ function GroupRow({
   highlighted,
   issues,
   selected,
+  showErrors,
+  touched,
 }: {
   dragging: boolean;
   group: SheetGroup;
@@ -218,6 +220,8 @@ function GroupRow({
   highlighted: boolean;
   issues: SheetIssue[];
   selected: boolean;
+  showErrors?: boolean;
+  touched: ReadonlySet<string>;
   suppliers?: string[];
 }) {
   const { product } = group;
@@ -307,8 +311,17 @@ function GroupRow({
 
   const mark = (field: SheetDefaultField): boolean =>
     group.overridden.includes(field);
-  const errorFor = (field: string): string | null =>
-    own.find((issue) => issue.field === field)?.message ?? null;
+  const shouldShowGroupField = (field: string) =>
+    Boolean(showErrors) || touched.has(`${group.id}:${field}`);
+  const errorFor = (field: string): string | null => {
+    if (!shouldShowGroupField(field)) {
+      return null;
+    }
+    return own.find((issue) => issue.field === field)?.message ?? null;
+  };
+  const visibleOwn = showErrors
+    ? own
+    : own.filter((issue) => touched.has(`${group.id}:${issue.field}`));
 
   return (
     // biome-ignore lint/a11y/noNoninteractiveElementInteractions lint/a11y/noStaticElementInteractions: HTML5 drop target; reordering is also offered by the row's Move up/down buttons
@@ -362,7 +375,7 @@ function GroupRow({
           {plural(totals.batches, "batch", "batches")} ·{" "}
           {formatCount(totals.units)} units
         </span>
-        <IssueChip issues={own} />
+        <IssueChip issues={visibleOwn} />
       </div>
 
       <div className="min-w-0">
@@ -497,6 +510,8 @@ function BatchRow({
   indexInGroup,
   issues,
   lastInGroup,
+  showErrors,
+  touched,
 }: {
   batchRow: BatchDraft;
   group: SheetGroup;
@@ -505,10 +520,14 @@ function BatchRow({
   indexInGroup: number;
   issues: SheetIssue[];
   lastInGroup: boolean;
+  showErrors?: boolean;
+  touched: ReadonlySet<string>;
   suppliers?: string[];
 }) {
   const { product } = group;
   const label = `${product.name.trim() || `group ${groupIndex + 1}`} lot ${indexInGroup + 1}`;
+  const shouldShow = (column: string) =>
+    Boolean(showErrors) || touched.has(`${group.id}:${batchRow.id}:${column}`);
 
   const patch = useCallback(
     (next: Partial<BatchDraft>) =>
@@ -568,7 +587,10 @@ function BatchRow({
       </div>
       <div className={cellClass(1, tone)} style={frozenStyle(1)}>
         <CellText
-          invalid={Boolean(rowIssue(issues, batchRow.id, "batch"))}
+          invalid={
+            shouldShow("batch") &&
+            Boolean(rowIssue(issues, batchRow.id, "batch"))
+          }
           label={`Lot number for ${label}`}
           onChange={handleBatch}
           placeholder="B-2027-01"
@@ -577,7 +599,10 @@ function BatchRow({
       </div>
       <div className={cellClass(2, tone)} style={frozenStyle(2)}>
         <CellDate
-          invalid={Boolean(rowIssue(issues, batchRow.id, "expiry"))}
+          invalid={
+            shouldShow("expiry") &&
+            Boolean(rowIssue(issues, batchRow.id, "expiry"))
+          }
           label={`Expiry for ${label}`}
           min={todayIso()}
           onChange={handleExpiry}
@@ -586,7 +611,9 @@ function BatchRow({
       </div>
       <div className={cellClass(3, tone)} style={frozenStyle(3)}>
         <CellQty
-          invalid={Boolean(rowIssue(issues, batchRow.id, "qty"))}
+          invalid={
+            shouldShow("qty") && Boolean(rowIssue(issues, batchRow.id, "qty"))
+          }
           label={`Quantity for ${label}`}
           onChange={handleQty}
           value={batchRow.qty}
@@ -691,7 +718,40 @@ export function DeliverySheet({
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [pasteOpen, setPasteOpen] = useState(false);
   const [pasteNotice, setPasteNotice] = useState<string | null>(null);
+  const [submitAttempted, setSubmitAttempted] = useState(false);
+  const [touchedGroups, setTouchedGroups] = useState<Set<string>>(
+    () => new Set()
+  );
+  const [touchedBatches, setTouchedBatches] = useState<Set<string>>(
+    () => new Set()
+  );
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  const markGroupTouched = useCallback((groupId: string, field: string) => {
+    const key = `${groupId}:${field}`;
+    setTouchedGroups((prev) => {
+      if (prev.has(key)) {
+        return prev;
+      }
+      const next = new Set(prev);
+      next.add(key);
+      return next;
+    });
+  }, []);
+  const markBatchTouched = useCallback(
+    (groupId: string, rowId: string, field: string) => {
+      const key = `${groupId}:${rowId}:${field}`;
+      setTouchedBatches((prev) => {
+        if (prev.has(key)) {
+          return prev;
+        }
+        const next = new Set(prev);
+        next.add(key);
+        return next;
+      });
+    },
+    []
+  );
 
   const validation: SheetValidation = useMemo(
     () =>
@@ -788,19 +848,28 @@ export function DeliverySheet({
   );
 
   const handleGroupPatch = useCallback(
-    (groupId: string, patch: Parameters<typeof patchSheetGroup>[2]) =>
-      onChange(patchSheetGroup(groups, groupId, patch)),
-    [groups, onChange]
+    (groupId: string, patch: Parameters<typeof patchSheetGroup>[2]) => {
+      for (const field of Object.keys(patch)) {
+        markGroupTouched(groupId, field);
+      }
+      onChange(patchSheetGroup(groups, groupId, patch));
+    },
+    [groups, markGroupTouched, onChange]
   );
 
   const handleSkuChange = useCallback(
-    (groupId: string, sku: string) =>
-      onChange(setGroupSku(groups, groupId, sku)),
-    [groups, onChange]
+    (groupId: string, sku: string) => {
+      markGroupTouched(groupId, "sku");
+      onChange(setGroupSku(groups, groupId, sku));
+    },
+    [groups, markGroupTouched, onChange]
   );
 
   const handleBatchChange = useCallback(
     (groupId: string, rowId: string, patch: Partial<BatchDraft>) => {
+      for (const field of Object.keys(patch)) {
+        markBatchTouched(groupId, rowId, field);
+      }
       const group = groups.find((entry) => entry.id === groupId);
       if (!group) {
         return;
@@ -815,11 +884,12 @@ export function DeliverySheet({
         )
       );
     },
-    [groups, onChange]
+    [groups, markBatchTouched, onChange]
   );
 
   const handleNameBlur = useCallback(
     (groupId: string) => {
+      markGroupTouched(groupId, "name");
       const group = groups.find((entry) => entry.id === groupId);
       if (!group || group.skuTouched || group.product.name.trim() === "") {
         return;
@@ -836,7 +906,7 @@ export function DeliverySheet({
         })
       );
     },
-    [context.rawSkus, groups, onChange]
+    [context.rawSkus, groups, markGroupTouched, onChange]
   );
 
   const handleDuplicateGroup = useCallback(
@@ -943,6 +1013,14 @@ export function DeliverySheet({
   );
 
   const blocked = validation.errors.length > 0;
+
+  const handleReview = useCallback(() => {
+    if (blocked) {
+      setSubmitAttempted(true);
+      return;
+    }
+    onSubmit();
+  }, [blocked, onSubmit]);
 
   return (
     <div className="space-y-3">
@@ -1079,7 +1157,9 @@ export function DeliverySheet({
                         highlighted={highlightGroupId === row.group.id}
                         issues={validation.errors}
                         selected={selectedIds.has(row.group.id)}
+                        showErrors={submitAttempted}
                         suppliers={context.suppliers}
+                        touched={touchedGroups}
                       />
                     ) : (
                       <BatchRow
@@ -1090,7 +1170,9 @@ export function DeliverySheet({
                         indexInGroup={row.indexInGroup}
                         issues={validation.errors}
                         lastInGroup={row.lastInGroup}
+                        showErrors={submitAttempted}
                         suppliers={context.suppliers}
+                        touched={touchedBatches}
                       />
                     )}
                   </div>
@@ -1107,8 +1189,8 @@ export function DeliverySheet({
         </Button>
         <Button
           className="press-feedback"
-          disabled={blocked || groups.length === 0}
-          onClick={onSubmit}
+          disabled={groups.length === 0}
+          onClick={handleReview}
           type="button"
         >
           Review

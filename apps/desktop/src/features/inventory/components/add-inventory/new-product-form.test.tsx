@@ -161,13 +161,15 @@ describe("NewProductForm", () => {
       name: "Paracetamol",
       sku: "SKU-PARA-500",
     };
-    renderForm(draft);
+    const { onSubmit } = renderForm(draft);
 
     const review = screen.getByRole("button", { name: REVIEW_BUTTON });
-    expect(review).toBeDisabled();
-    expect(screen.getByText(NEEDS_BATCH)).toBeInTheDocument();
+    // Deferred validation: no red errors on initial load, Review is enabled to allow validation trigger
+    expect(review).not.toBeDisabled();
+    expect(screen.queryByText(NEEDS_BATCH)).not.toBeInTheDocument();
 
     await userEvent.click(review);
-    expect(review).toBeDisabled();
+    expect(screen.getByText(NEEDS_BATCH)).toBeInTheDocument();
+    expect(onSubmit).not.toHaveBeenCalled();
   });
 });

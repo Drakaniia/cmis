@@ -84,6 +84,8 @@ export function NewProductForm({
   // own — from then on it is theirs, and a collision is surfaced rather than
   // silently suffixed (spec §10.2).
   const [skuTouched, setSkuTouched] = useState(draft.sku.trim() !== "");
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
+  const [submitAttempted, setSubmitAttempted] = useState(false);
 
   const validation = useMemo(
     () =>
@@ -92,6 +94,16 @@ export function NewProductForm({
         skus: context.skus,
       }),
     [context.identities, context.skus, draft]
+  );
+
+  const markTouched = useCallback(
+    (field: string) =>
+      setTouched((prev) => (prev[field] ? prev : { ...prev, [field]: true })),
+    []
+  );
+  const shouldShow = useCallback(
+    (field: string) => submitAttempted || Boolean(touched[field]),
+    [submitAttempted, touched]
   );
 
   const totalQty = useMemo(
@@ -107,19 +119,26 @@ export function NewProductForm({
   );
 
   const setName = useCallback(
-    (value: string) => patch({ name: value }),
-    [patch]
+    (value: string) => {
+      markTouched("name");
+      patch({ name: value });
+    },
+    [markTouched, patch]
   );
   const setSku = useCallback(
     (value: string) => {
       setSkuTouched(true);
+      markTouched("sku");
       patch({ sku: value });
     },
-    [patch]
+    [markTouched, patch]
   );
   const setCategory = useCallback(
-    (value: string) => patch({ category: value }),
-    [patch]
+    (value: string) => {
+      markTouched("category");
+      patch({ category: value });
+    },
+    [markTouched, patch]
   );
   const setStrengthValue = useCallback(
     (value: string) => patch({ strengthValue: value }),
@@ -155,11 +174,12 @@ export function NewProductForm({
   );
 
   const handleNameBlur = useCallback(() => {
+    markTouched("name");
     if (skuTouched || draft.name.trim() === "") {
       return;
     }
     patch({ sku: deriveSku(draft.name, draft.strengthValue, context.rawSkus) });
-  }, [context.rawSkus, draft, patch, skuTouched]);
+  }, [context.rawSkus, draft, markTouched, patch, skuTouched]);
 
   const handleAddBatches = useCallback(() => {
     if (validation.duplicateOf) {
@@ -172,15 +192,26 @@ export function NewProductForm({
       event.preventDefault();
       if (validation.valid) {
         onSubmit();
+        return;
       }
+      setSubmitAttempted(true);
+      setTouched((prev) => ({
+        ...prev,
+        category: true,
+        name: true,
+        sku: true,
+      }));
     },
     [onSubmit, validation.valid]
   );
 
-  const nameError = errorFor(validation, "name");
-  const categoryError = errorFor(validation, "category");
-  const skuError = errorFor(validation, "sku");
+  const nameError = shouldShow("name") ? errorFor(validation, "name") : null;
+  const categoryError = shouldShow("category")
+    ? errorFor(validation, "category")
+    : null;
+  const skuError = shouldShow("sku") ? errorFor(validation, "sku") : null;
   const displayName = displayNameOf(draft);
+  const visibleErrors = submitAttempted ? validation.errors : [];
 
   return (
     <form className="space-y-4" onSubmit={handleSubmit}>
@@ -315,6 +346,7 @@ export function NewProductForm({
           batches={draft.batches}
           highlightRowId={highlightRowId}
           onChange={setBatches}
+          showErrors={submitAttempted}
           validation={validation}
         />
         <p className="text-caption text-muted-foreground">
@@ -325,9 +357,9 @@ export function NewProductForm({
         </p>
       </section>
 
-      {validation.errors.length > 0 ? (
+      {visibleErrors.length > 0 ? (
         <ul className="space-y-1" role="alert">
-          {validation.errors.map((issue) => (
+          {visibleErrors.map((issue) => (
             <li className="text-caption text-destructive" key={issue.field}>
               {issue.message}
             </li>
@@ -339,11 +371,7 @@ export function NewProductForm({
         <Button onClick={onCancel} type="button" variant="ghost">
           Back
         </Button>
-        <Button
-          className="press-feedback"
-          disabled={!validation.valid}
-          type="submit"
-        >
+        <Button className="press-feedback" type="submit">
           Review
         </Button>
       </div>
