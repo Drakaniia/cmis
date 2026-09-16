@@ -1,7 +1,9 @@
 import { Button } from "@cmis/ui/components/button";
+import type { ChangeEvent } from "react";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 
+import { DEFAULT_OPERATOR } from "@/features/admin/audit/operator";
 import type { GeneralSettings } from "../types";
 import { SettingsCard } from "./settings-card";
 
@@ -49,7 +51,15 @@ export function GeneralTab({
 
   const dirty =
     draft.dateFormat !== general.dateFormat ||
+    draft.operatorName !== general.operatorName ||
     draft.timeFormat !== general.timeFormat;
+
+  const handleOperatorNameChange = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => {
+      setDraft((prev) => ({ ...prev, operatorName: event.target.value }));
+    },
+    []
+  );
 
   const handleDateFormatSelect = useCallback(
     (format: GeneralSettings["dateFormat"]) => {
@@ -89,7 +99,7 @@ export function GeneralTab({
       </SettingsCard>
 
       <SettingsCard
-        description="Applies to every role the moment it is saved."
+        description="Applies app-wide the moment it is saved."
         title="Defaults"
       >
         <div className="grid gap-4 sm:grid-cols-2">
@@ -123,6 +133,22 @@ export function GeneralTab({
             </div>
           </fieldset>
         </div>
+      </SettingsCard>
+
+      <SettingsCard
+        description={`Credited as the actor on every audit entry. Leave blank to record "${DEFAULT_OPERATOR}".`}
+        title="Audit trail"
+      >
+        <label className="block text-caption text-foreground">
+          Operator name
+          <input
+            autoComplete="off"
+            className="mt-1 h-8 w-full max-w-sm rounded-md border border-input bg-background px-3 text-sm outline-none focus:border-ring focus:ring-1 focus:ring-ring"
+            onChange={handleOperatorNameChange}
+            placeholder={DEFAULT_OPERATOR}
+            value={draft.operatorName}
+          />
+        </label>
       </SettingsCard>
 
       <div className="flex justify-end">
