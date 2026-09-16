@@ -51,11 +51,11 @@ export function useTopDispensed(month: string, category: string) {
     queryFn: async (): Promise<TopDispensedRow[]> => {
       const db = await getDb();
       let sql =
-        "SELECT i.id as id, i.name || ' ' || i.dosage as name, i.sku as sku, i.category as category, SUM(d.qty) as qty FROM dispensing_events d JOIN inventory_items i ON d.item_id=i.id WHERE d.month=? GROUP BY i.id ORDER BY qty DESC LIMIT 5";
+        "SELECT i.id as id, COALESCE(NULLIF(trim(i.display_name), ''), i.name || ' ' || i.dosage) as name, i.sku as sku, i.category as category, SUM(d.qty) as qty FROM dispensing_events d JOIN inventory_items i ON d.item_id=i.id WHERE d.month=? GROUP BY i.id ORDER BY qty DESC LIMIT 5";
       let params: unknown[] = [month];
       if (category !== "All") {
         sql =
-          "SELECT i.id as id, i.name || ' ' || i.dosage as name, i.sku as sku, i.category as category, SUM(d.qty) as qty FROM dispensing_events d JOIN inventory_items i ON d.item_id=i.id WHERE d.month=? AND i.category=? GROUP BY i.id ORDER BY qty DESC LIMIT 5";
+          "SELECT i.id as id, COALESCE(NULLIF(trim(i.display_name), ''), i.name || ' ' || i.dosage) as name, i.sku as sku, i.category as category, SUM(d.qty) as qty FROM dispensing_events d JOIN inventory_items i ON d.item_id=i.id WHERE d.month=? AND i.category=? GROUP BY i.id ORDER BY qty DESC LIMIT 5";
         params = [month, category];
       }
       try {

@@ -4,6 +4,7 @@ import { Download, FileDown, Upload } from "lucide-react";
 import { motion, useReducedMotion } from "motion/react";
 import { type ChangeEvent, useCallback, useRef } from "react";
 
+import { CategoryPicker } from "@/features/inventory/components/category-picker";
 import { densitySpring } from "@/lib/motion";
 import type { ReportsPreset } from "../types";
 
@@ -13,17 +14,6 @@ const PRESETS: { label: string; value: ReportsPreset }[] = [
   { label: "90D", value: "90d" },
   { label: "1Y", value: "1y" },
 ];
-
-const CATEGORIES = [
-  "All",
-  "Analgesic",
-  "Antibiotic",
-  "Antiseptic",
-  "Supplement",
-  "Respiratory",
-  "Gastro",
-  "First Aid",
-] as const;
 
 /**
  * §4 — Segmented pill selector with spring layout animation.
@@ -102,12 +92,6 @@ export function ReportsFilterBar({
 }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleCategoryChange = useCallback(
-    (event: ChangeEvent<HTMLSelectElement>) =>
-      onCategoryChange(event.target.value),
-    [onCategoryChange]
-  );
-
   const handleImportClick = useCallback(() => {
     fileInputRef.current?.click();
   }, []);
@@ -169,20 +153,16 @@ export function ReportsFilterBar({
           <span className="hidden font-semibold text-[11px] text-muted-foreground/70 uppercase tracking-[0.06em] sm:inline">
             Category
           </span>
-          <div className="relative">
-            <select
-              aria-label="Filter by category"
-              className="h-7 rounded-md border border-input bg-background px-2 pr-7 font-medium text-xs shadow-sm focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring/50"
-              onChange={handleCategoryChange}
-              value={category}
-            >
-              {CATEGORIES.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-            </select>
-          </div>
+          {/* The shared picker: reports filter by the same list the forms
+              write to, and one can be added or renamed from here. */}
+          <CategoryPicker
+            allLabel="All categories"
+            aria-label="Filter by category"
+            onChange={onCategoryChange}
+            placeholder="Category"
+            value={category}
+            variant="filter"
+          />
         </div>
 
         {/* §8 Action buttons — Import (outline, secondary), Export CSV (outline, secondary),

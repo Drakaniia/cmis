@@ -1,3 +1,4 @@
+import { AppleDatePicker } from "@cmis/ui/components/apple-date-picker";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -120,16 +121,17 @@ export function RequestsFilterBar({
   );
 
   const handleFromChange = useCallback(
-    (event: ChangeEvent<HTMLInputElement>) =>
-      onSetCustomRange(event.target.value, filters.to),
+    (iso: string) => onSetCustomRange(iso, filters.to),
     [filters.to, onSetCustomRange]
   );
 
   const handleToChange = useCallback(
-    (event: ChangeEvent<HTMLInputElement>) =>
-      onSetCustomRange(filters.from, event.target.value),
+    (iso: string) => onSetCustomRange(filters.from, iso),
     [filters.from, onSetCustomRange]
   );
+
+  const invalidRange =
+    Boolean(filters.from) && Boolean(filters.to) && filters.from > filters.to;
 
   return (
     <div className="sticky top-0 z-10 shrink-0 border-border/50 border-b bg-card/95 backdrop-blur-[6px]">
@@ -221,22 +223,29 @@ export function RequestsFilterBar({
         <div className="flex flex-wrap items-center gap-2 px-3 pb-2">
           <label className="flex items-center gap-1.5 text-caption text-muted-foreground">
             From
-            <input
-              className="h-7 rounded-md border border-input bg-background px-2 text-xs outline-none focus:border-ring focus:ring-1 focus:ring-ring"
+            <AppleDatePicker
+              className="h-7 w-[124px]"
+              max={filters.to || undefined}
               onChange={handleFromChange}
-              type="date"
+              placeholder="YYYY-MM-DD"
               value={filters.from}
             />
           </label>
           <label className="flex items-center gap-1.5 text-caption text-muted-foreground">
             To
-            <input
-              className="h-7 rounded-md border border-input bg-background px-2 text-xs outline-none focus:border-ring focus:ring-1 focus:ring-ring"
+            <AppleDatePicker
+              className="h-7 w-[124px]"
+              min={filters.from || undefined}
               onChange={handleToChange}
-              type="date"
+              placeholder="YYYY-MM-DD"
               value={filters.to}
             />
           </label>
+          {invalidRange ? (
+            <span className="text-caption text-destructive">
+              From must be on or before To.
+            </span>
+          ) : null}
         </div>
       ) : null}
 

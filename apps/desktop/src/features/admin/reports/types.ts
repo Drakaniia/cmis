@@ -8,7 +8,7 @@
 export type ReportsPreset = "7d" | "30d" | "90d" | "1y" | "custom";
 
 export interface ReportsFilters {
-  category: string; // "All" or INVENTORY_CATEGORIES value
+  category: string; // "All" or a category name from the shared list
   customRange?: { from: string; to: string };
   preset: ReportsPreset;
 }

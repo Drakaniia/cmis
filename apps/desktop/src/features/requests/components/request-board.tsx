@@ -86,7 +86,7 @@ export function RequestBoard({
   if (totalVisible === 0) {
     return (
       <div
-        className="flex h-full items-center justify-center p-4"
+        className="flex h-full min-h-[420px] w-full items-center justify-center p-6"
         ref={boardRef}
       >
         <RequestsEmptyState variant="board" />
@@ -97,7 +97,7 @@ export function RequestBoard({
   if (filteredCount === 0) {
     return (
       <div
-        className="flex h-full items-center justify-center p-4"
+        className="flex h-full min-h-[420px] w-full items-center justify-center p-6"
         ref={boardRef}
       >
         <RequestsEmptyState

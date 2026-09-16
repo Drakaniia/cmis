@@ -22,7 +22,7 @@ export function RequestsEmptyState({
 }) {
   if (variant === "filtered") {
     return (
-      <Empty className="border border-dashed bg-muted/20">
+      <Empty className="w-full max-w-md border border-dashed bg-muted/20">
         <EmptyHeader>
           <EmptyMedia variant="icon">
             <SearchX />
@@ -50,7 +50,7 @@ export function RequestsEmptyState({
   }
 
   return (
-    <Empty className="border border-dashed bg-muted/20">
+    <Empty className="w-full max-w-md border border-dashed bg-muted/20">
       <EmptyHeader>
         <EmptyMedia variant="icon">
           <ClipboardList />
