@@ -39,6 +39,8 @@ from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.datavalidation import DataValidation
 
+from inventory_vocabulary import form_list_formula, unit_list_formula
+
 SHEET_TITLE = "Inventory Template"
 
 # The template contract, byte-for-byte what csv-parser.ts validates against.
@@ -234,8 +236,21 @@ def split_dosage(dosage: str) -> tuple[str, str, str, str]:
     return strength_value, strength_unit, form, " ".join(remaining)
 
 
+def compose_display_name(name: str, sv: str, su: str, form: str, pack: str) -> str:
+    """Mirror of composeDisplayName() in the app's ``domain/strength.ts``.
+
+    The app stores this full label in ``display_name`` and matches dispense
+    requests against it, so the converter has to agree with it exactly —
+    otherwise a converted workbook and the row it produces disagree about the
+    medicine's name (strength spec §7.1).
+    """
+    parts = [name.strip(), f"{sv} {su}".strip(), form.strip(), pack.strip()]
+    return " ".join(part for part in parts if part)
+
+
 def assemble(sv: str, su: str, form: str, pack: str) -> str:
-    """Mirror of assembleDosage() in csv-parser.ts — used to measure fidelity."""
+    """The four strength parts joined in template order — what fidelity is
+    measured against, since that is the text the app now stores."""
     return " ".join(part for part in (sv, su, form, pack) if part)
 
 
@@ -408,9 +423,12 @@ def write_workbook(rows: list[ConvertedRow], out_path: Path) -> None:
 
     last_row = max(len(rows) + 1, 2)
     validations = [
-        DataValidation(type="decimal", operator="between", formula1="0", formula2="10000", allow_blank=True, sqref="B2:B501"),
-        DataValidation(type="list", formula1='"mg,g,mcg,ml,mg/ml,mg/5ml,%,IU,units"', allow_blank=True, sqref="C2:C501"),
-        DataValidation(type="list", formula1='"tablet,capsule,cap,sachet,syrup,suspension,susp,ointment,cream,drops,vial,ampule,nebule,injection,suppository,box,piece"', allow_blank=True, sqref="D2:D501"),
+        # Free text, not decimal 0–10000: a compound strength ("200/200/5") is a
+        # legal stored value, and the old rule made the workbook reject a row the
+        # app had just exported (strength spec §9).
+        DataValidation(type="textLength", operator="between", formula1="0", formula2="20", allow_blank=True, sqref="B2:B501"),
+        DataValidation(type="list", formula1=unit_list_formula(), allow_blank=True, sqref="C2:C501"),
+        DataValidation(type="list", formula1=form_list_formula(), allow_blank=True, sqref="D2:D501"),
         DataValidation(type="textLength", operator="between", formula1="0", formula2="40", allow_blank=True, sqref="E2:E501"),
         DataValidation(type="whole", operator="between", formula1="0", formula2="10000", allow_blank=True, sqref="F2:F501"),
         DataValidation(type="whole", operator="between", formula1="0", formula2="10000", allow_blank=True, sqref="G2:AK501"),
