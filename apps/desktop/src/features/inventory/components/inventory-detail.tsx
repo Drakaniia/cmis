@@ -1,10 +1,41 @@
 import { Button } from "@cmis/ui/components/button";
 import { cn } from "@cmis/ui/lib/utils";
-import { Clock, Package, X } from "lucide-react";
+import { ArrowLeft, Clock, Package, Trash2, X } from "lucide-react";
 import { motion, useReducedMotion } from "motion/react";
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { daysUntilExpiry, expiryLabel } from "../domain/expiry";
 import type { InventoryItem } from "../types";
+import { ItemEditPanel } from "./item-edit-panel";
+import { ItemHistoryPanel } from "./item-history-panel";
+
+/**
+ * What this surface is showing when it owns its own view state. A page with
+ * real view state (the modal) passes `onEdit` / `onHistory` instead and this
+ * stays on `"detail"` forever.
+ */
+type InPlaceView = "detail" | "edit" | "history";
+
+/**
+ * §8.2 — one row of the Composition block. Module level (not nested in the
+ * detail panel) so React never remounts it between renders.
+ *
+ * A blank field renders as an em dash rather than being hidden: the operator is
+ * looking at this block precisely to find out what is *missing*, and an absent
+ * row cannot tell them that.
+ */
+function CompositionRow({ label, value }: { label: string; value: string }) {
+  // Resolved before the JSX: a ternary in the markup cannot be told apart from
+  // an arbitrary variable alternate, and a bare `string` is always renderable.
+  const shown = value === "" ? "—" : value;
+  return (
+    <div className="flex items-baseline gap-2">
+      <dt className="text-muted-foreground">{label}</dt>
+      <dd className={cn("truncate", value === "" && "text-muted-foreground")}>
+        {shown}
+      </dd>
+    </div>
+  );
+}
 
 function StatusMarker({ status }: { status: InventoryItem["status"] }) {
   const map: Record<
@@ -38,6 +69,31 @@ function StatusMarker({ status }: { status: InventoryItem["status"] }) {
 }
 
 /**
+ * One batch's delete affordance. Module-level (not defined inside the detail
+ * panel) so its handler is stable and the rule under test is the parent's.
+ */
+function BatchDeleteAction({
+  batch,
+  onDelete,
+}: {
+  batch: string;
+  onDelete: (batch: string) => void;
+}) {
+  const handleClick = useCallback(() => onDelete(batch), [batch, onDelete]);
+  return (
+    <Button
+      aria-label={`Delete batch ${batch}`}
+      className="press-feedback shrink-0 text-destructive hover:bg-destructive/10"
+      onClick={handleClick}
+      size="icon-xs"
+      variant="ghost"
+    >
+      <Trash2 aria-hidden className="size-3" />
+    </Button>
+  );
+}
+
+/**
  * Apple Design §12 — Action bar is a translucent material layer between
  * the header and scrolling content. Content scrolls underneath (§12).
  * §1 — Each button has instant press feedback (scale 0.97).
@@ -50,22 +106,67 @@ export function InventoryDetailContent({
   onStockIn,
   onStockOut,
   onClose,
+  onEdit,
+  onHistory,
+  onDeleteProduct,
+  onDeleteBatch,
   autoFocus = false,
+  items,
+  onItemUpdated,
 }: {
   item: InventoryItem | null;
   onStockIn: () => void;
   onStockOut: () => void;
   onClose?: () => void;
+  /**
+   * Opens the edit form. When a surface has no view state of its own, leaving
+   * this out makes the panel edit in place instead of leaving the button dead.
+   */
+  onEdit?: () => void;
+  /**
+   * Opens the real dispensing history. Like `onEdit`, leaving it out swaps the
+   * history in place so the button is never dead on Stock Management.
+   */
+  onHistory?: () => void;
+  /** Moves the whole product — batches and history — to Trash (§7.7). */
+  onDeleteProduct?: () => void;
+  /** Deletes one batch and corrects the product qty (§10.3). */
+  onDeleteBatch?: (batchName: string) => void;
   autoFocus?: boolean;
+  /**
+   * The whole inventory, for the in-place edit form's SKU-uniqueness check.
+   * Providing it (and omitting `onEdit`) is what makes the Edit button work on
+   * surfaces with no view state of their own.
+   */
+  items?: InventoryItem[];
+  /** Fired after an in-place save so the page can refresh. */
+  onItemUpdated?: () => void;
 }) {
   const stockInRef = useRef<HTMLButtonElement>(null);
   const reduceMotion = useReducedMotion();
+  const [view, setView] = useState<InPlaceView>("detail");
 
   useEffect(() => {
     if (autoFocus && item && stockInRef.current) {
       stockInRef.current.focus();
     }
   }, [autoFocus, item]);
+
+  // Selecting another row returns to the details, matching the modal's rule
+  // (§8.3): reopening a row must never land the operator in a half-finished
+  // edit or on the previous row's history.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reset is keyed on the item's identity, not on the state it sets
+  useEffect(() => {
+    setView("detail");
+  }, [item?.id]);
+
+  // Stable references: both views are swapped in as props, and a fresh arrow on
+  // every keystroke of the parent would remount the form and drop focus.
+  const handleBackToDetail = useCallback(() => setView("detail"), []);
+  const handleSaved = useCallback(() => {
+    onItemUpdated?.();
+    setView("detail");
+  }, [onItemUpdated]);
 
   if (!item) {
     return (
@@ -93,6 +194,40 @@ export function InventoryDetailContent({
   const daysLeft = daysUntilExpiry(nearestExpiry);
   const expiryText = `${expiryLabel(nearestExpiry)} (${daysLeft >= 0 ? `${daysLeft} days` : "expired"})`;
 
+  if (view === "edit" && !onEdit) {
+    return (
+      <ItemEditPanel
+        item={item}
+        items={items ?? [item]}
+        onCancel={handleBackToDetail}
+        onSaved={handleSaved}
+      />
+    );
+  }
+
+  if (view === "history" && !onHistory) {
+    return (
+      <div className="flex h-full flex-col overflow-hidden">
+        {/* The panel has no back button of its own — it is a view here, so the
+         * way out belongs to the surface that swapped it in. */}
+        <div className="flex shrink-0 items-center gap-2 border-border/30 border-b px-3 py-2">
+          <Button
+            className="press-feedback"
+            onClick={handleBackToDetail}
+            size="sm"
+            variant="ghost"
+          >
+            <ArrowLeft aria-hidden className="size-3.5" />
+            Back to details
+          </Button>
+        </div>
+        <div className="min-h-0 flex-1 overflow-auto">
+          <ItemHistoryPanel item={item} />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-full flex-col overflow-hidden">
       {/* §15 — Header: tight tracking on heading, caption tracking on metadata */}
@@ -103,7 +238,7 @@ export function InventoryDetailContent({
               className="truncate font-semibold text-foreground text-sm"
               style={{ letterSpacing: "-0.01em" }}
             >
-              {item.name} — {item.category}
+              {item.displayName} — {item.category}
             </h2>
             <p className="mt-1 flex flex-wrap gap-2 text-caption text-muted-foreground">
               <span>SKU: {item.sku}</span>
@@ -137,6 +272,23 @@ export function InventoryDetailContent({
             <div className="mt-2">
               <StatusMarker status={item.status} />
             </div>
+            {/* §8.2 — the one place the split is shown. This is the same detail
+             * surface all three pages open, so Expiry Alerts and Low-Stock
+             * Alerts reach it too. */}
+            <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-caption">
+              <CompositionRow
+                label="Strength"
+                value={`${item.strengthValue} ${item.strengthUnit}`.trim()}
+              />
+              <CompositionRow label="Form" value={item.form} />
+              <CompositionRow label="Pack size" value={item.packSize} />
+            </dl>
+            {item.detailsIncomplete ? (
+              <p className="mt-2 text-caption text-muted-foreground">
+                Details incomplete — use Edit to add the missing strength
+                fields.
+              </p>
+            ) : null}
           </div>
           {onClose ? (
             <Button
@@ -187,12 +339,35 @@ export function InventoryDetailContent({
           Stock Out
         </Button>
         {/* §8 — Tertiary: ghost (subtle, same weight as text) */}
-        <Button className="press-feedback" size="sm" variant="ghost">
+        <Button
+          className="press-feedback"
+          onClick={onEdit ?? (() => setView("edit"))}
+          size="sm"
+          variant="ghost"
+        >
           Edit
         </Button>
-        <Button className="press-feedback" size="sm" variant="ghost">
+        <Button
+          className="press-feedback"
+          onClick={onHistory ?? (() => setView("history"))}
+          size="sm"
+          variant="ghost"
+        >
           History
         </Button>
+        {/* §8 — Destructive action recedes: ghost until hovered, never competing
+         * with Stock In for attention. */}
+        {onDeleteProduct ? (
+          <Button
+            className="press-feedback ml-auto text-destructive hover:bg-destructive/10"
+            onClick={onDeleteProduct}
+            size="sm"
+            variant="ghost"
+          >
+            <Trash2 aria-hidden className="size-3.5" />
+            Delete product
+          </Button>
+        ) : null}
       </motion.div>
 
       {/* Content scroll area — §12 content scrolls under the frosted bar */}
@@ -252,7 +427,7 @@ export function InventoryDetailContent({
                 )
                 .map((b) => (
                   <li
-                    className="flex items-center justify-between rounded-md border border-border bg-card px-2.5 py-1.5 text-caption"
+                    className="flex items-center justify-between gap-2 rounded-md border border-border bg-card px-2.5 py-1.5 text-caption"
                     key={b.batch}
                   >
                     <span className="font-medium">{b.batch}</span>
@@ -263,6 +438,12 @@ export function InventoryDetailContent({
                       Qty {b.qty}
                     </span>
                     <span className="text-muted-foreground">{b.supplier}</span>
+                    {onDeleteBatch ? (
+                      <BatchDeleteAction
+                        batch={b.batch}
+                        onDelete={onDeleteBatch}
+                      />
+                    ) : null}
                   </li>
                 ))}
             </ul>

@@ -1,4 +1,5 @@
 import { Button } from "@cmis/ui/components/button";
+import { QuantityStepper } from "@cmis/ui/components/quantity-stepper";
 import { cn } from "@cmis/ui/lib/utils";
 import {
   type ChangeEvent,
@@ -143,7 +144,7 @@ function PickRow({
       onClick={handleClick}
       type="button"
     >
-      <span className="font-medium">{item.name}</span>
+      <span className="font-medium">{item.displayName}</span>
       <span className="text-caption text-muted-foreground">
         Qty: {item.qty} · {item.sku}
       </span>
@@ -305,8 +306,8 @@ function StepQty({
   const exceedsStock =
     available !== null && qty.length > 0 && Number(qty) > available;
 
-  const handleQtyChange = useCallback(
-    (event: ChangeEvent<HTMLInputElement>) => onQtyChange(event.target.value),
+  const handleQtyStep = useCallback(
+    (next: number | "") => onQtyChange(next === "" ? "" : String(next)),
     [onQtyChange]
   );
   const handleBatchChange = useCallback(
@@ -327,16 +328,14 @@ function StepQty({
       )}
       <label className="block font-medium text-caption text-foreground">
         Quantity
-        <input
-          className={cn(
-            "mt-1 w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-1 focus:ring-ring",
-            qtyInvalid && "border-destructive"
-          )}
+        <QuantityStepper
+          aria-label="Quantity"
+          className="mt-1 h-9"
+          invalid={qtyInvalid}
           max={available ?? undefined}
           min={1}
-          onChange={handleQtyChange}
+          onChange={handleQtyStep}
           placeholder="0"
-          type="number"
           value={qty}
         />
         {exceedsStock ? (
@@ -603,7 +602,9 @@ export function StockOutWizard({
       return items.filter((i) => i.qty > 0);
     }
     return items.filter(
-      (i) => `${i.name} ${i.sku}`.toLowerCase().includes(q) && i.qty > 0
+      (i) =>
+        `${i.name} ${i.displayName} ${i.sku}`.toLowerCase().includes(q) &&
+        i.qty > 0
     );
   }, [items, search]);
 

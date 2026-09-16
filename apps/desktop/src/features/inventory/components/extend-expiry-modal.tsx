@@ -1,4 +1,6 @@
+import { AppleDatePicker } from "@cmis/ui/components/apple-date-picker";
 import { Button } from "@cmis/ui/components/button";
+import { addDaysIso, todayIso } from "@cmis/ui/lib/date";
 import { cn } from "@cmis/ui/lib/utils";
 import { X } from "lucide-react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
@@ -45,10 +47,8 @@ export function ExtendExpiryModal({
 
   useEffect(() => {
     if (open && row) {
-      // Default to 90 days from now
-      const d = new Date();
-      d.setDate(d.getDate() + 90);
-      setNewExpiry(d.toISOString().slice(0, 10));
+      // Default to 90 days from today
+      setNewExpiry(addDaysIso(todayIso(), 90));
       setNote("");
       setAttempted(false);
     }
@@ -72,13 +72,6 @@ export function ExtendExpiryModal({
   const handleClose = useCallback(() => {
     onOpenChange(false);
   }, [onOpenChange]);
-
-  const handleExpiryChange = useCallback(
-    (event: ChangeEvent<HTMLInputElement>) => {
-      setNewExpiry(event.target.value);
-    },
-    []
-  );
 
   const handleNoteChange = useCallback(
     (event: ChangeEvent<HTMLTextAreaElement>) => {
@@ -166,7 +159,7 @@ export function ExtendExpiryModal({
               <div className="space-y-3 p-4">
                 <div className="rounded-md border border-[var(--warning)]/20 bg-[var(--warning)]/5 p-3 text-sm">
                   <p className="font-medium">
-                    {row.item.name} — batch {row.batch.batch}
+                    {row.item.displayName} — batch {row.batch.batch}
                   </p>
                   <p className="text-caption text-muted-foreground">
                     Current expiry: {expiryLabel(row.batch.expiry)}
@@ -176,11 +169,11 @@ export function ExtendExpiryModal({
                 {/* New expiry date */}
                 <label className="block text-caption text-foreground">
                   New expiry date
-                  <input
-                    className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-1 focus:ring-ring"
-                    min={new Date().toISOString().slice(0, 10)}
-                    onChange={handleExpiryChange}
-                    type="date"
+                  <AppleDatePicker
+                    className="mt-1 h-9"
+                    min={todayIso()}
+                    onChange={setNewExpiry}
+                    placeholder="Select expiry date"
                     value={newExpiry}
                   />
                 </label>

@@ -24,6 +24,10 @@ export function InventoryDetailSheet({
   originRect: _originRect,
   onStockIn,
   onStockOut,
+  onDeleteProduct,
+  onDeleteBatch,
+  items,
+  onItemUpdated,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -31,6 +35,11 @@ export function InventoryDetailSheet({
   originRect: DOMRect | null;
   onStockIn: () => void;
   onStockOut: () => void;
+  onDeleteProduct?: () => void;
+  onDeleteBatch?: (batchName: string) => void;
+  /** Forwarded so the sheet's Edit button can open the form (§8.3). */
+  items?: InventoryItem[];
+  onItemUpdated?: () => void;
 }) {
   const reduceMotion = useReducedMotion();
   const variants = reduceMotion ? materializeEnterReduced : materializeEnter;
@@ -140,7 +149,7 @@ export function InventoryDetailSheet({
           <div className="fixed inset-0 z-50 flex items-end justify-center p-3 sm:items-center sm:p-6">
             <motion.div
               animate="animate"
-              aria-label={item ? item.name : "Inventory detail"}
+              aria-label={item ? item.displayName : "Inventory detail"}
               aria-modal="true"
               className="surface-frosted flex max-h-[78vh] w-full max-w-[560px] flex-col overflow-hidden rounded-xl border border-border/50 shadow-xl"
               exit="exit"
@@ -169,7 +178,11 @@ export function InventoryDetailSheet({
                 <InventoryDetailContent
                   autoFocus
                   item={item}
+                  items={items}
                   onClose={handleClose}
+                  onDeleteBatch={onDeleteBatch}
+                  onDeleteProduct={onDeleteProduct}
+                  onItemUpdated={onItemUpdated}
                   onStockIn={onStockIn}
                   onStockOut={onStockOut}
                 />

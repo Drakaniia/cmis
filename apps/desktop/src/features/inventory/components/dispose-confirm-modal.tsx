@@ -1,4 +1,5 @@
 import { Button } from "@cmis/ui/components/button";
+import { QuantityStepper } from "@cmis/ui/components/quantity-stepper";
 import { cn } from "@cmis/ui/lib/utils";
 import { X } from "lucide-react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
@@ -78,10 +79,9 @@ export function DisposeConfirmModal({
     onOpenChange(false);
   }, [onOpenChange]);
 
-  const handleQtyChange = useCallback(
-    (event: ChangeEvent<HTMLInputElement>) => setQty(event.target.value),
-    []
-  );
+  const handleQtyChange = useCallback((next: number | "") => {
+    setQty(next === "" ? "" : String(next));
+  }, []);
 
   const handleReasonChange = useCallback(
     (event: ChangeEvent<HTMLSelectElement>) =>
@@ -184,7 +184,7 @@ export function DisposeConfirmModal({
               <div className="space-y-3 p-4">
                 <div className="rounded-md border border-destructive/20 bg-destructive/5 p-3 text-sm">
                   <p className="font-medium text-destructive">
-                    Dispose {row.batch.qty} × {row.item.name}
+                    Dispose {row.batch.qty} × {row.item.displayName}
                   </p>
                   <p className="text-caption text-muted-foreground">
                     Batch {row.batch.batch} — exp{" "}
@@ -195,15 +195,13 @@ export function DisposeConfirmModal({
                 {/* Quantity — must match row qty */}
                 <label className="block text-caption text-foreground">
                   Quantity (must match batch qty: {row.batch.qty})
-                  <input
-                    className={cn(
-                      "mt-1 w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-1 focus:ring-ring",
-                      attempted && !validQty && "border-destructive"
-                    )}
+                  <QuantityStepper
+                    aria-label="Quantity"
+                    className="mt-1 h-9"
+                    invalid={attempted && !validQty}
                     max={row.batch.qty}
                     min={1}
                     onChange={handleQtyChange}
-                    type="number"
                     value={qty}
                   />
                   {attempted && !validQty ? (

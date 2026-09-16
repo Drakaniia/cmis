@@ -1,15 +1,21 @@
 import { Button } from "@cmis/ui/components/button";
-import { AlertTriangle, RefreshCw } from "lucide-react";
+import { cn } from "@cmis/ui/lib/utils";
+import { Link } from "@tanstack/react-router";
+import { AlertTriangle, PackagePlus, RefreshCw } from "lucide-react";
 import {
   type PointerEvent,
   useCallback,
+  useEffect,
   useMemo,
   useRef,
   useState,
 } from "react";
 import { toast } from "sonner";
+import { ConfirmModal } from "@/features/admin/components/confirm-modal";
 import { useDensity } from "@/hooks/use-density";
+import { insertNewItemWithBatch } from "../data/create-item-with-batch";
 import { useBarcodeWedge } from "../hooks/use-barcode-wedge";
+import { useInventoryDeletion } from "../hooks/use-inventory-deletion";
 import { useInventoryFilters } from "../hooks/use-inventory-filters";
 import { useInventoryItems } from "../hooks/use-inventory-items";
 import { useMediaQuery1200 } from "../hooks/use-media-query-1200";
@@ -18,84 +24,101 @@ import {
   useStockInMutation,
   useStockOutMutation,
 } from "../hooks/use-stock-mutations";
-import type { InventoryItem, StockOutPayload } from "../types";
+import type { InventoryTab } from "../inventory-search";
+import type { StockOutPayload } from "../types";
+import { DeleteConfirmModal } from "./delete-confirm-modal";
 import { InventoryDetailContent } from "./inventory-detail";
 import { InventoryDetailSheet } from "./inventory-detail-sheet";
 import { InventoryFiltersBar } from "./inventory-filters";
 import { InventoryList } from "./inventory-list";
+import { InventorySelectionToolbar } from "./inventory-selection-toolbar";
 import { NoInventoryEmptyState } from "./no-inventory-empty-state";
 import { StockInWizard } from "./stock-in-wizard";
 import { StockOutWizard } from "./stock-out-wizard";
+import { TrashList } from "./trash-list";
 
-/**
- * Creates a medication the inventory has never seen, plus its first batch.
- *
- * A brand-new item has no row to update, so it cannot go through the stock-in
- * mutation and is written directly instead. Returns the new id so the caller can
- * select it once the list refetches.
- */
-async function insertNewItemWithBatch(payload: {
-  batch: string;
-  category: string;
-  expiry: string;
-  name: string;
-  qty: number;
-  supplier: string;
-}): Promise<string> {
-  const { getDb } = await import("@/lib/db");
-  const db = await getDb();
-  const id =
-    typeof crypto !== "undefined" && "randomUUID" in crypto
-      ? crypto.randomUUID()
-      : `inv-${Date.now()}`;
-  const sku = `SKU-${payload.name.slice(0, 4).toUpperCase()}-${payload.qty}`;
-  await db.execute(
-    "INSERT INTO inventory_items (id, sku, name, dosage, dosage_missing, stock_on_hand, total_dispensed, stock_remaining, daily_sum, total_mismatch, qty, status, needs_batch, category, supplier, threshold, is_no_stock, created_at, updated_at) VALUES (?, ?, ?, ?, 0, ?, 0, NULL, 0, 0, ?, ?, 0, ?, ?, 20, 0, ?, ?)",
-    [
-      id,
-      sku,
-      payload.name,
-      "",
-      payload.qty,
-      payload.qty,
-      payload.qty > 0 ? "in" : "out",
-      payload.category,
-      payload.supplier,
-      new Date().toISOString(),
-      new Date().toISOString(),
-    ]
+function InventoryTabButton({
+  id,
+  label,
+  selected,
+  onSelect,
+}: {
+  id: InventoryTab;
+  label: string;
+  onSelect: (tab: InventoryTab) => void;
+  selected: boolean;
+}) {
+  const handleClick = useCallback(() => onSelect(id), [id, onSelect]);
+  return (
+    <button
+      aria-selected={selected}
+      className={cn(
+        "press-feedback rounded-md px-2.5 py-1 text-[12px] transition-colors",
+        selected
+          ? "bg-muted font-semibold text-foreground"
+          : "font-medium text-muted-foreground hover:text-foreground"
+      )}
+      onClick={handleClick}
+      role="tab"
+      type="button"
+    >
+      {label}
+    </button>
   );
-  if (payload.batch) {
-    await db.execute(
-      "INSERT INTO inventory_batches (id, item_id, batch, expiry, qty, supplier) VALUES (?, ?, ?, ?, ?, ?)",
-      [
-        `${id}-b`,
-        id,
-        payload.batch,
-        payload.expiry,
-        payload.qty,
-        payload.supplier,
-      ]
-    );
-  }
-  return id;
 }
 
-function _derivedStatus(
-  total: number,
-  threshold: number,
-  current: InventoryItem["status"]
-): InventoryItem["status"] {
-  if (total === 0) {
-    return "out";
-  }
-  if (total <= threshold) {
-    return "low";
-  }
-  return current;
+function InventoryTabStrip({
+  activeTab,
+  onTabChange,
+  trashCount,
+}: {
+  activeTab: InventoryTab;
+  onTabChange?: (tab: InventoryTab) => void;
+  trashCount: number;
+}) {
+  const handleSelect = useCallback(
+    (tab: InventoryTab) => onTabChange?.(tab),
+    [onTabChange]
+  );
+  return (
+    <div
+      aria-label="Inventory sections"
+      className="flex shrink-0 items-center gap-1 border-border/50 border-b bg-card px-2 py-1.5"
+      role="tablist"
+    >
+      <InventoryTabButton
+        id="stock"
+        label="Stock"
+        onSelect={handleSelect}
+        selected={activeTab === "stock"}
+      />
+      <InventoryTabButton
+        id="trash"
+        label={trashCount > 0 ? `Trash (${trashCount})` : "Trash"}
+        onSelect={handleSelect}
+        selected={activeTab === "trash"}
+      />
+      <Link
+        className="press-feedback ml-auto inline-flex items-center gap-1 rounded-md bg-primary px-2.5 py-1 font-medium text-[12px] text-primary-foreground hover:bg-primary/90"
+        to="/admin/inventory/add"
+      >
+        <PackagePlus aria-hidden className="size-3.5" />
+        Add Inventory
+      </Link>
+    </div>
+  );
 }
 
-export function InventoryPage() {
+export function InventoryPage({
+  activeTab = "stock",
+  onTabChange,
+  preselectItemId = null,
+}: {
+  activeTab?: InventoryTab;
+  onTabChange?: (tab: InventoryTab) => void;
+  /** Decision 14 — `?item=` from an alert page's "Open in Stock Management". */
+  preselectItemId?: string | null;
+} = {}) {
   const { density } = useDensity();
   const isWide = useMediaQuery1200();
   const { displayRatio, setRatio, toggleCollapse, collapsed } = usePanelRatio();
@@ -126,8 +149,48 @@ export function InventoryPage() {
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [originRect, setOriginRect] = useState<DOMRect | null>(null);
+
+  // The alert pages hand the operator here with the product already chosen.
+  useEffect(() => {
+    if (preselectItemId) {
+      setSelectedId(preselectItemId);
+    }
+  }, [preselectItemId]);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [barcodeValue, setBarcodeValue] = useState("");
+
+  // Deletion + Trash (spec §7.6, §7.7) — kept in one hook so this page stays a
+  // composition root rather than a home for delete rules.
+  const {
+    clearSelection,
+    closeDeleteTarget,
+    closePurge,
+    closeSkuConflict,
+    confirmDelete,
+    confirmPurge,
+    deleteConsequences,
+    deleteLabel,
+    deleteOpen,
+    deleteTitle,
+    purgeConsequences,
+    purgeOpen,
+    purgeTitle,
+    requestDeleteBatch,
+    requestDeleteBulk,
+    requestDeleteItem,
+    requestPurge,
+    requestPurgeSelected,
+    restore,
+    restoreWithSku,
+    selectedIds,
+    selectedTrashIds,
+    skuConflict,
+    toggleAll,
+    toggleAllTrash,
+    toggleSelect,
+    toggleTrash,
+    trash,
+  } = useInventoryDeletion({ filtered, filters, items });
 
   // Wizards
   const [stockInOpen, setStockInOpen] = useState(false);
@@ -138,6 +201,23 @@ export function InventoryPage() {
   const selectedItem = useMemo(
     () => items.find((i) => i.id === selectedId) ?? null,
     [items, selectedId]
+  );
+
+  // Detail-view actions act on whatever row is selected, so they adapt the
+  // hook's item-first signatures rather than re-resolving it at each call site.
+  const handleDeleteProductFromDetail = useCallback(() => {
+    if (selectedItem) {
+      requestDeleteItem(selectedItem);
+    }
+  }, [requestDeleteItem, selectedItem]);
+
+  const handleDeleteBatchFromDetail = useCallback(
+    (batchName: string) => {
+      if (selectedItem) {
+        requestDeleteBatch(selectedItem, batchName);
+      }
+    },
+    [requestDeleteBatch, selectedItem]
   );
 
   const handleSelect = useCallback(
@@ -170,7 +250,7 @@ export function InventoryPage() {
         if (!isWide) {
           setSheetOpen(true);
         }
-        toast.success(`Scanned: ${found.name}`);
+        toast.success(`Scanned: ${found.displayName}`);
         setBarcodeValue("");
       } else {
         toast.message("Not found — Create new item?", {
@@ -250,11 +330,14 @@ export function InventoryPage() {
       isNew: boolean;
       name: string;
       category: string;
-      unit: string;
+      form: string;
+      packSize: string;
+      strengthUnit: string;
+      strengthValue: string;
       batch: string;
       expiry: string;
       qty: number;
-      supplier: string;
+      supplier: string | null;
       notes: string;
     }) => {
       // Use mutation; payload.isNew creates new item via direct DB insert fallback
@@ -277,11 +360,14 @@ export function InventoryPage() {
           batch: payload.batch,
           category: payload.category,
           expiry: payload.expiry,
+          form: payload.form,
           identifier: payload.itemId ?? payload.name,
           name: payload.name,
+          packSize: payload.packSize,
           qty: payload.qty,
+          strengthUnit: payload.strengthUnit,
+          strengthValue: payload.strengthValue,
           supplier: payload.supplier,
-          unit: payload.unit,
         },
         {
           onError: (e) => setError(e.message),
@@ -358,14 +444,37 @@ export function InventoryPage() {
   const showErrorBanner = !loading && effectiveError !== null;
   const isEmptyDb = !loading && items.length === 0 && !effectiveError;
 
-  if (isEmptyDb) {
+  if (isEmptyDb && activeTab === "stock") {
     return (
-      <NoInventoryEmptyState description="Import your inventory CSV to get started. No data is bundled — pick the file via Admin." />
+      <div className="flex h-full flex-col overflow-hidden">
+        <InventoryTabStrip
+          activeTab={activeTab}
+          onTabChange={onTabChange}
+          trashCount={trash.length}
+        />
+        <div className="min-h-0 flex-1 overflow-hidden">
+          <NoInventoryEmptyState description="Import your inventory CSV to get started. No data is bundled — pick the file via Admin." />
+        </div>
+      </div>
     );
   }
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
+      <InventoryTabStrip
+        activeTab={activeTab}
+        onTabChange={onTabChange}
+        trashCount={trash.length}
+      />
+
+      {activeTab === "stock" ? (
+        <InventorySelectionToolbar
+          count={selectedIds.size}
+          onClear={clearSelection}
+          onDelete={requestDeleteBulk}
+        />
+      ) : null}
+
       {showErrorBanner ? (
         <div
           className="flex shrink-0 items-center gap-2 border-destructive/20 border-b bg-destructive/5 px-3 py-2 text-sm"
@@ -396,7 +505,21 @@ export function InventoryPage() {
         ref={containerRef}
         style={{ position: "relative" }}
       >
-        {isWide ? (
+        {activeTab === "trash" ? (
+          <div className="flex min-w-0 flex-1 flex-col overflow-hidden bg-card">
+            <TrashList
+              entries={trash}
+              onPurge={requestPurge}
+              onPurgeSelected={requestPurgeSelected}
+              onRestore={restore}
+              onToggle={toggleTrash}
+              onToggleAll={toggleAllTrash}
+              selectedIds={selectedTrashIds}
+            />
+          </div>
+        ) : null}
+
+        {activeTab === "stock" && isWide ? (
           <>
             {/* List panel */}
             <div
@@ -427,10 +550,15 @@ export function InventoryPage() {
                   items={filtered}
                   loading={loading}
                   onClearFilters={clearFilters}
+                  onDeleteItem={requestDeleteItem}
                   onRowRect={setOriginRect}
                   onSelect={handleSelect}
                   onSort={setSort}
+                  onToggleAll={toggleAll}
+                  onToggleSelect={toggleSelect}
+                  selectable
                   selectedId={selectedId}
+                  selectedIds={selectedIds}
                   sortDir={filters.sortDir}
                   sortKey={filters.sortKey}
                   totalUnfiltered={items.length}
@@ -487,6 +615,10 @@ export function InventoryPage() {
                   <InventoryDetailContent
                     autoFocus={!!selectedId}
                     item={selectedItem}
+                    items={items}
+                    onDeleteBatch={handleDeleteBatchFromDetail}
+                    onDeleteProduct={handleDeleteProductFromDetail}
+                    onItemUpdated={refetch}
                     onStockIn={handleStockInFromDetail}
                     onStockOut={handleStockOutFromDetail}
                   />
@@ -494,7 +626,9 @@ export function InventoryPage() {
               )}
             </div>
           </>
-        ) : (
+        ) : null}
+
+        {activeTab === "stock" && !isWide ? (
           // Narrow: full-width list, detail as sheet
           <div className="flex min-w-0 flex-1 flex-col overflow-hidden bg-card">
             <InventoryFiltersBar
@@ -516,27 +650,78 @@ export function InventoryPage() {
                 items={filtered}
                 loading={loading}
                 onClearFilters={clearFilters}
+                onDeleteItem={requestDeleteItem}
                 onRowRect={setOriginRect}
                 onSelect={handleSelect}
                 onSort={setSort}
+                onToggleAll={toggleAll}
+                onToggleSelect={toggleSelect}
+                selectable
                 selectedId={selectedId}
+                selectedIds={selectedIds}
                 sortDir={filters.sortDir}
                 sortKey={filters.sortKey}
                 totalUnfiltered={items.length}
               />
             </div>
           </div>
-        )}
+        ) : null}
       </div>
 
       {/* Detail sheet for narrow */}
       <InventoryDetailSheet
         item={selectedItem}
+        items={items}
+        onDeleteBatch={handleDeleteBatchFromDetail}
+        onDeleteProduct={handleDeleteProductFromDetail}
+        onItemUpdated={refetch}
         onOpenChange={setSheetOpen}
         onStockIn={handleStockInFromSheet}
         onStockOut={handleStockOutFromSheet}
         open={sheetOpen && !isWide}
         originRect={originRect}
+      />
+
+      {/* Deletion — one modal for product, batch and bulk (§7.7). */}
+      <DeleteConfirmModal
+        confirmLabel={deleteLabel}
+        consequences={deleteConsequences}
+        onConfirm={confirmDelete}
+        onOpenChange={closeDeleteTarget}
+        open={deleteOpen}
+        title={deleteTitle}
+      />
+
+      {/* Permanent removal (§7.6) — the only irreversible action, so it asks for
+       * a different word than the recoverable ones. */}
+      <DeleteConfirmModal
+        confirmLabel="Delete permanently"
+        confirmWord="PURGE"
+        consequences={purgeConsequences}
+        onConfirm={confirmPurge}
+        onOpenChange={closePurge}
+        open={purgeOpen}
+        reversible={false}
+        title={purgeTitle}
+      />
+
+      {/* Restore blocked on a taken SKU — offers the suffixed one (§7.6). */}
+      <ConfirmModal
+        confirmLabel={
+          skuConflict ? `Restore as ${skuConflict.suggestedSku}` : "Restore"
+        }
+        description={
+          skuConflict ? (
+            <span>
+              {skuConflict.message} Restoring it under a new SKU keeps both
+              products, and the original stays in Trash.
+            </span>
+          ) : null
+        }
+        onConfirm={restoreWithSku}
+        onOpenChange={closeSkuConflict}
+        open={skuConflict !== null}
+        title="SKU already in use"
       />
 
       {/* Wizards — always centered modal 560px, not bottom sheet */}

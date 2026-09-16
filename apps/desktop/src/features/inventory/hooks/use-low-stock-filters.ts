@@ -45,10 +45,21 @@ function applyLowStockFilters(
       return false;
     }
 
-    // Search
+    // Search — all four strength fields included (decision 17).
     if (q) {
-      const hay =
-        `${row.item.name} ${row.item.sku} ${row.item.supplier} ${row.item.category}`.toLowerCase();
+      const hay = [
+        row.item.name,
+        row.item.displayName,
+        row.item.sku,
+        row.item.supplier,
+        row.item.category,
+        row.item.strengthValue,
+        row.item.strengthUnit,
+        row.item.form,
+        row.item.packSize,
+      ]
+        .join(" ")
+        .toLowerCase();
       if (!hay.includes(q)) {
         return false;
       }
@@ -233,13 +244,11 @@ export function useLowStockFilters(items: InventoryItem[]) {
     }
   }, []);
 
-  // Distinct suppliers, categories from items
+  // Suppliers still come from the items themselves (there is no supplier table
+  // read here); categories come from the shared category list, so the filter
+  // bar no longer derives its own copy from the stock on hand.
   const distinctSuppliers = useMemo(
     () => [...new Set(items.map((i) => i.supplier))].sort(),
-    [items]
-  );
-  const distinctCategories = useMemo(
-    () => [...new Set(items.map((i) => i.category))].sort(),
     [items]
   );
 
@@ -247,7 +256,6 @@ export function useLowStockFilters(items: InventoryItem[]) {
     activeChips,
     allRows,
     clearFilters,
-    distinctCategories,
     distinctSuppliers,
     filtered,
     filters,

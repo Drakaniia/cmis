@@ -1,7 +1,7 @@
 import { Button } from "@cmis/ui/components/button";
+import { QuantityStepper } from "@cmis/ui/components/quantity-stepper";
 import { AnimatePresence, motion } from "motion/react";
 import {
-  type ChangeEvent,
   type CSSProperties,
   useCallback,
   useEffect,
@@ -64,11 +64,9 @@ export function AdjustThresholdPopover({
 
   const handleClose = useCallback(() => onOpenChange(false), [onOpenChange]);
 
-  const handleThresholdChange = useCallback(
-    (event: ChangeEvent<HTMLInputElement>) =>
-      setThreshold(Number(event.target.value)),
-    []
-  );
+  const handleThresholdChange = useCallback((next: number | "") => {
+    setThreshold(next === "" ? 0 : next);
+  }, []);
 
   const handleSubmit = useCallback(() => {
     if (!(row && isValid)) {
@@ -76,7 +74,7 @@ export function AdjustThresholdPopover({
     }
     onConfirm({
       itemId: row.item.id,
-      itemName: row.item.name,
+      itemName: row.item.displayName,
       newThreshold: threshold,
       oldThreshold: row.threshold,
     });
@@ -110,7 +108,7 @@ export function AdjustThresholdPopover({
                 Adjust Threshold
               </h3>
               <p className="mt-0.5 text-caption text-muted-foreground">
-                {row.item.name}
+                {row.item.displayName}
               </p>
             </div>
 
@@ -122,12 +120,11 @@ export function AdjustThresholdPopover({
                 >
                   Current threshold
                 </label>
-                <input
-                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-1 focus:ring-ring"
+                <QuantityStepper
+                  className="h-9"
                   id="threshold-input"
                   min={1}
                   onChange={handleThresholdChange}
-                  type="number"
                   value={threshold}
                 />
                 <p className="mt-1 text-caption text-muted-foreground">

@@ -1,4 +1,5 @@
 import { Button } from "@cmis/ui/components/button";
+import { QuantityStepper } from "@cmis/ui/components/quantity-stepper";
 import { cn } from "@cmis/ui/lib/utils";
 import { X } from "lucide-react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
@@ -71,12 +72,9 @@ export function ReorderSheet({
     []
   );
 
-  const handleQtyChange = useCallback(
-    (event: ChangeEvent<HTMLInputElement>) => {
-      setQty(Number(event.target.value));
-    },
-    []
-  );
+  const handleQtyChange = useCallback((next: number | "") => {
+    setQty(next === "" ? 0 : next);
+  }, []);
 
   const handleNotesChange = useCallback(
     (event: ChangeEvent<HTMLTextAreaElement>) => {
@@ -91,7 +89,7 @@ export function ReorderSheet({
     }
     onConfirm({
       itemId: row.item.id,
-      itemName: row.item.name,
+      itemName: row.item.displayName,
       qty,
       supplier,
     });
@@ -174,7 +172,7 @@ export function ReorderSheet({
                     Item
                   </span>
                   <p className="font-medium text-foreground text-sm">
-                    {row.item.name}
+                    {row.item.displayName}
                     <span className="ml-2 text-muted-foreground">
                       ({row.item.sku})
                     </span>
@@ -241,12 +239,11 @@ export function ReorderSheet({
                       (suggested: {row.suggestedQty})
                     </span>
                   </label>
-                  <input
-                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-1 focus:ring-ring"
+                  <QuantityStepper
+                    className="h-9"
                     id="reorder-qty"
                     min={gap > 0 ? gap : 0}
                     onChange={handleQtyChange}
-                    type="number"
                     value={qty}
                   />
                   {gap > 0 && qty < gap ? (

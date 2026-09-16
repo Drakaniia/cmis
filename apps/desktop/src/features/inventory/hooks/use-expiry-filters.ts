@@ -42,8 +42,20 @@ function matchesSearch(row: ExpiryRow, query: string): boolean {
   if (query.length === 0) {
     return true;
   }
-  const hay =
-    `${row.item.name} ${row.item.sku} ${row.batch.batch} ${row.item.barcode ?? ""}`.toLowerCase();
+  // All four strength fields are searchable here too (decision 17).
+  const hay = [
+    row.item.name,
+    row.item.displayName,
+    row.item.sku,
+    row.item.barcode ?? "",
+    row.item.strengthValue,
+    row.item.strengthUnit,
+    row.item.form,
+    row.item.packSize,
+    row.batch.batch,
+  ]
+    .join(" ")
+    .toLowerCase();
   return hay.includes(query);
 }
 
