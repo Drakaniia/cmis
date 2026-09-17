@@ -41,6 +41,7 @@ export function canMove(from: RequestStatus, to: RequestStatus): boolean {
 
 export type RequestActionId =
   | "approve"
+  | "cancel"
   | "deny"
   | "dispense"
   | "move-to-approved"
@@ -73,6 +74,10 @@ export function requestActions(status: RequestStatus): RequestAction[] {
         { id: "approve", label: "Approve", to: "approved" },
         { id: "move-to-ready", label: "Move to Ready to Claim", to: "ready" },
         { destructive: true, id: "deny", label: "Deny", to: "denied" },
+        // decided or prepared yet (D19/F6). Approved and Ready are cancellable
+        // through Deny, which keeps the audit trail; Claimed and Denied are
+        // terminal.
+        { destructive: true, id: "cancel", label: "Cancel request" },
       ];
     case "approved":
       return [

@@ -19,6 +19,7 @@ const NOW = new Date("2026-09-12T14:00:00").getTime();
 function item(overrides: Partial<RequestItem> = {}): RequestItem {
   return {
     category: "Analgesic",
+    dispensingRecords: [],
     history: [],
     id: "REQ-2026-0001",
     medicine: "Paracetamol 500mg",
@@ -26,6 +27,7 @@ function item(overrides: Partial<RequestItem> = {}): RequestItem {
     qty: 2,
     reason: "test",
     requestor: { email: "a@b.c", id: "STU-2024-0831", name: "Maria Santos" },
+    source: "queue",
     status: "pending",
     submittedAt: new Date(NOW).toISOString(),
     unit: "tabs",

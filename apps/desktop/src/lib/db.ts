@@ -137,7 +137,6 @@ export async function wipeAllData(opts?: {
     localStorage.removeItem(k);
   }
   // Written after the tables are empty, so the log explains the empty database
-  // rather than being blank itself. Best-effort: the wipe already happened, and
   // failing here would report a data loss that did not occur.
   const { recordAudit } = await import("@/features/admin/audit/write-audit");
   await recordAudit(

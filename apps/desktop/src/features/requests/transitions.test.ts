@@ -23,6 +23,7 @@ function claimHistory(at: string): StatusHistoryEntry[] {
 function claimedItem(claimedHoursAgo: number, now: number): RequestItem {
   return {
     category: "Analgesic",
+    dispensingRecords: [],
     history: claimHistory(
       new Date(now - claimedHoursAgo * HOUR_MS).toISOString()
     ),
@@ -32,6 +33,7 @@ function claimedItem(claimedHoursAgo: number, now: number): RequestItem {
     qty: 2,
     reason: "test",
     requestor: { email: "a@b.c", id: "STU-1", name: "Test Viewer" },
+    source: "queue",
     status: "claimed",
     submittedAt: new Date(now - 6 * HOUR_MS).toISOString(),
     unit: "tabs",

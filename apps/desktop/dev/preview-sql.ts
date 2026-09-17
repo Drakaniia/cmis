@@ -126,11 +126,19 @@ function openDatabase(
  * app fails here with "column index out of range" (which the app's own error
  * handling swallows). Repeats are expanded per occurrence, exactly as SQLite's
  * positional `?` numbering would.
+ *
+ * A statement that already uses `?` keeps the caller's values **in order**: the
+ * parameters are rebuilt here, so returning the rewritten list would drop them
+ * and leave every `?` bound to NULL. node:sqlite answers that with zero rows
+ * rather than an error, which is precisely the silent false empty state this
+ * plugin exists to prevent — a `WHERE display_name = ?` lookup simply finds
+ * nothing, and the UI reports "no inventory item matches".
  */
-function bindPlaceholders(sql: string, values: unknown[]): SqlRequest {
+export function bindPlaceholders(sql: string, values: unknown[]): SqlRequest {
   const chunks: string[] = [];
   const params: unknown[] = [];
   let index = 0;
+  let numbered = 0;
   let quote: string | null = null;
 
   while (index < sql.length) {
@@ -158,11 +166,12 @@ function bindPlaceholders(sql: string, values: unknown[]): SqlRequest {
       continue;
     }
 
-    const numbered = NUMBERED_PLACEHOLDER_RE.exec(sql.slice(index));
-    if (numbered) {
-      params.push(values[Number(numbered[1]) - 1] ?? null);
+    const placeholder = NUMBERED_PLACEHOLDER_RE.exec(sql.slice(index));
+    if (placeholder) {
+      params.push(values[Number(placeholder[1]) - 1] ?? null);
       chunks.push("?");
-      index += numbered[0].length;
+      index += placeholder[0].length;
+      numbered += 1;
       continue;
     }
 
@@ -170,7 +179,11 @@ function bindPlaceholders(sql: string, values: unknown[]): SqlRequest {
     index += 1;
   }
 
-  return { params, sql: chunks.join("") };
+  // No `$1` to rewrite: the values already line up with the statement's `?`s.
+  return {
+    params: numbered === 0 ? values : params,
+    sql: chunks.join(""),
+  };
 }
 
 function isReadStatement(sql: string): boolean {
@@ -257,9 +270,8 @@ export function previewSql(): Plugin {
               error: error instanceof Error ? error.message : String(error),
             });
           }
-        })().catch(() => {
-          // fire-and-forget: errors are already handled above
-        });
+          // biome-ignore lint/suspicious/noEmptyBlockStatements: fire-and-forget preview handler
+        })().catch(() => {});
       });
 
       server.httpServer?.on("close", () => db.close());

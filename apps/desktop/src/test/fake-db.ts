@@ -11,6 +11,11 @@
  * (`DELETE … WHERE id NOT IN (SELECT …)` and `UPDATE … SET col = (SELECT b.col
  * FROM "backup" b WHERE …)`), because the atomicity promise is only worth
  * something if a test can make the writes fail halfway.
+ *
+ * A third shape it knows is the app's medicine predicate (`MEDICINE_WHERE_SQL`):
+ * a request names an item by normalized text rather than by a foreign key, so a
+ * test of any path that resolves a medicine against the shelf needs it — the
+ * request's dispensing service included.
  */
 
 import type { DbLike } from "@/features/inventory/creation/db-like";
@@ -37,6 +42,17 @@ export interface FakeDb extends DbLike {
 type Condition =
   | { column: string; kind: "compare"; like?: boolean; value: unknown }
   | { column: string; kind: "in"; values: unknown[] }
+  | {
+      /** Normalized medicine match — `MEDICINE_WHERE_SQL`'s three branches. */
+      kind: "medicine";
+      columns: {
+        composedA: string;
+        composedB: string;
+        display: string;
+        name: string;
+      };
+      values: [unknown, unknown, unknown];
+    }
   | { column: string; kind: "not-in"; table: string };
 
 type ReadTable = (name: string) => DbRow[];
@@ -58,13 +74,19 @@ const AND_RE = /\s+AND\s+/i;
 const QUOTES_RE = /^'|'$/g;
 const ORDER_TERM_RE = /\s+/;
 // Table names may carry a timestamp suffix (`inventory_items_backup_2026-…`),
-// so they are wider than `\w`: letters, digits, underscores and dashes.
 const CREATE_AS_SELECT_RE =
   /^CREATE TABLE (?:IF NOT EXISTS )?"?([\w-]+)"? AS SELECT \* FROM ([\w-]+)(\s+WHERE 1=0)?$/i;
 const DROP_TABLE_RE = /^DROP TABLE (?:IF EXISTS )?"?([\w-]+)"?$/i;
 const LIKE_CONDITION_RE = /^(\w+)\s+LIKE\s+'(.+)'$/i;
 const NOT_IN_SUBQUERY_RE =
   /^(\w+)\s+NOT\s+IN\s*\(\s*SELECT\s+\w+\s+FROM\s+"?([\w-]+)"?\s*\)$/i;
+/**
+ * `MEDICINE_WHERE_SQL` verbatim: display name, then `name || ' ' || dosage`,
+ * then the bare name. Spacing is the constant's, because the app interpolates it
+ * straight into the statement.
+ */
+const MEDICINE_CONDITION_RE =
+  /^lower\(trim\((\w+)\)\) = lower\(trim\(\?\)\) OR lower\(trim\((\w+) \|\| ' ' \|\| (\w+)\)\) = lower\(trim\(\?\)\) OR lower\(trim\((\w+)\)\) = lower\(trim\(\?\)\)$/i;
 const SUBQUERY_ASSIGNMENT_RE =
   /^(\w+)\s*=\s*\(SELECT\s+b\.(\w+)\s+FROM\s+"?([\w-]+)"?\s+b\s+WHERE\s+b\.(\w+)\s*=\s*(\w+)\.(\w+)\)$/i;
 const SQLITE_MASTER = "sqlite_master";
@@ -147,6 +169,21 @@ function parseConditions(
     return [];
   }
   const conditions: Condition[] = [];
+  const medicine = clause.trim();
+  const medicineMatch = MEDICINE_CONDITION_RE.exec(medicine);
+  if (medicineMatch) {
+    conditions.push({
+      columns: {
+        composedA: medicineMatch[2],
+        composedB: medicineMatch[3],
+        display: medicineMatch[1],
+        name: medicineMatch[4],
+      },
+      kind: "medicine",
+      values: [nextParam(), nextParam(), nextParam()],
+    });
+    return conditions;
+  }
   for (const part of clause.split(AND_RE)) {
     const trimmed = part.trim();
     const like = LIKE_CONDITION_RE.exec(trimmed);
@@ -203,6 +240,20 @@ function matches(
   readTable: ReadTable
 ): boolean {
   return conditions.every((condition) => {
+    if (condition.kind === "medicine") {
+      const normalize = (candidate: unknown) =>
+        String(candidate ?? "")
+          .trim()
+          .toLowerCase();
+      const { composedA, composedB, display, name } = condition.columns;
+      const [forDisplay, forComposed, forName] = condition.values;
+      return (
+        normalize(row[display]) === normalize(forDisplay) ||
+        normalize(`${row[composedA] ?? ""} ${row[composedB] ?? ""}`) ===
+          normalize(forComposed) ||
+        normalize(row[name]) === normalize(forName)
+      );
+    }
     const value = row[condition.column];
     if (condition.kind === "in") {
       return condition.values.some(
