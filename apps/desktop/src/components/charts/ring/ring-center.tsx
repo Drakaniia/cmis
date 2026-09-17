@@ -69,7 +69,6 @@ export function RingCenter({
   // Leave some padding so text doesn't touch the inner ring
   const centerSize = baseInnerRadius * 2 - 16;
 
-  // If custom render function is provided, use it
   if (children && hoveredData) {
     return (
       <div
@@ -91,7 +90,6 @@ export function RingCenter({
   }
 
   // Default center content with NumberFlow animations
-  // Now renders as pure HTML, avoiding Safari's foreignObject bugs
   return (
     <div
       className={cn(

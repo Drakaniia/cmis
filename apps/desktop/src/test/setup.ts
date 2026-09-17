@@ -18,7 +18,6 @@ if (typeof window !== "undefined" && typeof window.matchMedia !== "function") {
   });
 }
 
-// jsdom / Base UI compat: PointerEvent missing or not constructable in some jsdom versions
 if (typeof window !== "undefined") {
   const w = window as unknown as Record<string, unknown>;
   if (typeof w.PointerEvent !== "function") {

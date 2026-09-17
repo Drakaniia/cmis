@@ -77,7 +77,6 @@ export function QuantityStepper({
   const holdRef = useRef<number | null>(null);
   const repeatRef = useRef<number | null>(null);
 
-  // Adopt values set by the parent (modal reopen, form reset, clamping).
   useEffect(() => {
     if (emittedRef.current === value) {
       return;

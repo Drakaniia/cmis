@@ -55,7 +55,6 @@ export interface RingStableContextValue {
   baseInnerRadius: number;
   center: number;
 
-  // Container ref for portals
   containerRef: RefObject<HTMLDivElement | null>;
   // Data
   data: RingData[];
@@ -69,10 +68,8 @@ export interface RingStableContextValue {
    */
   geometryScrubbing: boolean;
 
-  // Get color for a ring index
   getColor: (index: number) => string;
 
-  // Get ring radii for an index
   getRingRadii: (index: number) => { innerRadius: number; outerRadius: number };
   isLoaded: boolean;
   ringGap: number;

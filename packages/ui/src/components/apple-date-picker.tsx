@@ -104,7 +104,6 @@ export function AppleDatePicker({
   );
   const today = todayIso();
 
-  // Parent-driven changes (form reset, validation revert) win over typed text.
   useEffect(() => {
     setText(value);
   }, [value]);

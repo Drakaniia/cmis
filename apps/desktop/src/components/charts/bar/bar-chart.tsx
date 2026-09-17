@@ -127,8 +127,6 @@ function extractBarConfigs(children: ReactNode): LineConfig[] {
       (props && typeof props.dataKey === "string" && props.dataKey.length > 0);
 
     if (isBarComponent && props?.dataKey) {
-      // Use stroke for tooltip dot color if provided, otherwise fall back to fill
-      // This allows gradient/pattern fills to have a solid dot color
       const dotColor =
         props.stroke || props.fill || "var(--chart-line-primary)";
       configs.push({
@@ -398,13 +396,11 @@ const ChartCore = memo(function ChartCoreMemo({
 
   const isHorizontal = orientation === "horizontal";
 
-  // Extract bar configs synchronously from children
   const lines = useMemo(() => extractBarConfigs(children), [children]);
 
   const innerWidth = width - margin.left - margin.right;
   const innerHeight = height - margin.top - margin.bottom;
 
-  // Category accessor function - returns string for categorical scale
   const categoryAccessor = useCallback(
     (d: Record<string, unknown>): string => {
       const value = d[xDataKey];
@@ -416,7 +412,6 @@ const ChartCore = memo(function ChartCoreMemo({
     [xDataKey]
   );
 
-  // For compatibility with ChartContext, provide a Date-based xAccessor
   const xAccessorDate = useCallback(
     (d: Record<string, unknown>): Date => {
       const value = d[xDataKey];
@@ -428,7 +423,6 @@ const ChartCore = memo(function ChartCoreMemo({
     [xDataKey]
   );
 
-  // Category scale (band) - for the categorical axis
   const categoryScale = useMemo(() => {
     const domain = data.map((d) => categoryAccessor(d));
     const range: [number, number] = isHorizontal
@@ -441,10 +435,8 @@ const ChartCore = memo(function ChartCoreMemo({
     });
   }, [innerWidth, innerHeight, data, categoryAccessor, barGap, isHorizontal]);
 
-  // Band width for bars - use prop if provided, otherwise use scale's bandwidth
   const bandWidth = barWidthProp ?? categoryScale.bandwidth();
 
-  // Compute max value considering stacking
   const maxValue = useMemo(() => {
     const max = stacked
       ? computeStackedMax(data, lines)
@@ -452,7 +444,6 @@ const ChartCore = memo(function ChartCoreMemo({
     return max || 100;
   }, [data, lines, stacked]);
 
-  // Value scale (linear) - for the value axis
   const valueScale = useMemo(() => {
     const range = isHorizontal ? [0, innerWidth] : [innerHeight, 0];
     return scaleLinear({
@@ -487,7 +478,6 @@ const ChartCore = memo(function ChartCoreMemo({
 
   const primaryYScale = getPrimaryYScale(yScales, valueScale);
 
-  // Compute stack offsets for stacked bars
   const stackOffsets = useMemo(() => {
     if (!stacked) {
       return;
@@ -512,7 +502,6 @@ const ChartCore = memo(function ChartCoreMemo({
     return offsets;
   }, [data, lines, stacked]);
 
-  // Column width for tooltip indicator
   const columnWidth = useMemo(() => {
     if (data.length < 1) {
       return 0;
@@ -520,13 +509,11 @@ const ChartCore = memo(function ChartCoreMemo({
     return isHorizontal ? innerHeight / data.length : innerWidth / data.length;
   }, [innerWidth, innerHeight, data.length, isHorizontal]);
 
-  // Pre-compute labels for ticker animation
   const dateLabels = useMemo(
     () => data.map((d) => categoryAccessor(d)),
     [data, categoryAccessor]
   );
 
-  // Create a fake time scale for compatibility with ChartContext
   const fakeTimeScale = useMemo(() => {
     const now = Date.now();
     const start = now - data.length * 24 * 60 * 60 * 1000;
@@ -540,7 +527,6 @@ const ChartCore = memo(function ChartCoreMemo({
     return scale;
   }, [categoryScale, innerWidth, data.length]);
 
-  // Animation timing — replay when motion settings change
   // biome-ignore lint/correctness/useExhaustiveDependencies: revealSignature
   useEffect(() => {
     setRevealEpoch((n) => n + 1);
@@ -561,7 +547,6 @@ const ChartCore = memo(function ChartCoreMemo({
     onPhaseChange?.(isLoaded ? "ready" : "revealing");
   }, [isLoaded, onPhaseChange]);
 
-  // Mouse move handler
   const handleMouseMove = useCallback(
     (event: React.MouseEvent<SVGGElement>) => {
       const point = localPoint(event);
@@ -644,7 +629,6 @@ const ChartCore = memo(function ChartCoreMemo({
 
   const canInteract = isLoaded;
 
-  // Separate children into defs, pre-overlay, and post-overlay
   const defsChildren: ReactElement[] = [];
   const clipExcludedChildren: ReactElement[] = [];
   const underlayChildren: ReactElement[] = [];
@@ -681,7 +665,6 @@ const ChartCore = memo(function ChartCoreMemo({
     animationDuration,
     animationEasing,
     bandWidth,
-    // Bar-specific properties
     barScale: categoryScale,
     barXAccessor: categoryAccessor,
     chartPhase: resolveRestingChartPhase(status),

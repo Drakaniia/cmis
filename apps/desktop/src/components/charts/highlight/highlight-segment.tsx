@@ -7,7 +7,6 @@ import { type RefObject, useId } from "react";
 // band whose x/width spring to track the hovered point, so only the segment
 // around the dot shows brighter. The band comes from `useHighlightSegment`;
 // because the bright stroke reuses the base `d`, it follows whatever curve is
-// drawn (see `highlight-segment-bounds.ts` for the band-extent caveat).
 
 export interface HighlightSegmentProps {
   /** Plot height — the clip band spans it fully. */

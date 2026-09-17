@@ -487,7 +487,7 @@ export function AppSidebar({
       ) : (
         <div className="shrink-0 space-y-1 px-3 pb-3">
           <p className="border-border/70 border-t pt-2 text-[10.5px] text-muted-foreground/70">
-            Clinical Inventory System
+            Clinic Medicine Inventory System
           </p>
           <div className="flex items-center gap-2">
             {displayVersion ? (

@@ -20,6 +20,8 @@ import {
   ensureStrengthBackfill,
   type StrengthBackfillReport,
 } from "@/features/inventory/data/strength-backfill";
+import { QuickDeductDialogProvider } from "@/features/inventory/quick-deduct-dialog-context";
+import { NewRequestDialogProvider } from "@/features/requests/new-request-dialog-context";
 import { UpdaterProvider } from "@/features/updater/use-updater";
 
 import "../index.css";
@@ -153,31 +155,38 @@ function RootComponent() {
       >
         <UpdaterProvider>
           <HelpDialogsProvider>
-            {isDocsRoute ? (
-              <div className="flex h-svh flex-col overflow-hidden overflow-x-hidden">
-                <TitleBar onToggleSidebar={handleToggle} />
-                <DocsHeader />
-                <main className="page-canvas flex-1 overflow-y-auto">
-                  <Outlet />
-                </main>
-              </div>
-            ) : (
-              <div className="flex h-svh flex-col overflow-hidden overflow-x-hidden">
-                <TitleBar onToggleSidebar={handleToggle} />
-                <div className="flex flex-1 overflow-hidden overflow-x-hidden">
-                  <AppSidebar
-                    collapsed={sidebarCollapsed}
-                    onToggle={handleToggle}
-                  />
-                  <div className="flex min-w-0 flex-1 flex-col">
-                    <Header />
+            {/* New Request (Ctrl+N) and Quick Deduct (Ctrl+D) are both
+                app-wide, so their dialogs are mounted once here rather than
+                owned by a route. */}
+            <QuickDeductDialogProvider>
+              <NewRequestDialogProvider>
+                {isDocsRoute ? (
+                  <div className="flex h-svh flex-col overflow-hidden overflow-x-hidden">
+                    <TitleBar onToggleSidebar={handleToggle} />
+                    <DocsHeader />
                     <main className="page-canvas flex-1 overflow-y-auto">
                       <Outlet />
                     </main>
                   </div>
-                </div>
-              </div>
-            )}
+                ) : (
+                  <div className="flex h-svh flex-col overflow-hidden overflow-x-hidden">
+                    <TitleBar onToggleSidebar={handleToggle} />
+                    <div className="flex flex-1 overflow-hidden overflow-x-hidden">
+                      <AppSidebar
+                        collapsed={sidebarCollapsed}
+                        onToggle={handleToggle}
+                      />
+                      <div className="flex min-w-0 flex-1 flex-col">
+                        <Header />
+                        <main className="page-canvas flex-1 overflow-y-auto">
+                          <Outlet />
+                        </main>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </NewRequestDialogProvider>
+            </QuickDeductDialogProvider>
             <StrengthBackfillNotice />
             <Toaster position="bottom-right" richColors />
           </HelpDialogsProvider>

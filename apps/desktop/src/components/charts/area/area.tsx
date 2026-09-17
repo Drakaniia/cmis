@@ -3,7 +3,6 @@
 import { curveMonotoneX } from "@visx/curve";
 import { AreaClosed, LinePath } from "@visx/shape";
 
-// CurveFactory type - simplified version compatible with visx
 // biome-ignore lint/suspicious/noExplicitAny: d3 curve factory type
 type CurveFactory = any;
 
@@ -203,7 +202,6 @@ export function Area({
     showLoadingPulse,
   ]);
 
-  // Unique IDs for this area
   const uniqueId = useId();
   const gradientId = `area-gradient-${dataKey}-${uniqueId}`;
   const strokeGradientId = `area-stroke-gradient-${dataKey}-${uniqueId}`;

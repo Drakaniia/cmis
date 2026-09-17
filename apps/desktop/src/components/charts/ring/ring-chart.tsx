@@ -102,7 +102,6 @@ function isRing(child: ReactNode): boolean {
   );
 }
 
-// Helper to check if a child is a RingCenter component
 function isRingCenter(child: ReactNode): boolean {
   return (
     isValidElement(child) &&
@@ -195,7 +194,6 @@ const RingChartCore = memo(function RingChartCoreImpl({
     [data]
   );
 
-  // Get color for a ring index
   const getColor = useCallback(
     (index: number) => {
       const item = data[index];
@@ -207,7 +205,6 @@ const RingChartCore = memo(function RingChartCoreImpl({
     [data]
   );
 
-  // Get ring radii for an index
   const getRingRadii = useCallback(
     (index: number) => {
       const innerRadius = baseInnerRadius + index * (strokeWidth + ringGap);
@@ -273,7 +270,6 @@ const RingChartCore = memo(function RingChartCoreImpl({
   }, [enterTransition, enterStaggerScale, geometryScrubbing]);
 
   // Separate SVG children (rings) from HTML children (RingCenter)
-  // This avoids Safari's foreignObject positioning bugs (WebKit #23113)
   const { svgChildren, centerChildren } = useMemo(() => {
     const svgNodes: ReactNode[] = [];
     const centerNodes: ReactNode[] = [];
@@ -335,7 +331,6 @@ const RingChartCore = memo(function RingChartCoreImpl({
   );
 
   // Use CSS Grid stacking to layer SVG and HTML content
-  // This avoids Safari's foreignObject rendering bugs where HTML content
   // inside SVG foreignObject renders at wrong positions when it has a RenderLayer
   return (
     <RingProvider value={contextValue}>
@@ -454,7 +449,6 @@ export function RingChart({
     );
   }
 
-  // Otherwise use ParentSize for responsive sizing
   return (
     <div
       className={cn("relative aspect-square w-full", className)}

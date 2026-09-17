@@ -43,7 +43,6 @@ function BarXAxisLabel({
     }
   }
 
-  // Zero-width container approach for perfect centering
   return (
     <div
       className="absolute"
@@ -96,7 +95,6 @@ const BarXAxisInner = memo(function BarXAxisInnerImpl({
   const { margin, tooltipData, barScale, bandWidth, barXAccessor, data } =
     useChart();
 
-  // Generate labels for each bar
   const labelsToShow = useMemo(() => {
     if (!(barScale && bandWidth && barXAccessor)) {
       return [];

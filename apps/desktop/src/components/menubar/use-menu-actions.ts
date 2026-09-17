@@ -34,7 +34,6 @@ function applyZoom(next: number) {
     // ignore
   }
   document.documentElement.style.zoom = String(clamped);
-  // fallback for browsers that ignore zoom (e.g. Firefox)
   if (document.documentElement.style.zoom === "") {
     document.documentElement.style.setProperty("--cmis-zoom", String(clamped));
     document.documentElement.style.fontSize = `${clamped * 100}%`;

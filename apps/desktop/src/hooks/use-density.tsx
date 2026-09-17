@@ -82,7 +82,6 @@ export function DensityProvider({ children }: { children: ReactNode }) {
 export function useDensity(): DensityContextValue {
   const context = useContext(DensityContext);
   if (!context) {
-    // Graceful fallback for pages rendered outside the provider (tests, SSR).
     return {
       density: DEFAULT_DENSITY,
       setDensity: () => {
