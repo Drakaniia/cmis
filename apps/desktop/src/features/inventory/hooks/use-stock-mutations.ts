@@ -19,7 +19,7 @@ function nowIso(): string {
  * Decrements the named batch, clearing it when the take exhausts it. Batches are
  * optional on a stock-out, so nothing happens when the payload names none.
  */
-async function decrementBatch(
+export async function decrementBatch(
   db: Db,
   itemId: string,
   batchName: string,
@@ -45,7 +45,7 @@ async function decrementBatch(
 }
 
 /** Keeps the dispensing log in step with the qty just taken off the shelf. */
-async function recordDispensing(
+export async function recordDispensing(
   db: Db,
   itemId: string,
   qty: number

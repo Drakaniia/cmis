@@ -129,7 +129,6 @@ describe("AUGUST 2026 inventory workbook", () => {
     expect(byName.get("Atenolol")?.stockOnHand).toBe(440);
     expect(byName.get("Tobramycin 0.3% eye drops")?.stockOnHand).toBe(7);
 
-    // Daily grid survives position for position: day 3 = 5, day 24 = 37.
     const acetyl = byName.get("Acetylcysteine");
     expect(acetyl?.daily[2]).toBe(5);
     expect(acetyl?.daily[23]).toBe(37);
@@ -267,7 +266,6 @@ describe("an import that fails part-way", () => {
     expect(rejection.message).toContain(INJECTED_FAILURE);
     expect(rejection.message).not.toContain("rollback");
 
-    // Row for row, event for event — including updated_at, which the re-import
     // rewrites and the restore has to put back.
     expect(db.query("SELECT * FROM inventory_items ORDER BY sku")).toEqual(
       itemsBefore

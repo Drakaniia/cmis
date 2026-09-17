@@ -147,7 +147,6 @@ describe("strength round trip", () => {
     const { db, raw } = openLegacyDatabase();
     await backfillStrengthFields(db, { force: true });
 
-    // Build the export from what is actually stored, the way `export-card` does.
     const rows = raw
       .prepare(
         `SELECT name, strength_value, strength_unit, form, pack_size
