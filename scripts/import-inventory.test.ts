@@ -117,7 +117,6 @@ it("imports the monthly workbook into the desktop database", async () => {
   const before = statSync(DB_PATH);
   log(`size     : ${before.size} bytes (before import)`);
 
-  // 1) Keep a file-level copy before the importer starts mutating tables. The
   //    app makes its own in-database backup tables; this is the belt to that.
   const stamp = new Date().toISOString().replace(/[:.]/g, "-");
   const fileBackup = `${DB_PATH}.backup-${stamp}`;
@@ -144,7 +143,6 @@ it("imports the monthly workbook into the desktop database", async () => {
     );
     log(`before   : ${preRun.items} items, ${preRun.events} dispensing events`);
 
-    // 2) Import exactly what the Data page's Import button imports.
     const csv = inventoryXlsxToCsv(new Uint8Array(readFileSync(WORKBOOK)));
     const result = await importInventoryCsv(csv, db, { month: MONTH });
 
@@ -191,7 +189,6 @@ it("imports the monthly workbook into the desktop database", async () => {
     );
 
     // The four stored columns are the whole point of the change: assert the
-    // import actually filled them and composed a label from them.
     const incomplete = inventory.filter(
       (row) =>
         row.strength_value.trim() === "" ||

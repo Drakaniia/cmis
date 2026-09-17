@@ -111,6 +111,15 @@ describe("database migrations", () => {
     // The index the list's search and ordering lean on (§8.1).
     expect(indexes).toContain("idx_inventory_strength");
 
+    // A request can be handed over more than once — a partial dispense takes
+    // what is on the shelf and leaves the rest — so 0007 re-keyed the table on
+    // its own row id instead of on `request_id` (D14).
+    const dispensing = db
+      .prepare("PRAGMA table_info(dispensing_records)")
+      .all() as { name: string; pk: number }[];
+    expect(dispensing.find((row) => row.name === "id")?.pk).toBe(1);
+    expect(dispensing.find((row) => row.name === "request_id")?.pk).toBe(0);
+
     db.close();
   });
 
@@ -177,10 +186,11 @@ describe("database migrations", () => {
       const sql = readFileSync(`${MIGRATIONS_DIR}/${file}`, "utf8");
       // SQLite has no `ADD COLUMN IF NOT EXISTS`, so an additive column is
       // single-shot by nature — the plugin runs each version exactly once.
-      // Everything else (tables, indexes) must still survive a re-run; an index
-      // over an added column only exists as *idempotent SQL* because the column
-      // was created by the full pass above.
-      const repeatable = sql.replace(/^ALTER TABLE .*;$/gm, "");
+      // Everything else (tables, indexes, and a table rebuild's
+      // `RENAME TO`) must still survive a re-run; an index over an added column
+      // only exists as *idempotent SQL* because the column was created by the
+      // full pass above.
+      const repeatable = sql.replace(/^ALTER TABLE .* ADD COLUMN .*;$/gm, "");
       db.exec(repeatable);
       db.exec(repeatable);
     }

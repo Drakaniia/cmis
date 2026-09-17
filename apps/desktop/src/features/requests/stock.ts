@@ -1,35 +1,75 @@
 /**
- * CMIS-UI-05 §7 / §4.4 — stock verification shared by the single dispense and
- * the batch dispense. Now queries SQLite instead of in-memory data (spec §3.8, §6.2).
+ * CMIS-UI-05 §7 / §4.4 — stock verification shared by the single dispense, the
+ * batch dispense and the drag-to-Claimed path.
+ *
+ * The checks here are **read-only**: they answer "what would a hand-over take,
+ * and from which batches?" so the confirmation can show the plan before
+ * anything moves. The write side lives in `deduct-stock.ts`, which consumes this
+ * module so there is exactly one implementation of FEFO order and of the
+ * partial-take arithmetic.
+ *
+ * The sync shims this file used to export (`hasInventoryItem`, `onHandFor`,
+ * `batchOptionsFor`, `checkStock`, …) returned hardcoded `false` / `[]` / `0`,
+ * which is why dispensing could never be confirmed (AF6, AF7). They are deleted
+ * rather than fixed: a caller that reintroduces one reintroduces the bug (F11).
  */
 
-import { daysUntilExpiry } from "@/features/inventory/domain/expiry";
+import {
+  dispensableTotal,
+  type PlanBatch,
+  type PlanTake,
+  usableBatches,
+} from "@/features/inventory/domain/deduct-plan";
 import {
   MEDICINE_WHERE_SQL,
   medicineMatchParams,
 } from "@/features/inventory/domain/medicine-match";
 import { getDb } from "@/lib/db";
-import type { RequestItem } from "./types";
 
-export interface BatchOption {
-  batch: string;
-  days: number;
-  expiry: string;
-  qty: number;
-}
+/**
+ * A dispensable batch: FEFO order, expired and empty batches already removed.
+ *
+ * The shape and the rules are `deduct-plan.ts`'s — this is a re-export, not a
+ * second definition, so the queue and the quick-deduct shortcut cannot drift
+ * apart about which batch leaves the shelf first.
+ */
+export type BatchOption = PlanBatch;
+
+/** How much of a hand-over comes out of which batch. */
+export type BatchTake = PlanTake;
 
 export type StockState =
-  | "insufficient"
+  /** No inventory item matches the request's medicine text. */
   | "no-inventory-item"
+  /** The item exists but nothing dispensable is on hand (empty, or all expired). */
+  | "no-batch"
+  /** Everything asked for fits on the shelf. */
   | "ok"
-  | "split-required";
+  /** Some of it fits — the hand-over is partial, the remainder stays on the card. */
+  | "partial";
 
 export interface StockCheck {
-  /** Earliest-expiring batch that can cover the request outright, if any. */
+  /** Earliest-expiring single batch that covers the request outright, if any. */
   batch: BatchOption | null;
+  /**
+   * How many batch rows exist for the item, expired and empty ones included.
+   * This is what separates "the item has no batches at all" — deductible from
+   * the item total — from "every batch is dead", which is a refusal (E1/E2).
+   */
+  batchCount: number;
+  /** Total dispensable quantity across every usable batch. */
+  dispensable: number;
+  itemId: string | null;
   onHand: number;
+  /** FEFO order, expired and empty batches removed. */
   options: BatchOption[];
+  /** Quantity that would still be outstanding after taking `take`. */
+  remaining: number;
   state: StockState;
+  /** Quantity this hand-over would actually take (`min(qty, dispensable)`). */
+  take: number;
+  /** The item's low-stock threshold, for the standing a deduction leaves behind. */
+  threshold: number;
 }
 
 interface InventoryItemRow {
@@ -37,6 +77,7 @@ interface InventoryItemRow {
   id: string;
   name: string;
   qty: number;
+  threshold: number;
 }
 
 interface BatchRow {
@@ -52,26 +93,32 @@ export async function batchOptionsForAsync(
   const db = await getDb();
   // medicine is display name "Name Dosage"; match via name or name+dosage
   const itemRows = await db.select<InventoryItemRow[]>(
-    `SELECT id, name, dosage, qty FROM inventory_items WHERE ${MEDICINE_WHERE_SQL} LIMIT 1`,
+    `SELECT id, name, dosage, qty, threshold FROM inventory_items WHERE ${MEDICINE_WHERE_SQL} LIMIT 1`,
     medicineMatchParams(medicine)
   );
   if (itemRows.length === 0) {
     return [];
   }
-  const itemId = itemRows[0].id;
-  const batches = await db.select<BatchRow[]>(
-    "SELECT batch, expiry, qty FROM inventory_batches WHERE item_id = ?",
-    [itemId]
-  );
-  return batches
-    .map((batch: BatchRow) => ({
-      batch: batch.batch,
-      days: batch.expiry ? daysUntilExpiry(batch.expiry) : 9999,
-      expiry: batch.expiry ?? "",
-      qty: batch.qty,
-    }))
-    .filter((batch: BatchOption) => batch.days >= 0 && batch.qty > 0)
-    .sort((a: BatchOption, b: BatchOption) => a.days - b.days);
+  return usableBatches(await batchRowsFor(db, itemRows[0].id));
+}
+
+/**
+ * Every batch row on file for an item, unfiltered — the planner decides what is
+ * dispensable. A missing `inventory_batches` table (a half-migrated build)
+ * reads as "no batches" rather than failing the whole check.
+ */
+async function batchRowsFor(
+  db: Awaited<ReturnType<typeof getDb>>,
+  itemId: string
+): Promise<BatchRow[]> {
+  try {
+    return await db.select<BatchRow[]>(
+      "SELECT batch, expiry, qty FROM inventory_batches WHERE item_id = ?",
+      [itemId]
+    );
+  } catch {
+    return [];
+  }
 }
 
 export async function hasInventoryItemAsync(
@@ -84,9 +131,6 @@ export async function hasInventoryItemAsync(
   );
   return (rows[0]?.c ?? 0) > 0;
 }
-export function hasInventoryItem(_medicine: string): boolean {
-  return false;
-}
 
 export async function onHandForAsync(medicine: string): Promise<number> {
   const db = await getDb();
@@ -96,76 +140,108 @@ export async function onHandForAsync(medicine: string): Promise<number> {
   );
   return rows[0]?.qty ?? 0;
 }
-export function onHandFor(_medicine: string): number {
-  return 0;
-}
 
-// Sync shim for legacy callers (spec follow-up will make them async)
-export function batchOptionsFor(_medicine: string): BatchOption[] {
-  return [];
-}
-export function batchOptionsForSync(_medicine: string): BatchOption[] {
-  return [];
-}
-
-export async function checkStockAsync(item: RequestItem): Promise<StockCheck> {
+/**
+ * Read-only plan for handing one request over: what fits now, from which
+ * batches, and what would be left on the card.
+ */
+export async function checkStockAsync(item: {
+  medicine: string;
+  qty: number;
+  unit: string;
+}): Promise<StockCheck> {
   const db = await getDb();
   const itemRows = await db.select<InventoryItemRow[]>(
-    `SELECT id, name, dosage, qty FROM inventory_items WHERE ${MEDICINE_WHERE_SQL} LIMIT 1`,
+    `SELECT id, name, dosage, qty, threshold FROM inventory_items WHERE ${MEDICINE_WHERE_SQL} LIMIT 1`,
     medicineMatchParams(item.medicine)
   );
-  const options = await batchOptionsForAsync(item.medicine);
   const inventoryItem = itemRows[0] ?? null;
-  const onHand = inventoryItem?.qty ?? 0;
 
   if (!inventoryItem) {
-    return { batch: null, onHand: 0, options, state: "no-inventory-item" };
+    return {
+      batch: null,
+      batchCount: 0,
+      dispensable: 0,
+      itemId: null,
+      onHand: 0,
+      options: [],
+      remaining: item.qty,
+      state: "no-inventory-item",
+      take: 0,
+      threshold: 0,
+    };
   }
-  if (onHand < item.qty) {
-    return { batch: null, onHand, options, state: "insufficient" };
-  }
-  const covering = options.find((option) => option.qty >= item.qty) ?? null;
-  return {
-    batch: covering,
-    onHand,
+
+  // The item is read once and its batches once: the FEFO exclusion, the
+  // dispensable total and the row count all come from the same read, so a
+  // concurrent stock-in cannot make the options and the count disagree.
+  const batchRows = await batchRowsFor(db, inventoryItem.id);
+  const options = usableBatches(batchRows);
+  const dispensable = dispensableTotal(options);
+  const base = {
+    batchCount: batchRows.length,
+    itemId: inventoryItem.id,
+    onHand: inventoryItem.qty,
     options,
-    state: covering ? "ok" : "split-required",
+    threshold: inventoryItem.threshold,
+  };
+
+  if (dispensable === 0) {
+    // The item is on file but nothing can leave the shelf: no batches at all, or
+    // every one expired. Deducting here would either conjure stock or dispense
+    // expired medicine, so it is a refusal (E2) — unless the caller is the
+    // quick-deduct path, which takes from the item total in this case (E1/D7)
+    // and decides that from `batchCount`.
+    return {
+      ...base,
+      batch: null,
+      dispensable: 0,
+      remaining: item.qty,
+      state: "no-batch",
+      take: 0,
+    };
+  }
+
+  const take = Math.min(item.qty, dispensable);
+  return {
+    ...base,
+    batch: options.find((option) => option.qty >= item.qty) ?? null,
+    dispensable,
+    remaining: item.qty - take,
+    state: take < item.qty ? "partial" : "ok",
+    take,
   };
 }
 
-// Legacy sync wrapper kept for callers not yet async — returns insufficient by default until migrated
-export function checkStockSync(_item: RequestItem): StockCheck {
-  return { batch: null, onHand: 0, options: [], state: "no-inventory-item" };
-}
-export function checkStock(_item: RequestItem): StockCheck {
-  return { batch: null, onHand: 0, options: [], state: "no-inventory-item" };
-}
-export function hasInventoryItemSync(_medicine: string): boolean {
-  return false;
-}
-
-export function stockStateLabel(check: StockCheck, item: RequestItem): string {
+export function stockStateLabel(
+  check: StockCheck,
+  item: { qty: number; unit: string }
+): string {
   switch (check.state) {
     case "no-inventory-item":
-      return "No matching inventory item";
-    case "insufficient":
-      return `${check.onHand} in stock — needs ${item.qty} ${item.unit}`;
-    case "split-required":
-      return `${check.onHand} in stock, but no single batch covers ${item.qty} ${item.unit} — dispense from the detail view`;
+      return "No matching inventory item — deduction cannot be verified";
+    case "no-batch":
+      return check.onHand === 0
+        ? "Nothing on hand"
+        : "No dispensable batch — none on hand, or all expired";
+    case "partial":
+      return `Only ${check.take} of ${item.qty} ${item.unit} available — the rest stays in Ready to Claim`;
     case "ok":
-      return `Batch ${check.batch?.batch} · exp ${check.batch?.expiry}`;
+      return check.batch
+        ? `Batch ${check.batch.batch} · exp ${check.batch.expiry}`
+        : `${check.dispensable} available across ${check.options.length} batches (earliest expiry first)`;
     default:
       return "";
   }
 }
 
-// Aliases for spec §6.2 canDispense / medicineExists
+/** True when a hand-over of `qty` can deduct from the shelf right now. */
 export const canDispense = async (
   medicine: string,
   qty: number
 ): Promise<boolean> => {
-  const onHand = await onHandForAsync(medicine);
-  return onHand >= qty;
+  const check = await checkStockAsync({ medicine, qty, unit: "" });
+  return check.state === "ok" || check.state === "partial";
 };
 
 export const medicineExists = hasInventoryItemAsync;
