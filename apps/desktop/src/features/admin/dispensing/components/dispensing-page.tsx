@@ -10,7 +10,7 @@ import {
 } from "../dispensing-search";
 import { downloadDispensingCsv } from "../export-dispensing";
 import { useDispensingFilters } from "../hooks/use-dispensing-filters";
-import type { DispensingRow } from "../types";
+import { useDispensingRows } from "../hooks/use-dispensing-rows";
 import { DispensingFilterBar } from "./dispensing-filter-bar";
 import type { SortDir, SortKey } from "./dispensing-table";
 import { DispensingTable } from "./dispensing-table";
@@ -28,7 +28,9 @@ export function DispensingPage({
 }) {
   const navigate = useNavigate();
   const search: DispensingSearch = useSearch({ from: routePath });
-  const [rows] = useState<DispensingRow[]>([]);
+  // One row per hand-over, from `dispensing_records` joined to its request — the
+  // source marker and the batch-less case both come out of that join.
+  const { hasError, isLoading, rows } = useDispensingRows();
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [sortKey, setSortKey] = useState<SortKey>("dispensedAt");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
@@ -157,6 +159,8 @@ export function DispensingPage({
       <div className="min-h-0 flex-1 overflow-auto">
         <DispensingTable
           expandedId={expandedId}
+          hasError={hasError}
+          loading={isLoading}
           onClearFilters={clearFilters}
           onRequest={handleRequest}
           onSort={handleSort}

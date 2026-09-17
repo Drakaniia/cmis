@@ -8,6 +8,50 @@
 
 export type DispensingStatus = "dispensed" | "denied";
 
+/**
+ * How the hand-over that produced this row came about (migration 0008).
+ *
+ * The log is the audit surface, and "Walk-in" is what a quick deduction and an
+ * anonymous queued request both render as — so without this the two are
+ * indistinguishable exactly where the distinction matters most.
+ */
+export type DispensingSource = "queue" | "quick-deduct";
+
+/** Short label for the row marker. */
+export const DISPENSING_SOURCE_LABELS: Record<DispensingSource, string> = {
+  queue: "Request queue",
+  "quick-deduct": "Quick deduct",
+};
+
+/** Longer wording for the expanded detail. */
+export const DISPENSING_SOURCE_DETAIL: Record<DispensingSource, string> = {
+  queue: "Queued request, dispensed from the board",
+  "quick-deduct": "Quick deduction — taken at the counter",
+};
+
+/**
+ * A quick deduction of an item that has no batch rows records an empty batch
+ * rather than inventing one (quick-deduct spec E1), so the cell says so in
+ * words instead of showing a blank a reader has to interpret.
+ */
+export const NO_BATCH_LABEL = "No batch recorded";
+
+export function hasBatch(row: { batch: string }): boolean {
+  return row.batch.trim() !== "";
+}
+
+/** The batch cell's text — the code, or the explanation for its absence. */
+export function batchLabel(row: { batch: string }): string {
+  return hasBatch(row) ? row.batch : NO_BATCH_LABEL;
+}
+
+/** Stored values are untrusted strings; anything unknown reads as `queue`. */
+export function toDispensingSource(
+  value: string | null | undefined
+): DispensingSource {
+  return value === "quick-deduct" ? "quick-deduct" : "queue";
+}
+
 export type DispensingDatePreset = "7d" | "30d" | "90d" | "all";
 
 export const DISPENSING_DATE_PRESETS: {
@@ -40,6 +84,7 @@ export interface DispensingRow {
   requestLink: string | null;
   requestor: string;
   requestorId: string;
+  source: DispensingSource;
   staff: string;
   status: DispensingStatus;
 }

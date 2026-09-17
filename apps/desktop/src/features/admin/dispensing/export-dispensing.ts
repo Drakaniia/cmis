@@ -1,6 +1,10 @@
 import { auditTimestamp } from "../format";
 import type { DispensingRow } from "./types";
+import { DISPENSING_SOURCE_LABELS } from "./types";
 
+// `Source` is appended rather than slotted beside `Status`: the export is the
+// audit artifact, and adding a column in the middle would silently shift every
+// existing one for anything already reading these files.
 const HEADERS = [
   "Date",
   "ID",
@@ -14,6 +18,7 @@ const HEADERS = [
   "Status",
   "Request",
   "Branch",
+  "Source",
 ];
 
 function cell(value: string): string {
@@ -38,6 +43,7 @@ export function buildDispensingCsv(rows: DispensingRow[]): string {
         row.status,
         row.requestLink ?? "",
         row.branch,
+        DISPENSING_SOURCE_LABELS[row.source],
       ]
         .map(cell)
         .join(",")
