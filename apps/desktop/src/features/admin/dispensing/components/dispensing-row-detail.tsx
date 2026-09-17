@@ -4,6 +4,7 @@ import { useCallback } from "react";
 
 import { absoluteDateTime } from "../../format";
 import type { DispensingRow } from "../types";
+import { batchLabel, DISPENSING_SOURCE_DETAIL } from "../types";
 
 /**
  * CMIS-UI-06 §4 — expanded row detail for a dispensing record.
@@ -53,7 +54,10 @@ export function DispensingRowDetail({
           label="Medicine"
           value={`${row.medicine} (${row.medicineSku})`}
         />
-        <DetailRow label="Batch" value={row.batch} />
+        {/* "No batch recorded" rather than a blank: a quick deduction of an
+            item with no batch rows has no code to show, and an empty cell
+            reads as missing data instead of a recorded absence. */}
+        <DetailRow label="Batch" value={batchLabel(row)} />
         <DetailRow label="Quantity" value={String(row.qty)} />
         <DetailRow label="Dispensed by" value={row.staff} />
         <DetailRow label="Location" value={row.branch} />
@@ -69,6 +73,10 @@ export function DispensingRowDetail({
               "Dispensed"
             )
           }
+        />
+        <DetailRow
+          label="Source"
+          value={DISPENSING_SOURCE_DETAIL[row.source]}
         />
         {row.requestLink ? (
           <DetailRow label="Request" value={row.requestLink} />

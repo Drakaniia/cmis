@@ -18,6 +18,12 @@ import { materializeEnter } from "@/lib/motion";
 
 import { auditTimestamp } from "../../format";
 import type { DispensingRow } from "../types";
+import {
+  DISPENSING_SOURCE_DETAIL,
+  DISPENSING_SOURCE_LABELS,
+  hasBatch,
+  NO_BATCH_LABEL,
+} from "../types";
 import { DispensingRowDetail } from "./dispensing-row-detail";
 
 export type SortKey =
@@ -205,22 +211,42 @@ function DispensingTableRow({
                 Denied
               </span>
             ) : null}
+            {/* Both a quick deduction and an anonymous queued request read
+                "Walk-in", so the exception is the one worth marking here; the
+                expanded detail names the source for every row. */}
+            {row.source === "quick-deduct" ? (
+              <span
+                className="ml-1.5 rounded-full bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground"
+                title={DISPENSING_SOURCE_DETAIL["quick-deduct"]}
+              >
+                {DISPENSING_SOURCE_LABELS["quick-deduct"]}
+              </span>
+            ) : null}
           </span>
         </td>
 
         <td className="min-w-0">
-          <button
-            className="group/batch inline-flex items-center gap-1 rounded px-1 py-0.5 font-mono text-caption hover:bg-muted"
-            onClick={handleCopyBatch}
-            title="Click to copy"
-            type="button"
-          >
-            {row.batch}
-            <Copy
-              aria-hidden
-              className="size-3 opacity-0 transition-opacity group-hover/batch:opacity-100"
-            />
-          </button>
+          {/* A batch-less deduction records an empty batch rather than
+              inventing one, and an empty cell reads as missing data — say what
+              happened instead, and offer no copy button for nothing. */}
+          {hasBatch(row) ? (
+            <button
+              className="group/batch inline-flex items-center gap-1 rounded px-1 py-0.5 font-mono text-caption hover:bg-muted"
+              onClick={handleCopyBatch}
+              title="Click to copy"
+              type="button"
+            >
+              {row.batch}
+              <Copy
+                aria-hidden
+                className="size-3 opacity-0 transition-opacity group-hover/batch:opacity-100"
+              />
+            </button>
+          ) : (
+            <span className="text-caption text-muted-foreground italic">
+              {NO_BATCH_LABEL}
+            </span>
+          )}
         </td>
 
         <td className="text-right tabular-nums">{row.qty}</td>
@@ -281,8 +307,38 @@ function DispensingTableRow({
  * Denied rows get a destructive muted tint. Sortable by Date (default desc),
  * secondary sort by Medicine asc on ties.
  */
+/**
+ * An empty table has three quite different meanings, so it never says "no
+ * records" when the truth is "could not read" — that is the same silence the
+ * request persistence bug hid behind.
+ */
+function emptyStateText(
+  hasFilters: boolean,
+  hasError: boolean
+): { description: string; title: string } {
+  if (hasFilters) {
+    return {
+      description: "No records match these filters.",
+      title: "No records match filters",
+    };
+  }
+  if (hasError) {
+    return {
+      description:
+        "The dispensing records could not be read from the database on this build.",
+      title: "Dispensing log unavailable",
+    };
+  }
+  return {
+    description:
+      "Hand-overs from the Request Queue — and quick deductions — appear here.",
+    title: "No dispensing records yet",
+  };
+}
+
 export function DispensingTable({
   expandedId,
+  hasError = false,
   loading = false,
   onToggleExpand,
   onRequest,
@@ -294,6 +350,8 @@ export function DispensingTable({
   onClearFilters,
 }: {
   expandedId: string | null;
+  /** The read failed; say so rather than showing an empty log. */
+  hasError?: boolean;
   loading?: boolean;
   onSort: (key: SortKey) => void;
   onToggleExpand: (id: string) => void;
@@ -334,7 +392,7 @@ export function DispensingTable({
   }
 
   if (rows.length === 0) {
-    const hasFilters = totalUnfiltered > 0;
+    const empty = emptyStateText(totalUnfiltered > 0, hasError);
     return (
       <div className="flex h-full min-h-[420px] w-full items-center justify-center p-6">
         <Empty className="w-full max-w-md border border-dashed bg-muted/20">
@@ -342,18 +400,10 @@ export function DispensingTable({
             <EmptyMedia variant="icon">
               <Copy />
             </EmptyMedia>
-            <EmptyTitle>
-              {hasFilters
-                ? "No records match filters"
-                : "No dispensing records yet"}
-            </EmptyTitle>
-            <EmptyDescription>
-              {hasFilters
-                ? "No records match these filters."
-                : "Claims from the Request Queue will appear here."}
-            </EmptyDescription>
+            <EmptyTitle>{empty.title}</EmptyTitle>
+            <EmptyDescription>{empty.description}</EmptyDescription>
           </EmptyHeader>
-          {hasFilters && onClearFilters ? (
+          {totalUnfiltered > 0 && onClearFilters ? (
             <EmptyContent>
               <Button
                 className="press-feedback"
