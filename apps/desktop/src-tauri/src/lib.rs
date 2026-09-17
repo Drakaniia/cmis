@@ -53,6 +53,18 @@ fn db_migrations() -> Vec<Migration> {
             sql: include_str!("../migrations/0006_categories.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 7,
+            description: "request_queue_dispensing",
+            sql: include_str!("../migrations/0007_request_queue_dispensing.sql"),
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 8,
+            description: "request_source",
+            sql: include_str!("../migrations/0008_request_source.sql"),
+            kind: MigrationKind::Up,
+        },
     ]
 }
 
@@ -97,6 +109,8 @@ fn setup_native_menu(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::E
 
     // File menu — minimal per spec: New Request, Import/Export, Settings, Exit (Quit)
     let new_request = MenuItem::with_id(app, "file.new-request", "New Request…", true, Some("CmdOrCtrl+N"))?;
+    // Ctrl+D / ⌘D — the one-action counter hand-over (quick deduct spec D5).
+    let quick_deduct = MenuItem::with_id(app, "file.quick-deduct", "Deduct Stock…", true, Some("CmdOrCtrl+D"))?;
     let import_item = MenuItem::with_id(app, "file.import", "Import…", true, None::<&str>)?;
     let export_item = MenuItem::with_id(app, "file.export", "Export…", true, None::<&str>)?;
     let settings = MenuItem::with_id(app, "file.settings", "Settings…", true, Some("CmdOrCtrl+,"))?;
@@ -106,6 +120,7 @@ fn setup_native_menu(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::E
         true,
         &[
             &new_request,
+            &quick_deduct,
             &PredefinedMenuItem::separator(app)?,
             &import_item,
             &export_item,
@@ -227,6 +242,7 @@ fn handle_menu_event(app: &tauri::AppHandle, event: tauri::menu::MenuEvent) {
     // Native window actions already handled by PredefinedMenuItem; custom ids emit to frontend
     const CUSTOM_IDS: &[&str] = &[
         "file.new-request",
+        "file.quick-deduct",
         "file.import",
         "file.export",
         "file.settings",
