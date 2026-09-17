@@ -262,7 +262,6 @@ export function LowStockPage({
   }, [closeDetail, detailRow, openStockOut]);
 
   const refreshInventory = useCallback(async () => {
-    // Decision 9 — the alert list must actually reflect the write.
     await queryClient.invalidateQueries({ queryKey: ["inventory_items"] });
     await queryClient.invalidateQueries({
       queryKey: ["inventory_items_count"],
@@ -350,7 +349,6 @@ export function LowStockPage({
 
   const thresholdMut = useUpdateThresholdMutation();
 
-  // Decision 9 — a threshold is one of the two inputs to `status`, so the save
   // re-derives it: a row that no longer falls below its threshold has to leave
   // this list now, not at the next import.
   const handleThresholdConfirm = useCallback(

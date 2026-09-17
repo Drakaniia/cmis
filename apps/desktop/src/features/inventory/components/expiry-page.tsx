@@ -340,7 +340,6 @@ export function ExpiryPage({
   }, [closeDetail, detailRow, openStockOut]);
 
   const refreshInventory = useCallback(async () => {
-    // Decision 9 — the alert list must actually reflect the write.
     await queryClient.invalidateQueries({ queryKey: ["inventory_items"] });
     await queryClient.invalidateQueries({
       queryKey: ["inventory_items_count"],
@@ -404,7 +403,6 @@ export function ExpiryPage({
 
   const extendExpiryMut = useExtendExpiryMutation();
 
-  // Decision 9 — the write is the point; the toast only reports it. The
   // mutation invalidates the inventory queries, so the list reflects the
   // disposal without this page refetching by hand.
   const handleDisposeConfirm = useCallback(

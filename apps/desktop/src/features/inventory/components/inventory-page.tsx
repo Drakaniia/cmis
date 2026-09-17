@@ -123,7 +123,6 @@ export function InventoryPage({
   const isWide = useMediaQuery1200();
   const { displayRatio, setRatio, toggleCollapse, collapsed } = usePanelRatio();
 
-  // Live inventory from SQLite
   const {
     data: itemsData,
     isLoading: loading,
@@ -150,7 +149,6 @@ export function InventoryPage({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [originRect, setOriginRect] = useState<DOMRect | null>(null);
 
-  // The alert pages hand the operator here with the product already chosen.
   useEffect(() => {
     if (preselectItemId) {
       setSelectedId(preselectItemId);
@@ -159,8 +157,6 @@ export function InventoryPage({
   const [sheetOpen, setSheetOpen] = useState(false);
   const [barcodeValue, setBarcodeValue] = useState("");
 
-  // Deletion + Trash (spec §7.6, §7.7) — kept in one hook so this page stays a
-  // composition root rather than a home for delete rules.
   const {
     clearSelection,
     closeDeleteTarget,
@@ -203,7 +199,6 @@ export function InventoryPage({
     [items, selectedId]
   );
 
-  // Detail-view actions act on whatever row is selected, so they adapt the
   // hook's item-first signatures rather than re-resolving it at each call site.
   const handleDeleteProductFromDetail = useCallback(() => {
     if (selectedItem) {
@@ -226,9 +221,7 @@ export function InventoryPage({
       if (rect) {
         setOriginRect(rect);
       }
-      if (isWide) {
-        // focus moves to detail first button via autoFocus in panel mode
-      } else {
+      if (!isWide) {
         setSheetOpen(true);
       }
     },
@@ -246,7 +239,6 @@ export function InventoryPage({
       );
       if (found) {
         setSelectedId(found.id);
-        // try to find row rect? use null for now
         if (!isWide) {
           setSheetOpen(true);
         }
@@ -281,10 +273,8 @@ export function InventoryPage({
     [handleScan]
   );
 
-  // Detail actions → wizards
   const openStockIn = useCallback(
     (rectSource?: DOMRect | null) => {
-      // capture trigger rect for materialize origin
       const r = rectSource ?? originRect;
       setWizardOrigin(r);
       setStockInOpen(true);
@@ -323,7 +313,6 @@ export function InventoryPage({
     openStockOut(originRect);
   }, [openStockOut, originRect]);
 
-  // Stock In confirm — persistent via SQLite
   const handleStockInConfirm = useCallback(
     (payload: {
       itemId: string | null;
@@ -340,9 +329,7 @@ export function InventoryPage({
       supplier: string | null;
       notes: string;
     }) => {
-      // Use mutation; payload.isNew creates new item via direct DB insert fallback
       if (payload.isNew || !payload.itemId) {
-        // For new items, insert directly via Database (no prior item)
         (async () => {
           try {
             const id = await insertNewItemWithBatch(payload);
@@ -409,7 +396,6 @@ export function InventoryPage({
       .catch(() => toast.error("Retry failed"));
   }, [refetch]);
 
-  // Divider drag
   const containerRef = useRef<HTMLDivElement>(null);
   const draggingRef = useRef<boolean>(false as boolean);
 
@@ -439,8 +425,6 @@ export function InventoryPage({
     }
   }, []);
 
-  // TODO: trigger error state from real data fetching
-  // For now, expose via a small dev trigger
   const showErrorBanner = !loading && effectiveError !== null;
   const isEmptyDb = !loading && items.length === 0 && !effectiveError;
 
