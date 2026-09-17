@@ -1,165 +1,25 @@
 import { Button } from "@cmis/ui/components/button";
 import { cn } from "@cmis/ui/lib/utils";
-import { AlertTriangle, X } from "lucide-react";
+import { AlertTriangle, CheckCircle2, X } from "lucide-react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect } from "react";
 
 import { expiryLabel } from "@/features/inventory/domain/expiry";
 import { materializeEnter, sheetSpring } from "@/lib/motion";
-import type { DispensePayload } from "../hooks/use-request-board";
-import type { BatchOption } from "../stock";
-import { batchOptionsFor, hasInventoryItem, onHandFor } from "../stock";
-import type { RequestItem } from "../types";
-
-function StockWarnings({
-  hasItem,
-  medicine,
-  outOfStock,
-  qty,
-  stock,
-  unit,
-}: {
-  hasItem: boolean;
-  medicine: string;
-  outOfStock: boolean;
-  qty: number;
-  stock: number;
-  unit: string;
-}) {
-  if (!hasItem) {
-    return (
-      <div className="rounded-md border border-destructive/30 bg-destructive/5 p-3">
-        <p className="font-medium text-destructive text-sm">
-          No matching inventory item
-        </p>
-        <p className="text-caption text-muted-foreground">
-          Cannot verify stock for “{medicine}”.
-        </p>
-      </div>
-    );
-  }
-
-  if (!outOfStock) {
-    return null;
-  }
-
-  return (
-    <div
-      className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/5 p-3"
-      role="alert"
-    >
-      <AlertTriangle
-        aria-hidden
-        className="mt-0.5 size-4 shrink-0 text-destructive"
-      />
-      <div>
-        <p className="font-medium text-destructive text-sm">
-          Insufficient stock
-        </p>
-        <p className="text-caption text-muted-foreground">
-          {medicine}: requested {qty} {unit}, available {stock}. Stock in or
-          deny the request instead.
-        </p>
-      </div>
-    </div>
-  );
-}
-
-function BatchOptionRow({
-  isSelected,
-  onSelect,
-  option,
-  qty,
-}: {
-  isSelected: boolean;
-  onSelect: (batch: string) => void;
-  option: BatchOption;
-  qty: number;
-}) {
-  const tooSmall = option.qty < qty;
-  const handleChange = useCallback(() => {
-    onSelect(option.batch);
-  }, [onSelect, option.batch]);
-
-  return (
-    <label
-      className={cn(
-        "flex cursor-pointer items-center gap-2 rounded-md border px-2.5 py-2 transition-colors",
-        isSelected ? "border-ring bg-accent" : "border-border/60 hover:bg-muted"
-      )}
-    >
-      <input
-        checked={isSelected}
-        name="fefo-batch"
-        onChange={handleChange}
-        type="radio"
-        value={option.batch}
-      />
-      <span className="min-w-0 flex-1">
-        <span className="block truncate font-medium text-xs">
-          {option.batch}
-        </span>
-        <span className="block text-caption text-muted-foreground">
-          exp {expiryLabel(option.expiry)} · {option.qty} available
-          {tooSmall ? " · short for this request" : ""}
-        </span>
-      </span>
-    </label>
-  );
-}
-
-function BatchPicker({
-  onSelect,
-  options,
-  qty,
-  selectedBatch,
-  selectedQty,
-  tooSmall,
-  unit,
-}: {
-  onSelect: (batch: string) => void;
-  options: BatchOption[];
-  qty: number;
-  selectedBatch: string | null;
-  selectedQty: number | null;
-  tooSmall: boolean;
-  unit: string;
-}) {
-  return (
-    <fieldset className="space-y-1.5">
-      <legend className="font-medium text-caption text-foreground">
-        Batch — earliest expiry first (FEFO)
-      </legend>
-      {options.length === 0 ? (
-        <p className="rounded-md border border-dashed px-3 py-4 text-center text-caption text-muted-foreground">
-          No dispensable batch — none on hand, or all expired.
-        </p>
-      ) : (
-        options.map((option) => (
-          <BatchOptionRow
-            isSelected={option.batch === selectedBatch}
-            key={option.batch}
-            onSelect={onSelect}
-            option={option}
-            qty={qty}
-          />
-        ))
-      )}
-      {tooSmall ? (
-        <p className="text-caption text-destructive">
-          Selected batch has {selectedQty} {unit} — choose a batch with at least{" "}
-          {qty}.
-        </p>
-      ) : null}
-    </fieldset>
-  );
-}
+import { useDispensePlan } from "../hooks/use-dispense";
+import { type RequestItem, requestorLabel } from "../types";
 
 /**
- * CMIS-UI-05 §7 — Dispense: verify stock, pick a FEFO batch (earliest expiry
- * first), then commit. Expired batches are never selectable — dispensing
- * expired medicine is the harm this screen must not enable (Apple §16
- * Responsibility), so the guard is structural, not a warning.
+ * CMIS-UI-05 §7 / F8 — the hand-over confirmation.
+ *
+ * FEFO is automatic (D7), so staff no longer pick a batch and this is where they
+ * see what will actually happen: which batch(es) leave the shelf, what is left
+ * afterwards, and — when the request is larger than the shelf — how much stays
+ * on the card. It is shown for every hand-over, not only surprising ones (D13).
+ *
+ * Expired batches are excluded upstream in `stock.ts`, so the plan can never
+ * offer one. The confirmation is a statement of fact, not a form: the only
+ * decisions are confirm or cancel.
  */
 export function DispenseRequestModal({
   onConfirm,
@@ -168,32 +28,15 @@ export function DispenseRequestModal({
   originRect: _originRect,
   request,
 }: {
-  onConfirm: (payload: DispensePayload) => void;
+  onConfirm: () => void;
   onOpenChange: (open: boolean) => void;
   open: boolean;
   originRect: DOMRect | null;
   request: RequestItem | null;
 }) {
   const reduceMotion = useReducedMotion();
-
-  const medicine = request?.medicine ?? "";
-  const known = hasInventoryItem(medicine);
-  /** FEFO order, expired batches excluded — shared with the batch toolbar. */
-  const options: BatchOption[] = useMemo(
-    () => batchOptionsFor(medicine),
-    [medicine]
-  );
-
-  const [selectedBatch, setSelectedBatch] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!(open && request)) {
-      return;
-    }
-    // Prefer the earliest-expiring batch that can cover the request outright.
-    const covering = options.find((option) => option.qty >= request.qty);
-    setSelectedBatch((covering ?? options[0])?.batch ?? null);
-  }, [open, request, options]);
+  const planQuery = useDispensePlan(request, open);
+  const plan = planQuery.data;
 
   useEffect(() => {
     if (!open) {
@@ -208,36 +51,25 @@ export function DispenseRequestModal({
     return () => window.removeEventListener("keydown", onKey);
   }, [open, onOpenChange]);
 
-  const stock = onHandFor(medicine);
-  const selected =
-    options.find((option) => option.batch === selectedBatch) ?? null;
-  const outOfStock = request ? stock < request.qty : false;
-  const batchTooSmall = Boolean(
-    selected && request && selected.qty < request.qty
-  );
-  const canConfirm = !(outOfStock || batchTooSmall || !selected);
-
   const handleClose = useCallback(() => {
     onOpenChange(false);
   }, [onOpenChange]);
 
   const handleConfirm = useCallback(() => {
-    if (!(canConfirm && selected)) {
+    if (!plan?.ok) {
       return;
     }
-    onConfirm({
-      batch: selected.batch,
-      expiry: selected.expiry,
-      qty: request?.qty ?? 0,
-    });
+    onConfirm();
     onOpenChange(false);
-  }, [canConfirm, selected, onConfirm, request, onOpenChange]);
+  }, [onConfirm, onOpenChange, plan]);
 
   if (!request) {
     return null;
   }
 
-  const transformOrigin = "center center";
+  const blocked = plan && !plan.ok ? plan.error : null;
+  const partial = plan?.ok ? plan.plan.remaining > 0 : false;
+  const canConfirm = Boolean(plan?.ok);
 
   return (
     <AnimatePresence>
@@ -262,7 +94,7 @@ export function DispenseRequestModal({
               initial={reduceMotion ? "animate" : "initial"}
               role="dialog"
               style={{
-                transformOrigin,
+                transformOrigin: "center center",
                 willChange: "transform, opacity, filter",
               }}
               transition={sheetSpring}
@@ -270,7 +102,7 @@ export function DispenseRequestModal({
             >
               <div className="flex shrink-0 items-center justify-between border-border/50 border-b px-4 py-3">
                 <h2 className="font-semibold text-foreground text-sm">
-                  Dispense to {request.requestor.name}
+                  Dispense to {requestorLabel(request)}
                 </h2>
                 <Button
                   aria-label="Close"
@@ -287,29 +119,104 @@ export function DispenseRequestModal({
                 <div className="rounded-md border border-border/60 bg-card p-3">
                   <p className="font-medium text-sm">{request.medicine}</p>
                   <p className="text-caption text-muted-foreground">
-                    {stock} in stock, dispensing {request.qty} {request.unit}
+                    Request {request.id} · dispensing {request.qty}{" "}
+                    {request.unit}
                   </p>
                 </div>
 
-                <StockWarnings
-                  hasItem={known}
-                  medicine={request.medicine}
-                  outOfStock={outOfStock}
-                  qty={request.qty}
-                  stock={stock}
-                  unit={request.unit}
-                />
+                {planQuery.isPending ? (
+                  <p className="rounded-md border border-dashed px-3 py-4 text-center text-caption text-muted-foreground">
+                    Checking what is on the shelf…
+                  </p>
+                ) : null}
 
-                {known ? (
-                  <BatchPicker
-                    onSelect={setSelectedBatch}
-                    options={options}
-                    qty={request.qty}
-                    selectedBatch={selectedBatch}
-                    selectedQty={selected?.qty ?? null}
-                    tooSmall={batchTooSmall}
-                    unit={request.unit}
-                  />
+                {blocked ? (
+                  <div
+                    className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/5 p-3"
+                    role="alert"
+                  >
+                    <AlertTriangle
+                      aria-hidden
+                      className="mt-0.5 size-4 shrink-0 text-destructive"
+                    />
+                    <div>
+                      <p className="font-medium text-destructive text-sm">
+                        Cannot be dispensed now
+                      </p>
+                      <p className="text-caption text-muted-foreground">
+                        {blocked.message}
+                      </p>
+                    </div>
+                  </div>
+                ) : null}
+
+                {plan?.ok ? (
+                  <>
+                    <section className="space-y-1.5">
+                      <h3 className="font-medium text-caption text-foreground">
+                        Will come off the shelf — earliest expiry first
+                      </h3>
+                      <ul className="space-y-1">
+                        {plan.plan.batches.map((take) => (
+                          <li
+                            className="flex items-center justify-between gap-2 rounded-md border border-border/60 bg-card px-2.5 py-2"
+                            key={take.batch}
+                          >
+                            <span className="min-w-0">
+                              <span className="block truncate font-medium text-xs">
+                                {take.batch}
+                              </span>
+                              <span className="block text-caption text-muted-foreground">
+                                exp {expiryLabel(take.expiry)}
+                              </span>
+                            </span>
+                            <span className="shrink-0 font-medium text-xs tabular-nums">
+                              {take.qty} {request.unit}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                      <p className="text-caption text-muted-foreground">
+                        {plan.plan.leftAfter} {request.unit} left on the shelf
+                        afterwards.
+                      </p>
+                    </section>
+
+                    {partial ? (
+                      <div
+                        className={cn(
+                          "flex items-start gap-2 rounded-md border p-3",
+                          "border-[var(--warning)]/40 bg-[var(--warning)]/8"
+                        )}
+                        role="alert"
+                      >
+                        <AlertTriangle
+                          aria-hidden
+                          className="mt-0.5 size-4 shrink-0 text-[var(--warning)]"
+                        />
+                        <div>
+                          <p className="font-medium text-sm">
+                            Partial hand-over — {plan.plan.take} of{" "}
+                            {plan.plan.requested} {request.unit}
+                          </p>
+                          <p className="text-caption text-muted-foreground">
+                            Only {plan.plan.take} {request.unit} can be taken
+                            now. The card stays in Ready to Claim showing{" "}
+                            {plan.plan.remaining} {request.unit}.
+                          </p>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="flex items-center gap-1.5 text-caption text-muted-foreground">
+                        <CheckCircle2
+                          aria-hidden
+                          className="size-3.5 text-[var(--success)]"
+                        />
+                        Everything requested is covered — the card moves to
+                        Claimed.
+                      </p>
+                    )}
+                  </>
                 ) : null}
               </div>
 
@@ -328,7 +235,9 @@ export function DispenseRequestModal({
                   onClick={handleConfirm}
                   size="sm"
                 >
-                  Confirm dispensing
+                  {partial
+                    ? "Dispense what is available"
+                    : "Confirm dispensing"}
                 </Button>
               </div>
             </motion.div>

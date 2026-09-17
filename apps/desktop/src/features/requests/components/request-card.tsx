@@ -16,7 +16,12 @@ import { dragSpring } from "@/lib/motion";
 import { relativeTimeLabel } from "../format";
 import type { RequestAction } from "../transitions";
 import type { RequestItem } from "../types";
-import { statusMetaOf } from "../types";
+import {
+  isPartiallyDispensed,
+  QUICK_DEDUCT_LABEL,
+  requestorLabel,
+  statusMetaOf,
+} from "../types";
 import { RequestCardMenu } from "./request-card-menu";
 import { RequestStatusBadge } from "./request-status-badge";
 
@@ -34,6 +39,9 @@ export function RequestCardContent({
   now: number;
 }) {
   const time = relativeTimeLabel(item.submittedAt, now);
+  // Anonymous requests render as "Walk-in" rather than an empty gap (D23).
+  const who = requestorLabel(item);
+  const whoId = item.requestor.id.trim();
   return (
     <div
       className={cn(
@@ -44,9 +52,9 @@ export function RequestCardContent({
       <div className="flex items-start gap-2">
         <span
           className="min-w-0 flex-1 truncate font-semibold text-xs"
-          title={`${item.requestor.name} — ${item.requestor.id}`}
+          title={whoId ? `${who} — ${whoId}` : who}
         >
-          {item.requestor.name}
+          {who}
         </span>
         <span className="shrink-0 text-caption text-muted-foreground">
           {time}
@@ -62,6 +70,20 @@ export function RequestCardContent({
           {item.qty} {item.unit}
         </span>
         <RequestStatusBadge status={item.status} />
+        {item.source === "quick-deduct" ? (
+          // D10 — how it got here, in the same colour-plus-text convention as
+          // every other chip on the board. A quick deduction and a walk-in
+          // request created through the queue both read "Walk-in" and both sit
+          // in Claimed; this is what tells them apart.
+          <span className="shrink-0 truncate rounded-sm border border-border bg-muted px-1 text-caption text-muted-foreground">
+            {QUICK_DEDUCT_LABEL}
+          </span>
+        ) : null}
+        {isPartiallyDispensed(item) ? (
+          <span className="truncate text-[var(--warning)] text-caption">
+            part dispensed
+          </span>
+        ) : null}
       </span>
     </div>
   );
@@ -109,6 +131,7 @@ export function RequestCard({
   const [menuOpen, setMenuOpen] = useState(false);
   const meta = statusMetaOf(item.status);
   const time = relativeTimeLabel(item.submittedAt, now);
+  const who = requestorLabel(item);
 
   /**
    * Track when the pointer went down so we can ignore clicks that follow a
@@ -213,7 +236,7 @@ export function RequestCard({
         </span>
       ) : null}
       <button
-        aria-label={`${item.requestor.name}, ${item.medicine}, ${item.qty} ${item.unit}, ${meta.label}, requested ${time}. Alt+arrow keys move it between columns.`}
+        aria-label={`${who}, ${item.medicine}, ${item.qty} ${item.unit}, ${item.source === "quick-deduct" ? `${QUICK_DEDUCT_LABEL}, ` : ""}${meta.label}, requested ${time}. Alt+arrow keys move it between columns.`}
         className="press-feedback block w-full cursor-grab touch-none rounded-xl text-left outline-none focus-visible:ring-2 focus-visible:ring-ring active:cursor-grabbing"
         data-drag-handle
         type="button"
@@ -239,7 +262,7 @@ export function RequestCard({
           transition={dragSpring}
         >
           <Checkbox
-            aria-label={`Select request from ${item.requestor.name}`}
+            aria-label={`Select request from ${who}`}
             checked={selected}
             className="size-[18px]"
             data-drag-exclude
@@ -254,7 +277,7 @@ export function RequestCard({
           onAction={handleMenuAction}
           onOpenChange={setMenuOpen}
           open={menuOpen}
-          requestorName={item.requestor.name}
+          requestorName={who}
           status={item.status}
         />
       </span>

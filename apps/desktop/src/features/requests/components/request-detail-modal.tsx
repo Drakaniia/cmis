@@ -31,7 +31,13 @@ import type {
   RequestItem,
   StatusHistoryEntry,
 } from "../types";
-import { statusMetaOf } from "../types";
+import {
+  dispensedTotal,
+  isPartiallyDispensed,
+  QUICK_DEDUCT_LABEL,
+  requestorLabel,
+  statusMetaOf,
+} from "../types";
 import { RequestStatusBadge } from "./request-status-badge";
 
 /**
@@ -185,26 +191,165 @@ function ActionButton({
   );
 }
 
-function DispensingRecordSection({
-  dispensing,
+/**
+ * Every hand-over, oldest first. A request can be dispensed more than once — a
+ * partial takes what is on the shelf and leaves the remainder in Ready to Claim
+ * — so this is a list rather than the single record it used to render (D14).
+ */
+function DispensingRecordsSection({
+  records,
   unit,
 }: {
-  dispensing: DispensingRecord;
+  records: DispensingRecord[];
   unit: string;
 }) {
   return (
     <section className="space-y-1">
-      <SectionHeading>Dispensing record</SectionHeading>
-      <div className="rounded-md border border-border/60 bg-card px-2.5 py-2">
-        <p className="text-caption">
-          Batch {dispensing.batch} · {dispensing.qty} {unit}
-        </p>
-        <p className="text-caption text-muted-foreground">
-          Dispensed {compactDateTimeLabel(dispensing.at)} by {dispensing.staff}{" "}
-          · exp {dispensing.expiry}
-        </p>
-      </div>
+      <SectionHeading>
+        {records.length === 1
+          ? "Dispensing record"
+          : `Dispensing records — ${records.length} hand-overs`}
+      </SectionHeading>
+      <ul className="space-y-1">
+        {records.map((record) => (
+          <li
+            className="rounded-md border border-border/60 bg-card px-2.5 py-2"
+            key={`${record.at}-${record.batch}`}
+          >
+            <p className="text-caption">
+              {/* A quick deduction of an item that has no batch rows records an
+                  empty batch rather than inventing one (E1). */}
+              {record.batch === ""
+                ? "No batch recorded"
+                : `Batch ${record.batch}`}{" "}
+              · {record.qty} {unit}
+            </p>
+            <p className="text-caption text-muted-foreground">
+              Dispensed {compactDateTimeLabel(record.at)} by {record.staff} ·
+              exp {record.expiry}
+            </p>
+          </li>
+        ))}
+      </ul>
     </section>
+  );
+}
+
+/**
+ * The requestor block. An anonymous request is a first-class answer, not a blank
+ * (D23): the name reads "Walk-in" and the empty fields are simply absent.
+ */
+function RequestorSection({ item }: { item: RequestItem }) {
+  const id = item.requestor.id.trim();
+  const email = item.requestor.email.trim();
+  const anonymous = item.requestor.name.trim() === "";
+
+  return (
+    <section className="space-y-1">
+      <SectionHeading>Requestor</SectionHeading>
+      <p className="font-semibold text-sm">
+        {requestorLabel(item)}{" "}
+        {id ? (
+          <span className="font-normal text-muted-foreground">— {id}</span>
+        ) : null}
+      </p>
+      {email ? (
+        <p className="text-caption text-muted-foreground">{email}</p>
+      ) : null}
+      {anonymous ? (
+        <p className="text-caption text-muted-foreground">
+          Anonymous — no requestor details were recorded.
+        </p>
+      ) : null}
+    </section>
+  );
+}
+
+function RequestSection({ item }: { item: RequestItem }) {
+  const reason = item.reason.trim();
+  const quickDeduct = item.source === "quick-deduct";
+
+  return (
+    <section className="space-y-1">
+      <SectionHeading>Request</SectionHeading>
+      <p className="text-sm">
+        {item.medicine}{" "}
+        <span className="text-muted-foreground">— {item.category}</span>
+      </p>
+      <p className="text-caption text-muted-foreground">
+        Qty: {item.qty} {item.unit} · Request {item.id}
+      </p>
+      <p className="text-caption text-foreground">
+        Reason: <span className="text-muted-foreground">{reason || "—"}</span>
+      </p>
+      {quickDeduct ? (
+        <p className="text-caption text-muted-foreground">
+          {QUICK_DEDUCT_LABEL} — taken straight off the shelf at the counter,
+          outside the approval workflow.
+        </p>
+      ) : null}
+      {item.deniedReason ? (
+        <p className="text-caption text-destructive">
+          Denied — {item.deniedReason}
+          {item.deniedNote ? `: ${item.deniedNote}` : ""}
+        </p>
+      ) : null}
+    </section>
+  );
+}
+
+/**
+ * Footer actions, derived here so the modal body stays presentational and only
+ * legal moves are ever rendered — never a disabled button.
+ */
+function DetailFooter({
+  item,
+  onAction,
+}: {
+  item: RequestItem;
+  onAction: (item: RequestItem, action: RequestAction) => void;
+}) {
+  const actions = requestActions(item.status);
+  const primary = primaryAction(item.status);
+  const secondary = actions.filter(
+    (action) => action.to && !action.destructive && action.id !== primary?.id
+  );
+  const cancel = actions.find((action) => action.id === "cancel");
+  const deny = actions.find((action) => action.id === "deny");
+
+  return (
+    <div className="flex shrink-0 items-center justify-end gap-2 border-border/50 border-t px-4 py-3">
+      {secondary.map((action) => (
+        <ActionButton
+          action={action}
+          item={item}
+          key={action.id}
+          onAction={onAction}
+          variant="outline"
+        />
+      ))}
+      {cancel ? (
+        <ActionButton
+          action={cancel}
+          item={item}
+          label="Cancel request"
+          onAction={onAction}
+          variant="destructive"
+        />
+      ) : null}
+      {deny ? (
+        <ActionButton
+          action={deny}
+          item={item}
+          label="Deny"
+          onAction={onAction}
+          variant="destructive"
+        />
+      ) : null}
+      {primary ? (
+        <ActionButton action={primary} item={item} onAction={onAction} />
+      ) : null}
+    </div>
   );
 }
 
@@ -332,15 +477,6 @@ export function RequestDetailModal({
     return null;
   }
 
-  const primary = primaryAction(item.status);
-  const structural = requestActions(item.status).filter(
-    (action) => action.to && !action.destructive
-  );
-  const secondary = structural.filter((action) => action.id !== primary?.id);
-  const deny = requestActions(item.status).find(
-    (action) => action.id === "deny"
-  );
-
   const transformOrigin = "center center";
 
   return (
@@ -359,7 +495,7 @@ export function RequestDetailModal({
           <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6">
             <motion.div
               animate="animate"
-              aria-label={`Request details for ${item.requestor.name}`}
+              aria-label={`Request details for ${requestorLabel(item)}`}
               aria-modal="true"
               className="surface-frosted relative flex max-h-[86vh] w-full max-w-[520px] flex-col overflow-hidden rounded-xl border border-border/50 shadow-xl"
               exit="exit"
@@ -405,45 +541,9 @@ export function RequestDetailModal({
               </div>
 
               <div className="min-h-0 flex-1 space-y-4 overflow-auto border-border/50 border-t p-4">
-                <section className="space-y-1">
-                  <h3 className="font-semibold text-caption text-muted-foreground uppercase tracking-widest">
-                    Requestor
-                  </h3>
-                  <p className="font-semibold text-sm">
-                    {item.requestor.name}{" "}
-                    <span className="font-normal text-muted-foreground">
-                      — {item.requestor.id}
-                    </span>
-                  </p>
-                  <p className="text-caption text-muted-foreground">
-                    {item.requestor.email}
-                  </p>
-                </section>
+                <RequestorSection item={item} />
 
-                <section className="space-y-1">
-                  <h3 className="font-semibold text-caption text-muted-foreground uppercase tracking-widest">
-                    Request
-                  </h3>
-                  <p className="text-sm">
-                    {item.medicine}{" "}
-                    <span className="text-muted-foreground">
-                      — {item.category}
-                    </span>
-                  </p>
-                  <p className="text-caption text-muted-foreground">
-                    Qty: {item.qty} {item.unit} · Request {item.id}
-                  </p>
-                  <p className="text-caption text-foreground">
-                    Reason:{" "}
-                    <span className="text-muted-foreground">{item.reason}</span>
-                  </p>
-                  {item.deniedReason ? (
-                    <p className="text-caption text-destructive">
-                      Denied — {item.deniedReason}
-                      {item.deniedNote ? `: ${item.deniedNote}` : ""}
-                    </p>
-                  ) : null}
-                </section>
+                <RequestSection item={item} />
 
                 <section className="space-y-1">
                   <h3 className="font-semibold text-caption text-muted-foreground uppercase tracking-widest">
@@ -464,11 +564,18 @@ export function RequestDetailModal({
                   onNoteChange={setNote}
                 />
 
-                {item.dispensing ? (
-                  <DispensingRecordSection
-                    dispensing={item.dispensing}
+                {item.dispensingRecords.length > 0 ? (
+                  <DispensingRecordsSection
+                    records={item.dispensingRecords}
                     unit={item.unit}
                   />
+                ) : null}
+
+                {isPartiallyDispensed(item) ? (
+                  <p className="text-[var(--warning)] text-caption">
+                    Partly dispensed — {dispensedTotal(item)} {item.unit} handed
+                    over so far, {item.qty} {item.unit} still waiting.
+                  </p>
                 ) : null}
 
                 {item.status === "claimed" ? (
@@ -479,33 +586,7 @@ export function RequestDetailModal({
                 ) : null}
               </div>
 
-              <div className="flex shrink-0 items-center justify-end gap-2 border-border/50 border-t px-4 py-3">
-                {secondary.map((action) => (
-                  <ActionButton
-                    action={action}
-                    item={item}
-                    key={action.id}
-                    onAction={onAction}
-                    variant="outline"
-                  />
-                ))}
-                {deny ? (
-                  <ActionButton
-                    action={deny}
-                    item={item}
-                    label="Deny"
-                    onAction={onAction}
-                    variant="destructive"
-                  />
-                ) : null}
-                {primary ? (
-                  <ActionButton
-                    action={primary}
-                    item={item}
-                    onAction={onAction}
-                  />
-                ) : null}
-              </div>
+              <DetailFooter item={item} onAction={onAction} />
             </motion.div>
           </div>
         </>

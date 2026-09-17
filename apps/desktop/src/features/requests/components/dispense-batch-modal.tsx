@@ -1,28 +1,24 @@
 import { Button } from "@cmis/ui/components/button";
-import { cn } from "@cmis/ui/lib/utils";
 import { AlertTriangle, CheckCircle2, X } from "lucide-react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useEffect } from "react";
 
 import { materializeEnter, sheetSpring } from "@/lib/motion";
-import type { DispensePayload } from "../hooks/use-request-board";
-import type { StockCheck } from "../stock";
-import { checkStock, stockStateLabel } from "../stock";
-import type { RequestItem } from "../types";
-
-interface PlanRow {
-  check: StockCheck;
-  item: RequestItem;
-}
+import { useDispensePlans } from "../hooks/use-dispense";
+import { type RequestItem, requestorLabel } from "../types";
 
 /**
- * CMIS-UI-05 §4.4 — bulk dispense.
+ * CMIS-UI-05 §4.4 / F9 — bulk dispense.
  *
  * The list is the point: staff must see, *before* confirming, exactly which
- * requests will leave the board and which are short on stock. Fulfillable
- * requests get their FEFO batch picked automatically; the rest stay put and are
- * named with the reason (Apple §16 Responsibility — show the consequence, and
- * never silently drop a request).
+ * requests will leave the board and which cannot. Because a hand-over is allowed
+ * to be partial (D4), a request larger than the shelf is no longer refused — it
+ * is listed as partial, with the amount that stays behind. A request with no
+ * matching item, or nothing dispensable on hand, is still named as blocked
+ * rather than silently dropped.
+ *
+ * The plan comes from the same read-only service the single confirmation uses,
+ * so the two surfaces cannot disagree.
  */
 export function DispenseBatchModal({
   items,
@@ -31,19 +27,19 @@ export function DispenseBatchModal({
   open,
 }: {
   items: RequestItem[];
-  onConfirm: (payloads: { id: string; payload: DispensePayload }[]) => void;
+  onConfirm: (items: RequestItem[]) => void;
   onOpenChange: (open: boolean) => void;
   open: boolean;
 }) {
   const reduceMotion = useReducedMotion();
+  const plans = useDispensePlans(items, open);
 
-  const plan = useMemo<PlanRow[]>(
-    () => items.map((item) => ({ check: checkStock(item), item })),
-    [items]
-  );
-
-  const ready = plan.filter((row) => row.check.state === "ok");
-  const blocked = plan.filter((row) => row.check.state !== "ok");
+  const rows = items.map((item, index) => ({
+    item,
+    plan: plans[index],
+  }));
+  const ready = rows.filter((row) => row.plan?.ok);
+  const blocked = rows.filter((row) => row.plan && !row.plan.ok);
 
   useEffect(() => {
     if (!open) {
@@ -61,26 +57,10 @@ export function DispenseBatchModal({
   const handleClose = useCallback(() => onOpenChange(false), [onOpenChange]);
 
   const handleConfirm = useCallback(() => {
-    const payloads = ready
-      .map(({ check, item }) =>
-        check.batch
-          ? {
-              id: item.id,
-              payload: {
-                batch: check.batch.batch,
-                expiry: check.batch.expiry,
-                qty: item.qty,
-              },
-            }
-          : null
-      )
-      .filter((entry): entry is { id: string; payload: DispensePayload } =>
-        Boolean(entry)
-      );
-    if (payloads.length === 0) {
+    if (ready.length === 0) {
       return;
     }
-    onConfirm(payloads);
+    onConfirm(ready.map((row) => row.item));
     onOpenChange(false);
   }, [onConfirm, onOpenChange, ready]);
 
@@ -139,20 +119,31 @@ export function DispenseBatchModal({
                       Will be dispensed
                     </h3>
                     <ul className="space-y-1">
-                      {ready.map(({ check, item }) => (
-                        <li
-                          className="rounded-md border border-border/60 bg-card px-2.5 py-2"
-                          key={item.id}
-                        >
-                          <p className="truncate font-medium text-xs">
-                            {item.medicine}
-                          </p>
-                          <p className="text-caption text-muted-foreground">
-                            {item.requestor.name} · {item.qty} {item.unit} ·
-                            batch {check.batch?.batch}
-                          </p>
-                        </li>
-                      ))}
+                      {ready.map(({ item, plan }) => {
+                        if (!plan?.ok) {
+                          return null;
+                        }
+                        const batches = plan.plan.batches
+                          .map((take) => take.batch)
+                          .join(", ");
+                        return (
+                          <li
+                            className="rounded-md border border-border/60 bg-card px-2.5 py-2"
+                            key={item.id}
+                          >
+                            <p className="truncate font-medium text-xs">
+                              {item.medicine}
+                            </p>
+                            <p className="text-caption text-muted-foreground">
+                              {requestorLabel(item)} · {plan.plan.take}{" "}
+                              {item.unit} · batch {batches}
+                              {plan.plan.remaining > 0
+                                ? ` · ${plan.plan.remaining} stays in Ready to Claim`
+                                : ""}
+                            </p>
+                          </li>
+                        );
+                      })}
                     </ul>
                   </section>
                 ) : null}
@@ -170,29 +161,24 @@ export function DispenseBatchModal({
                       Cannot be dispensed now
                     </h3>
                     <ul className="space-y-1" role="alert">
-                      {blocked.map(({ check, item }) => (
+                      {blocked.map(({ item, plan }) => (
                         <li
-                          className={cn(
-                            "rounded-md border px-2.5 py-2",
-                            check.state === "split-required"
-                              ? "border-[var(--warning)]/40 bg-[var(--warning)]/8"
-                              : "border-destructive/30 bg-destructive/5"
-                          )}
+                          className="rounded-md border border-destructive/30 bg-destructive/5 px-2.5 py-2"
                           key={item.id}
                         >
                           <p className="truncate font-medium text-xs">
                             {item.medicine}
                           </p>
                           <p className="text-caption text-muted-foreground">
-                            {item.requestor.name} —{" "}
-                            {stockStateLabel(check, item)}
+                            {requestorLabel(item)} —{" "}
+                            {plan && !plan.ok ? plan.error.message : ""}
                           </p>
                         </li>
                       ))}
                     </ul>
                     <p className="mt-1.5 text-caption text-muted-foreground">
-                      These stay in Ready to Claim. Stock in, split the batch,
-                      or deny them individually.
+                      These stay in Ready to Claim. Stock in, or deny them
+                      individually.
                     </p>
                   </section>
                 ) : null}

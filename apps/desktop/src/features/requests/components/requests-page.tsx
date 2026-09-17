@@ -3,12 +3,16 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { useDensity } from "@/hooks/use-density";
+import { acceptsTypedText } from "@/lib/typed-text";
 import { useCardDrag } from "../hooks/use-card-drag";
+import { useDispense } from "../hooks/use-dispense";
 import { useNow } from "../hooks/use-now";
-import type { DispensePayload } from "../hooks/use-request-board";
+import type { DispenseOutcome } from "../hooks/use-request-board";
 import { countInStatus, useRequestBoard } from "../hooks/use-request-board";
 import { useRequestFilters } from "../hooks/use-request-filters";
 import { useRequestPersistence } from "../hooks/use-request-persistence";
+import { useNewRequestDialog } from "../new-request-dialog-context";
+import { deleteRequest } from "../persistence";
 import type { RequestsSearch } from "../request-search";
 import {
   filtersFromSearch,
@@ -19,6 +23,7 @@ import type { BatchAction, RequestAction } from "../transitions";
 import { batchActions, canMove } from "../transitions";
 import type { RequestItem, RequestStatus } from "../types";
 import { REQUEST_COLUMNS, statusMetaOf } from "../types";
+import { CancelRequestModal } from "./cancel-request-modal";
 import { DenyRequestModal } from "./deny-request-modal";
 import { DispenseBatchModal } from "./dispense-batch-modal";
 import { DispenseRequestModal } from "./dispense-request-modal";
@@ -30,6 +35,9 @@ import { RequestsFilterBar } from "./requests-filter-bar";
 
 const FORBIDDEN_MESSAGE =
   "Complete requests cannot be denied — use detail view audit correction.";
+
+/** Drops that must be confirmed before they commit — a hand-over deducts stock. */
+const DEFERRED_DROP_STATUSES: RequestStatus[] = ["claimed"];
 
 const COLUMN_ORDER: RequestStatus[] = REQUEST_COLUMNS.map(
   (column) => column.status
@@ -53,17 +61,6 @@ function keyboardTargetStatus(
   );
 }
 
-function acceptsTypedText(target: EventTarget | null): boolean {
-  if (!(target instanceof HTMLElement)) {
-    return false;
-  }
-  if (target.isContentEditable) {
-    return true;
-  }
-  const tag = target.tagName.toLowerCase();
-  return tag === "input" || tag === "textarea" || tag === "select";
-}
-
 /**
  * CMIS-UI-05 — the Request Queue board. Staff and Admin render the same
  * workspace; Admin-only scope differences land with the reports work.
@@ -76,8 +73,12 @@ export function RequestsPage({ to }: { to: "/admin/requests" }) {
   const now = useNow();
   const persistence = useRequestPersistence([]);
   const board = useRequestBoard([], persistence.persist);
+  const dispense = useDispense();
   const navigate = useNavigate();
   const search: RequestsSearch = useSearch({ from: to });
+  // The same dialog Ctrl+N opens — the board offers it as a button so creating a
+  // request does not require knowing the shortcut (F1).
+  const { openNewRequest } = useNewRequestDialog();
 
   // Deep-linked filters seed the initial state; later edits flow back to the URL.
   const [initialFilters] = useState(() => filtersFromSearch(search));
@@ -103,6 +104,7 @@ export function RequestsPage({ to }: { to: "/admin/requests" }) {
     ids: string[];
     label: string;
   } | null>(null);
+  const [cancelTarget, setCancelTarget] = useState<RequestItem | null>(null);
   const [dispenseId, setDispenseId] = useState<string | null>(null);
   const [batchDispenseOpen, setBatchDispenseOpen] = useState(false);
   const [announcement, setAnnouncement] = useState("");
@@ -119,6 +121,13 @@ export function RequestsPage({ to }: { to: "/admin/requests" }) {
 
   const commitMove = useCallback(
     (item: RequestItem, status: RequestStatus, index: number) => {
+      // Moving into Claimed is a hand-over: it deducts stock, so it never
+      // happens on a bare status flip. The confirmation shows the FEFO plan and
+      // commits it (F7/F10).
+      if (status === "claimed") {
+        setDispenseId(item.id);
+        return;
+      }
       const outcome = board.moveRequestAt(item.id, status, index);
       if (!outcome.ok) {
         toast.error(FORBIDDEN_MESSAGE);
@@ -138,6 +147,7 @@ export function RequestsPage({ to }: { to: "/admin/requests" }) {
 
   const drag = useCardDrag({
     boardRef,
+    deferredStatuses: DEFERRED_DROP_STATUSES,
     onCommit: useCallback(
       (id: string, status: RequestStatus, index: number) => {
         const item = board.items.find((candidate) => candidate.id === id);
@@ -147,6 +157,9 @@ export function RequestsPage({ to }: { to: "/admin/requests" }) {
       },
       [board.items, commitMove]
     ),
+    // Dropping into Claimed needs the hand-over plan accepted first, so the card
+    // springs back and the confirmation opens (F10).
+    onDeferred: useCallback((id: string) => setDispenseId(id), []),
     onForbidden: useCallback((status: RequestStatus) => {
       toast.error(FORBIDDEN_MESSAGE);
       setAnnouncement(
@@ -237,6 +250,11 @@ export function RequestsPage({ to }: { to: "/admin/requests" }) {
         );
         return;
       }
+      // Keyboard move into Claimed goes through the same confirmation as a drop.
+      if (target === "claimed") {
+        setDispenseId(item.id);
+        return;
+      }
       animateMove(item, target, rect, countInStatus(board.items, target));
     },
     [animateMove, board.items]
@@ -260,6 +278,11 @@ export function RequestsPage({ to }: { to: "/admin/requests" }) {
       if (action.id === "dispense") {
         setDispenseId(item.id);
         setOpenId(null);
+        return;
+      }
+      if (action.id === "cancel") {
+        setOpenId(null);
+        setCancelTarget(item);
         return;
       }
       if (action.to) {
@@ -319,39 +342,123 @@ export function RequestsPage({ to }: { to: "/admin/requests" }) {
     [board.clearSelection, board.denyRequests, denyTarget]
   );
 
-  const handleDispenseConfirm = useCallback(
-    (payload: DispensePayload) => {
-      if (!dispenseItem) {
+  /**
+   * Deducts stock for each hand-over, then records it on the board.
+   *
+   * The order matters: stock moves first, the card second. A card that says
+   * Claimed while the shelf still holds the stock is the bug being fixed; the
+   * reverse — deducted but the card unmoved — is the safer failure (F7).
+   */
+  const runDispense = useCallback(
+    async (targets: RequestItem[]) => {
+      let attempts: Awaited<ReturnType<typeof dispense>>;
+      try {
+        attempts = await dispense(targets);
+      } catch {
+        // A build with no database cannot read the shelf, so it must not claim
+        // to have moved it.
+        toast.error("Could not dispense", {
+          description:
+            "The shelf could not be read — no stock was deducted and no card moved.",
+        });
         return;
       }
-      const applied = board.dispenseRequest(dispenseItem.id, payload);
-      if (applied) {
-        setAnnouncement(
-          `Dispensing logged for ${dispenseItem.medicine} for ${dispenseItem.requestor.name}.`
-        );
-        toast.success(`Dispensing logged for ${dispenseItem.medicine}`, {
-          description: `Batch ${payload.batch} · ${payload.qty} ${dispenseItem.unit}`,
-        });
+      const outcomes: { id: string; outcome: DispenseOutcome }[] = [];
+      const failures: string[] = [];
+      for (const attempt of attempts) {
+        if (attempt.ok && attempt.outcome) {
+          outcomes.push({ id: attempt.id, outcome: attempt.outcome });
+        } else {
+          failures.push(attempt.error ?? "Could not be dispensed");
+        }
       }
-      setDispenseId(null);
-    },
-    [board.dispenseRequest, dispenseItem]
-  );
 
-  const handleBatchDispenseConfirm = useCallback(
-    (payloads: { id: string; payload: DispensePayload }[]) => {
-      const applied = board.dispenseRequests(payloads);
+      const applied = board.markDispensedMany(outcomes);
       if (applied > 0) {
-        setAnnouncement(`${applied} requests dispensed and moved to Claimed.`);
-        toast.success(`${applied} requests dispensed`, {
-          description: "Dispensing records logged",
-        });
+        const partials = outcomes.filter(
+          (entry) => entry.outcome.remainingQty > 0
+        );
+        setAnnouncement(
+          `${applied} request${applied === 1 ? "" : "s"} dispensed and stock deducted.` +
+            (partials.length > 0
+              ? ` ${partials.length} partial — still in Ready to Claim.`
+              : "")
+        );
+        if (partials.length === 0) {
+          toast.success(`${applied} dispensed`, {
+            description: "Stock deducted and the hand-over recorded",
+          });
+        } else {
+          toast.success(`${applied} dispensed — ${partials.length} partially`, {
+            description: `${partials
+              .map((entry) => `${entry.outcome.remainingQty} still outstanding`)
+              .join(", ")} · stays in Ready to Claim`,
+          });
+        }
         board.clearSelection();
       }
-      setBatchDispenseOpen(false);
+
+      if (failures.length > 0) {
+        toast.error(`${failures.length} could not be dispensed`, {
+          description: failures[0],
+        });
+      }
     },
-    [board.clearSelection, board.dispenseRequests]
+    [board, dispense]
   );
+
+  const handleDispenseConfirm = useCallback(() => {
+    if (!dispenseItem) {
+      return;
+    }
+    setDispenseId(null);
+    runDispense([dispenseItem]).catch(() => undefined);
+  }, [dispenseItem, runDispense]);
+
+  const handleBatchDispenseConfirm = useCallback(
+    (items: RequestItem[]) => {
+      setBatchDispenseOpen(false);
+      runDispense(items).catch(() => undefined);
+    },
+    [runDispense]
+  );
+
+  /**
+   * F6 — Cancel deletes a Pending request. The row goes first: dropping it from
+   * the board while the delete failed would show a removal that never happened.
+   */
+  const handleCancelConfirm = useCallback(async () => {
+    const target = cancelTarget;
+    setCancelTarget(null);
+    if (!target) {
+      return;
+    }
+    const deleted = await deleteRequest(target.id);
+    if (!deleted) {
+      // The board keeps the card: showing it removed while the row survived
+      // would be a lie the next restart would correct.
+      toast.error("Could not cancel the request", {
+        description: "Nothing was deleted — this build has no database.",
+      });
+      return;
+    }
+    board.removeRequests([target.id]);
+    setAnnouncement(`Request ${target.id} cancelled and deleted.`);
+    toast.success("Request cancelled", {
+      description: `${target.medicine} · ${target.id}`,
+    });
+  }, [board, cancelTarget]);
+
+  const handleCancelOpenChange = useCallback((next: boolean) => {
+    if (!next) {
+      setCancelTarget(null);
+    }
+  }, []);
+
+  /** The modal's confirm takes no arguments, so the promise is contained here. */
+  const handleCancelConfirmClick = useCallback(() => {
+    handleCancelConfirm().catch(() => undefined);
+  }, [handleCancelConfirm]);
 
   const handleToggleDenied = useCallback(() => {
     setDeniedCollapsed((value) => !value);
@@ -383,6 +490,7 @@ export function RequestsPage({ to }: { to: "/admin/requests" }) {
         filters={filters}
         onCategoryChange={setCategory}
         onClearFilters={clearFilters}
+        onNewRequest={openNewRequest}
         onRemoveChip={removeChip}
         onRequestorChange={setRequestor}
         onSearchChange={setSearch}
@@ -446,6 +554,17 @@ export function RequestsPage({ to }: { to: "/admin/requests" }) {
         onOpenChange={handleDetailOpenChange}
         open={openId !== null}
         originRect={originRect}
+      />
+
+      <CancelRequestModal
+        onConfirm={handleCancelConfirmClick}
+        onOpenChange={handleCancelOpenChange}
+        open={cancelTarget !== null}
+        requestLabel={
+          cancelTarget
+            ? `${cancelTarget.medicine} · ${cancelTarget.id}`
+            : "This request"
+        }
       />
 
       <DenyRequestModal

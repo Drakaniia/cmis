@@ -133,11 +133,20 @@ function correctedOffset(
  */
 export function useCardDrag({
   boardRef,
+  deferredStatuses,
   onCommit,
+  onDeferred,
   onForbidden,
 }: {
   boardRef: RefObject<HTMLDivElement | null>;
+  /**
+   * Statuses a drop must not commit to on its own. Dropping into Claimed hands
+   * a product over, which deducts stock, so the card springs back and the
+   * confirmation takes over instead (F10/D13).
+   */
+  deferredStatuses?: RequestStatus[];
   onCommit: (id: string, status: RequestStatus, index: number) => void;
+  onDeferred?: (id: string, status: RequestStatus) => void;
   onForbidden: (status: RequestStatus) => void;
 }) {
   const x = useMotionValue(0);
@@ -156,6 +165,10 @@ export function useCardDrag({
   onCommitRef.current = onCommit;
   const onForbiddenRef = useRef(onForbidden);
   onForbiddenRef.current = onForbidden;
+  const onDeferredRef = useRef(onDeferred);
+  onDeferredRef.current = onDeferred;
+  const deferredRef = useRef(new Set(deferredStatuses ?? []));
+  deferredRef.current = new Set(deferredStatuses ?? []);
   const reducedRef = useRef(prefersReducedMotion);
   reducedRef.current = prefersReducedMotion;
 
@@ -509,6 +522,14 @@ export function useCardDrag({
         setShake(status);
         window.setTimeout(() => setShake(null), 600);
         onForbiddenRef.current(status);
+        springBack(velocity);
+        return;
+      }
+
+      // A deferred drop is legal but not yet agreed: the card goes home and the
+      // confirmation takes over, so nothing moves before the plan is accepted.
+      if (status !== session.fromStatus && deferredRef.current.has(status)) {
+        onDeferredRef.current?.(session.cardId, status);
         springBack(velocity);
         return;
       }

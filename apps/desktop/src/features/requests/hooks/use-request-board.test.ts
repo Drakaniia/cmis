@@ -7,6 +7,7 @@ import { useRequestBoard } from "./use-request-board";
 function makeItem(overrides: Partial<RequestItem> = {}): RequestItem {
   return {
     category: "Analgesic",
+    dispensingRecords: [],
     history: [],
     id: "REQ-2026-0001",
     medicine: "Paracetamol 500mg",
@@ -18,6 +19,7 @@ function makeItem(overrides: Partial<RequestItem> = {}): RequestItem {
       id: "STU-2024-0831",
       name: "Maria Santos",
     },
+    source: "queue",
     status: "pending",
     submittedAt: new Date(Date.now() - 60_000).toISOString(),
     unit: "tabs",
@@ -229,15 +231,22 @@ describe("useRequestBoard", () => {
     });
   });
 
-  describe("dispenseRequest", () => {
+  describe("markDispensed", () => {
+    const RECORD = {
+      at: "2026-09-17T10:00:00.000Z",
+      batch: "B-2026-04",
+      expiry: "2027-06-15",
+      qty: 5,
+      staff: "You",
+    };
+
     it("dispenses a ready request to claimed", () => {
       const { result } = renderHook(() => useRequestBoard(ITEMS));
       let ok = false;
       act(() => {
-        ok = result.current.dispenseRequest("REQ-004", {
-          batch: "B-2026-04",
-          expiry: "2027-06-15",
-          qty: 5,
+        ok = result.current.markDispensed("REQ-004", {
+          record: RECORD,
+          remainingQty: 0,
         });
       });
       expect(ok).toBe(true);
@@ -245,19 +254,32 @@ describe("useRequestBoard", () => {
         (item) => item.id === "REQ-004"
       );
       expect(claimed?.status).toBe("claimed");
-      expect(claimed?.dispensing).toBeDefined();
-      expect(claimed?.dispensing?.batch).toBe("B-2026-04");
-      expect(claimed?.dispensing?.qty).toBe(5);
+      expect(claimed?.dispensingRecords).toHaveLength(1);
+      expect(claimed?.dispensingRecords[0].batch).toBe("B-2026-04");
+      expect(claimed?.dispensingRecords[0].qty).toBe(5);
+    });
+
+    it("keeps a partial hand-over in Ready to Claim with the outstanding qty", () => {
+      const { result } = renderHook(() => useRequestBoard(ITEMS));
+      act(() => {
+        result.current.markDispensed("REQ-004", {
+          record: { ...RECORD, qty: 1 },
+          remainingQty: 1,
+        });
+      });
+      const item = result.current.items.find((found) => found.id === "REQ-004");
+      expect(item?.status).toBe("ready");
+      expect(item?.qty).toBe(1);
+      expect(item?.dispensingRecords).toHaveLength(1);
     });
 
     it("rejects dispensing a non-ready request", () => {
       const { result } = renderHook(() => useRequestBoard(ITEMS));
       let ok = false;
       act(() => {
-        ok = result.current.dispenseRequest("REQ-001", {
-          batch: "B-2026-04",
-          expiry: "2027-06-15",
-          qty: 2,
+        ok = result.current.markDispensed("REQ-001", {
+          record: RECORD,
+          remainingQty: 0,
         });
       });
       expect(ok).toBe(false);
@@ -270,10 +292,9 @@ describe("useRequestBoard", () => {
       const { result } = renderHook(() => useRequestBoard(ITEMS));
       let ok = false;
       act(() => {
-        ok = result.current.dispenseRequest("REQ-005", {
-          batch: "B-2026-04",
-          expiry: "2027-06-15",
-          qty: 5,
+        ok = result.current.markDispensed("REQ-005", {
+          record: RECORD,
+          remainingQty: 0,
         });
       });
       expect(ok).toBe(false);
@@ -282,10 +303,9 @@ describe("useRequestBoard", () => {
     it("records dispensing history", () => {
       const { result } = renderHook(() => useRequestBoard(ITEMS));
       act(() => {
-        result.current.dispenseRequest("REQ-004", {
-          batch: "B-2026-04",
-          expiry: "2027-06-15",
-          qty: 5,
+        result.current.markDispensed("REQ-004", {
+          record: RECORD,
+          remainingQty: 0,
         });
       });
       const claimed = result.current.items.find(
@@ -294,22 +314,41 @@ describe("useRequestBoard", () => {
       expect(claimed?.history).toHaveLength(1);
       expect(claimed?.history[0].to).toBe("claimed");
     });
+
+    it("offers no undo — a dispense has moved real stock (F12)", () => {
+      const { result } = renderHook(() => useRequestBoard(ITEMS));
+      act(() => {
+        result.current.markDispensed("REQ-004", {
+          record: RECORD,
+          remainingQty: 0,
+        });
+      });
+      let undone = true;
+      act(() => {
+        undone = result.current.undoLastMove();
+      });
+      expect(undone).toBe(false);
+      expect(
+        result.current.items.find((found) => found.id === "REQ-004")?.status
+      ).toBe("claimed");
+    });
   });
 
-  describe("dispenseRequests (bulk)", () => {
+  describe("markDispensedMany (bulk)", () => {
+    const RECORD = {
+      at: "2026-09-17T10:00:00.000Z",
+      batch: "B-2026-04",
+      expiry: "2027-06-15",
+      qty: 5,
+      staff: "You",
+    };
+
     it("dispenses multiple ready requests", () => {
       const { result } = renderHook(() => useRequestBoard(ITEMS));
       let applied = 0;
       act(() => {
-        applied = result.current.dispenseRequests([
-          {
-            id: "REQ-004",
-            payload: {
-              batch: "B-2026-04",
-              expiry: "2027-06-15",
-              qty: 5,
-            },
-          },
+        applied = result.current.markDispensedMany([
+          { id: "REQ-004", outcome: { record: RECORD, remainingQty: 0 } },
         ]);
       });
       expect(applied).toBe(1);
@@ -322,26 +361,15 @@ describe("useRequestBoard", () => {
       const { result } = renderHook(() => useRequestBoard(ITEMS));
       let applied = 0;
       act(() => {
-        applied = result.current.dispenseRequests([
-          {
-            id: "REQ-004",
-            payload: {
-              batch: "B-2026-04",
-              expiry: "2027-06-15",
-              qty: 5,
-            },
-          },
-          {
-            id: "REQ-001",
-            payload: {
-              batch: "B-2026-04",
-              expiry: "2027-06-15",
-              qty: 2,
-            },
-          },
+        applied = result.current.markDispensedMany([
+          { id: "REQ-004", outcome: { record: RECORD, remainingQty: 0 } },
+          { id: "REQ-001", outcome: { record: RECORD, remainingQty: 0 } },
         ]);
       });
       expect(applied).toBe(1);
+      expect(
+        result.current.items.find((found) => found.id === "REQ-001")?.status
+      ).toBe("pending");
     });
   });
 
@@ -444,6 +472,23 @@ describe("useRequestBoard", () => {
     });
   });
 
+  describe("removeRequests", () => {
+    it("drops cancelled requests and clears their selection", () => {
+      const { result } = renderHook(() => useRequestBoard(ITEMS));
+      act(() => result.current.toggleSelect("REQ-001"));
+      let removed = 0;
+      act(() => {
+        removed = result.current.removeRequests(["REQ-001"]);
+      });
+      expect(removed).toBe(1);
+      expect(result.current.items).toHaveLength(ITEMS.length - 1);
+      expect(
+        result.current.items.find((found) => found.id === "REQ-001")
+      ).toBeUndefined();
+      expect(result.current.selectedIds.size).toBe(0);
+    });
+  });
+
   describe("addNote", () => {
     it("adds an internal note to a request", () => {
       const { result } = renderHook(() => useRequestBoard(ITEMS));
@@ -492,10 +537,15 @@ describe("useRequestBoard", () => {
       const persist = vi.fn();
       const { result } = renderHook(() => useRequestBoard(ITEMS, persist));
       act(() =>
-        result.current.dispenseRequest("REQ-004", {
-          batch: "B-2026-04",
-          expiry: "2027-06-15",
-          qty: 5,
+        result.current.markDispensed("REQ-004", {
+          record: {
+            at: "2026-09-17T10:00:00.000Z",
+            batch: "B-2026-04",
+            expiry: "2027-06-15",
+            qty: 5,
+            staff: "You",
+          },
+          remainingQty: 0,
         })
       );
       expect(persist).toHaveBeenCalled();
