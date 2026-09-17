@@ -56,11 +56,31 @@ export interface DispensingRecord {
   staff: string;
 }
 
+/**
+ * How a request came to exist (D14/D15).
+ *
+ * `queue` is the default and covers every request walked through the board, so
+ * an existing row is correct without a backfill. `quick-deduct` marks the
+ * one-action counter hand-over (`Ctrl+D`), which lands directly in Claimed and
+ * is otherwise indistinguishable from an anonymous walk-in request.
+ */
+export type RequestSource = "queue" | "quick-deduct";
+
+export const REQUEST_SOURCES: RequestSource[] = ["queue", "quick-deduct"];
+
+/** The card badge and the detail line for a quick deduction (D10). */
+export const QUICK_DEDUCT_LABEL = "Quick deduct";
+
 export interface RequestItem {
   category: string;
   deniedNote?: string;
   deniedReason?: DenyReason;
-  dispensing?: DispensingRecord;
+  /**
+   * Every hand-over recorded for this request, oldest first. A partial dispense
+   * leaves the card in Ready to Claim and appends a second entry later, so this
+   * is a list rather than the single record migration 0001 assumed.
+   */
+  dispensingRecords: DispensingRecord[];
   history: StatusHistoryEntry[];
   /** e.g. REQ-2026-0141 */
   id: string;
@@ -71,6 +91,8 @@ export interface RequestItem {
   /** Viewer's stated reason for the request */
   reason: string;
   requestor: Requestor;
+  /** How it got here — a queued request or a quick deduction (D14). */
+  source: RequestSource;
   status: RequestStatus;
   /** ISO timestamp */
   submittedAt: string;
@@ -145,6 +167,29 @@ export function statusMetaOf(status: RequestStatus): RequestColumnMeta {
 
 /** Claimed cards auto-archive after 24h (§1). */
 export const CLAIMED_ARCHIVE_HOURS = 24;
+
+/** Total quantity handed over so far, across every dispensing record. */
+export function dispensedTotal(item: RequestItem): number {
+  let total = 0;
+  for (const record of item.dispensingRecords) {
+    total += record.qty;
+  }
+  return total;
+}
+
+/**
+ * True while an item has been handed over at least once but is still on the
+ * board — a partial dispense, whose remainder is still in Ready to Claim.
+ */
+export function isPartiallyDispensed(item: RequestItem): boolean {
+  return item.dispensingRecords.length > 0 && item.status === "ready";
+}
+
+/** "Walk-in" whenever the requestor is anonymous (D2/D23 stores blank strings). */
+export function requestorLabel(item: RequestItem): string {
+  const name = item.requestor.name.trim();
+  return name === "" ? "Walk-in" : name;
+}
 
 export type RequestDatePreset = "all" | "custom" | "today" | "7d" | "30d";
 
