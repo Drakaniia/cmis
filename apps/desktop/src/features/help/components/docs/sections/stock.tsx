@@ -60,6 +60,36 @@ export function StockSection() {
         enter the quantity and confirm.
       </DocsP>
 
+      <DocsSubHeading>Deduct stock in one action — Ctrl+D</DocsSubHeading>
+      <DocsP>
+        For a straight counter hand-over — one item, one number, nothing to
+        approve — press <DocsKey>Ctrl</DocsKey> <DocsKey>D</DocsKey> anywhere in
+        the app, or use{" "}
+        <span className="font-medium text-foreground">
+          File → Deduct Stock…
+        </span>
+        , or open <DocsKey>Ctrl</DocsKey> <DocsKey>K</DocsKey> and type
+        “deduct”. The form is an item and a quantity; the read-only line
+        underneath shows which batch leaves the shelf and what is left
+        afterwards.
+      </DocsP>
+      <DocsP>
+        Confirming decrements the earliest-expiring batch (splitting across two
+        batches when one cannot cover the quantity), recomputes the item’s
+        status, and writes the movement to the audit log, the Dispensing Log and
+        the analytics — exactly as a dispensed request does. It creates one card
+        in <DocsRoute to="/admin/requests">Claimed</DocsRoute> marked{" "}
+        <span className="font-medium text-foreground">Quick deduct</span>, with
+        the requestor shown as “Walk-in”.
+      </DocsP>
+      <DocsCallout title="Undo for a few seconds" tone="warning">
+        The confirmation toast offers <strong>Undo</strong> for five seconds.
+        Undoing puts the stock back, restores a batch that had been emptied, and
+        removes the card. After that window there is no correction path on the
+        card: use Stock In or Stock Out to offset a mistake, as you would for
+        any other stock movement.
+      </DocsCallout>
+
       <DocsSubHeading>Fix a mistake, or remove a batch</DocsSubHeading>
       <DocsP>
         Open an item in the list to see its batches and history. From a batch

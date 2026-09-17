@@ -55,19 +55,35 @@ export function RequestsSection() {
       <DocsSubHeading>Submit a request</DocsSubHeading>
       <DocsSteps>
         <DocsStep title="Press Ctrl+N (or File → New Request).">
-          The new-request form opens from anywhere in the app.
+          The new-request form opens from anywhere in the app, over whatever you
+          were looking at. It does not interrupt typing: inside a text field
+          Ctrl+N stays a line break.
         </DocsStep>
-        <DocsStep title="Pick the items and quantities.">
-          Add each medicine with how much is needed; the form checks what is on
-          the shelf as you go.
+        <DocsStep title="Pick the medicine, quantity and unit.">
+          The medicine list comes from Stock Management, and picking one fills
+          in its category and unit. What is on the shelf is shown as you type; a
+          quantity above it is allowed, and the hand-over will simply be partial
+          when it happens.
         </DocsStep>
-        <DocsStep title="Record who it is for.">
-          The requestor and purpose are what the approver uses to decide.
+        <DocsStep title="Add another item if you need to.">
+          Each item becomes its own card, with its own reference, so a request
+          still holds exactly one medicine.
+        </DocsStep>
+        <DocsStep title="Record who it is for — or leave it blank.">
+          The requestor and reason are what the approver uses to decide. Leave
+          the requestor blank for a counter walk-in; the card reads “Walk-in”.
         </DocsStep>
         <DocsStep title="Submit.">
-          The card lands in Pending with the time it arrived.
+          Cards land in Pending with the time they arrived. Turn on “Start in
+          Ready to Claim” to skip the approval steps for a walk-in hand-over —
+          the history still shows the skip.
         </DocsStep>
       </DocsSteps>
+      <DocsCallout title="A medicine that is not stocked cannot be requested">
+        If nothing in Stock Management matches what you typed, the form will not
+        submit: there would be no stock to deduct at hand-over. Stock the item
+        in first, or pick the closest match.
+      </DocsCallout>
 
       <DocsSubHeading>Move a card forward</DocsSubHeading>
       <DocsP>
@@ -84,16 +100,31 @@ export function RequestsSection() {
           from Approved once the items are packed and waiting.
         </DocsStep>
         <DocsStep title="Dispense → Claimed">
-          from Ready to Claim at hand-over. This writes the dispensing record,
-          deducts the quantity from stock and asks which batch you took it from.
+          from Ready to Claim at hand-over. Nothing moves until you confirm, and
+          the confirmation shows the plan: which batch leaves the shelf, how
+          much is left afterwards, and how much stays on the card if the request
+          is larger than stock on hand.
         </DocsStep>
         <DocsStep title="Deny">
           from Pending or Approved. A reason is required and stays on the card.
+        </DocsStep>
+        <DocsStep title="Cancel">
+          from Pending only, when a request was raised in error. It deletes the
+          card and its history, so Deny is the better answer when the request
+          was refused rather than withdrawn.
         </DocsStep>
         <DocsStep title="Re-open → Pending">
           from Denied, when the request can be reconsidered.
         </DocsStep>
       </DocsSteps>
+
+      <DocsCallout title="Handing over is what moves the stock" tone="tip">
+        Approving and preparing reserve nothing. The quantity leaves the shelf
+        at Dispense, taken from the earliest-expiring batch first, and the
+        dispensing log and dashboard totals update in the same moment. There is
+        no undo — a partial hand-over leaves the rest of the request in Ready to
+        Claim to be dispensed later.
+      </DocsCallout>
 
       <DocsCallout title="Working in bulk" tone="tip">
         Tick several cards in the same column to use the batch bar — Approve
