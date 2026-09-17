@@ -83,7 +83,6 @@ const BarYAxisInner = memo(function BarYAxisInnerComponent({
   const { margin, barScale, bandWidth, barXAccessor, data, hoveredBarIndex } =
     useChart();
 
-  // Generate labels for each bar
   const labelsToShow = useMemo(() => {
     if (!(barScale && bandWidth && barXAccessor)) {
       return [];

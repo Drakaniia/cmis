@@ -26,8 +26,11 @@ import {
 } from "react";
 
 import { useHelpDialogs } from "@/features/help/help-dialogs-context";
+import { useQuickDeductDialog } from "@/features/inventory/quick-deduct-dialog-context";
+import { useNewRequestDialog } from "@/features/requests/new-request-dialog-context";
 import { useUpdaterOptional } from "@/features/updater/use-updater";
 import { openExternal } from "@/lib/open-external";
+import { acceptsTypedText } from "@/lib/typed-text";
 
 import { AboutModal } from "./about-modal";
 import {
@@ -54,6 +57,8 @@ type OpenMenuSetter = Dispatch<SetStateAction<string | null>>;
 interface MenuDispatchContext {
   navigate: ReturnType<typeof useNavigate>;
   onToggleSidebar: () => void;
+  openNewRequest: () => void;
+  openQuickDeduct: () => void;
   openReportIssue: () => void;
   setAboutOpen: (open: boolean) => void;
   setShortcutsOpen: (open: boolean) => void;
@@ -272,9 +277,18 @@ const COMMANDS: Record<
 
 const MODALS: Record<string, (ctx: MenuDispatchContext) => void> = {
   about: (ctx) => ctx.setAboutOpen(true),
+  "new-request": (ctx) => ctx.openNewRequest(),
+  "quick-deduct": (ctx) => ctx.openQuickDeduct(),
   "report-issue": (ctx) => ctx.openReportIssue(),
   shortcuts: (ctx) => ctx.setShortcutsOpen(true),
 };
+
+/**
+ * The accelerators that must not fire while the user is typing: in a field,
+ * Ctrl/⌘+N is a line break, not "new request", and Ctrl/⌘+D is a bookmark and
+ * must not open the quick-deduct form over a half-typed word (F1/E12).
+ */
+const TYPE_SENSITIVE_KEYS = new Set(["ctrl+n", "ctrl+d", "meta+n", "meta+d"]);
 
 /**
  * Window commands. The Tauri window API is imported lazily so the menubar keeps
@@ -359,6 +373,8 @@ export function DesktopMenubar({
   const { setTheme } = useTheme();
   const updater = useUpdaterOptional();
   const { openReportIssue } = useHelpDialogs();
+  const { openNewRequest } = useNewRequestDialog();
+  const { openQuickDeduct } = useQuickDeductDialog();
 
   const [hideOnMac, setHideOnMac] = useState(false);
   useEffect(() => {
@@ -390,13 +406,23 @@ export function DesktopMenubar({
     () => ({
       navigate,
       onToggleSidebar,
+      openNewRequest,
+      openQuickDeduct,
       openReportIssue,
       setAboutOpen,
       setShortcutsOpen,
       setTheme,
       updater,
     }),
-    [navigate, onToggleSidebar, openReportIssue, setTheme, updater]
+    [
+      navigate,
+      onToggleSidebar,
+      openNewRequest,
+      openQuickDeduct,
+      openReportIssue,
+      setTheme,
+      updater,
+    ]
   );
 
   /** Walks the menu tree and runs the first item with this id. */
@@ -445,7 +471,11 @@ export function DesktopMenubar({
       }
       const ctrl = event.ctrlKey || event.metaKey;
       if (ctrl || event.key === "F11") {
-        runAccelerator(buildCombo(event), event, dispatchById, setOpenMenuId);
+        const combo = buildCombo(event);
+        if (TYPE_SENSITIVE_KEYS.has(combo) && acceptsTypedText(event.target)) {
+          return;
+        }
+        runAccelerator(combo, event, dispatchById, setOpenMenuId);
       }
     };
 

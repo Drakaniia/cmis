@@ -28,7 +28,6 @@ import type { ChartPhase, ChartStatus } from "./chart-phase";
 import type { ReferenceAreaConfig } from "./patterns/reference-area-config";
 import type { ChartSelection } from "./use-chart-interaction";
 
-// CSS variable references for theming
 export const chartCssVars = {
   background: "var(--chart-background)",
   badgeBackground: "var(--chart-marker-badge-background)",
@@ -124,17 +123,14 @@ export interface ChartContextValue extends ChartHoverContextValue {
   /** Width of each bar band */
   bandWidth?: number;
 
-  // Bar chart specific (optional - only present in BarChart)
   /** Band scale for categorical x-axis (bar charts) */
   barScale?: ScaleBand<string>;
   /** X accessor for bar charts (returns string instead of Date) */
   barXAccessor?: (d: Record<string, unknown>) => string;
 
-  // Loading / lifecycle (LineChart status transitions)
   chartPhase: ChartPhase;
   chartStatus: ChartStatus;
 
-  // Column width for spacing calculations
   columnWidth: number;
 
   // ComposedChart + SeriesBar (optional)
@@ -153,12 +149,10 @@ export interface ChartContextValue extends ChartHoverContextValue {
   /** Per-row cumulative offsets for stacked `SeriesBar` (data index → dataKey → offset). */
   composedStackOffsets?: Map<number, Map<string, number>>;
 
-  // Container ref for portals
   containerRef: RefObject<HTMLDivElement | null>;
   // Data
   data: Record<string, unknown>[];
 
-  // Pre-computed date labels for ticker animation
   dateLabels: string[];
   /** Motion enter transition (spring or tween) — drives clip reveal when spring. */
   enterTransition?: Transition;
@@ -420,7 +414,6 @@ export function useChart(): ChartContextValue {
   const stable = useChartStable();
   const hover = useChartHover();
   // Identity changes on every hover (hover is the volatile slice) — that's
-  // fine for consumers using this merged hook; they explicitly opted in to
   // re-rendering on hover.
   return { ...stable, ...hover };
 }

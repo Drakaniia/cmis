@@ -30,7 +30,6 @@ import {
 } from "./update-toasts";
 import { loadUpdaterSettings, saveUpdaterSettings } from "./updater-settings";
 
-// Tauri updater types are dynamic — we lazy-import to keep browser dev working
 interface TauriUpdate {
   body?: string | null;
   date?: string | null;
@@ -42,7 +41,6 @@ interface TauriUpdate {
 
 let devGuard = false;
 try {
-  // import.meta.env.DEV is replaced by Vite at build time
   devGuard =
     (import.meta as unknown as { env?: { DEV?: boolean } }).env?.DEV === true;
 } catch {
@@ -191,7 +189,6 @@ export function UpdaterProvider({ children }: { children: React.ReactNode }) {
         showDownloadingToast(pct);
       } else if (evt.event === "Finished") {
         setState((s) => ({ ...s, progress: 100 }));
-        // Defer ready toast if a blocking modal is open
         if (getBlockingModalCount() > 0) {
           deferredReadyRef.current = true;
           setState((s) => ({ ...s, status: "ready" }));
@@ -206,7 +203,6 @@ export function UpdaterProvider({ children }: { children: React.ReactNode }) {
             dismissUpdaterToast();
             setState((s) => ({ ...s, progress: null, status: "idle" }));
           },
-          // Tauri relaunch is fire-and-forget so the toast closes immediately
           onRestart: () => {
             restartNow().catch(() => undefined);
           },
@@ -288,7 +284,6 @@ export function UpdaterProvider({ children }: { children: React.ReactNode }) {
             msg
           );
         }
-        // persist lastCheckedAt even on failure for manual path
         if (!silent) {
           const ts = new Date().toISOString();
           const next = await saveUpdaterSettings({ lastCheckedAt: ts });
@@ -344,7 +339,6 @@ export function UpdaterProvider({ children }: { children: React.ReactNode }) {
         await doDownload();
       } else if (silent) {
         // silent launch with autoDownload OFF: show non-blocking "Version X available" toast
-        // spec says available toast is informational and does NOT need deferral
         showAvailableToast(update.version, {
           onDownload: () => {
             doDownload().catch(() => undefined);

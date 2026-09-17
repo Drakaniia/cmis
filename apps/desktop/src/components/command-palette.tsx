@@ -15,6 +15,7 @@ import {
   LayoutDashboard,
   type LucideIcon,
   Package,
+  PackageMinus,
   Search,
   Settings,
 } from "lucide-react";
@@ -27,6 +28,7 @@ import {
   type HelpCommandEntry,
   runHelpCommand,
 } from "@/features/help/lib/help-commands";
+import { useQuickDeductDialog } from "@/features/inventory/quick-deduct-dialog-context";
 import { materializeEnter, paletteSpring } from "@/lib/motion";
 
 /**
@@ -51,11 +53,24 @@ interface RouteCommandEntry {
 }
 
 /**
- * Palette entries are either straight navigation or a Help action handled by
- * the shared Help host. `HelpCommandEntry` owns the help-side model so the
- * palette cannot drift from the header dropdown.
+ * A palette entry that opens an app-wide modal instead of navigating. `Ctrl+D`
+ * exists for speed; this exists so the action is discoverable without knowing it
+ * (F7).
  */
-type CommandEntry = RouteCommandEntry | HelpCommandEntry;
+interface ActionCommandEntry {
+  action: "quick-deduct";
+  icon: LucideIcon;
+  kind: "action";
+  label: string;
+  section: string;
+}
+
+/**
+ * Palette entries are straight navigation, an app-wide modal, or a Help action
+ * handled by the shared Help host. `HelpCommandEntry` owns the help-side model so
+ * the palette cannot drift from the header dropdown.
+ */
+type CommandEntry = ActionCommandEntry | HelpCommandEntry | RouteCommandEntry;
 
 const ROUTE_ITEMS: RouteCommandEntry[] = [
   {
@@ -116,11 +131,34 @@ const ROUTE_ITEMS: RouteCommandEntry[] = [
   },
 ];
 
-const COMMAND_ITEMS: CommandEntry[] = [...ROUTE_ITEMS, ...HELP_COMMANDS];
+/**
+ * Actions that open a modal in place rather than moving the user to a route —
+ * the palette must not navigate away for these (F7).
+ */
+const ACTION_ITEMS: ActionCommandEntry[] = [
+  {
+    action: "quick-deduct",
+    icon: PackageMinus,
+    kind: "action",
+    label: "Deduct stock…",
+    section: "Inventory",
+  },
+];
 
-/** Stable React key + handler identity for both entry kinds. */
+const COMMAND_ITEMS: CommandEntry[] = [
+  ...ROUTE_ITEMS,
+  ...ACTION_ITEMS,
+  ...HELP_COMMANDS,
+];
+
+/** Stable React key + handler identity for every entry kind. */
 function commandKey(entry: CommandEntry): string {
-  return entry.kind === "route" ? entry.to : `help-action:${entry.action}`;
+  if (entry.kind === "route") {
+    return entry.to;
+  }
+  return entry.kind === "action"
+    ? `app-action:${entry.action}`
+    : `help-action:${entry.action}`;
 }
 
 export function CommandPalette() {
@@ -148,7 +186,6 @@ export function CommandPalette() {
   // Focus the input when the dialog opens — Apple §1: instant response.
   useEffect(() => {
     if (open) {
-      // Small delay to let AnimatePresence mount the DOM, then focus.
       const id = requestAnimationFrame(() => {
         inputRef.current?.focus();
       });
@@ -180,12 +217,20 @@ export function CommandPalette() {
   }, []);
 
   const { openReportIssue } = useHelpDialogs();
+  const { openQuickDeduct } = useQuickDeductDialog();
 
   const runEntry = useCallback(
     (entry: CommandEntry) => {
       setOpen(false);
       if (entry.kind === "route") {
         router.navigate({ to: entry.to });
+        return;
+      }
+      if (entry.kind === "action") {
+        // A modal over the current screen, never a navigation.
+        if (entry.action === "quick-deduct") {
+          openQuickDeduct();
+        }
         return;
       }
       runHelpCommand(entry, {
@@ -195,7 +240,7 @@ export function CommandPalette() {
         openReportIssue,
       });
     },
-    [openReportIssue, router]
+    [openQuickDeduct, openReportIssue, router]
   );
 
   // Precomputed per entry so no handler is recreated per render.

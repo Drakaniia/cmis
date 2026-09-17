@@ -27,7 +27,6 @@ import {
  * `<BarChart status="loading">`.
  */
 
-// CurveFactory type - simplified version compatible with visx
 // biome-ignore lint/suspicious/noExplicitAny: d3 curve factory type
 type CurveFactory = any;
 
@@ -55,7 +54,6 @@ const DEFAULT_BAR_FRACTION = 0.7;
 // Heights come from a deterministic hash of (index, seed), never
 // `Math.random()`, so the first server render and first client render agree
 // (no Next.js hydration mismatch). Re-randomizing only bumps the numeric seed
-// on the client, after a sweep completes.
 
 /** Cheap deterministic hash to a fractional part in [0, 1). */
 function hashFract(n: number): number {

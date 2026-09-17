@@ -41,9 +41,20 @@ export const MENUS: MenuDef[] = [
       {
         accelerator: "Ctrl+N",
         accelKeys: ["ctrl+n", "meta+n"],
-        action: { to: "/admin/requests", type: "navigate" },
+        // what it used to do — the accelerator promised a form that never
+        // existed (AF1).
+        action: { id: "new-request", type: "modal" },
         id: "file.new-request",
         label: "New Request…",
+      },
+      {
+        // F1 — the one-action counter hand-over. Opens a modal rather than
+        // navigating, like `new-request`; the modal is mounted at app root.
+        accelerator: "Ctrl+D",
+        accelKeys: ["ctrl+d", "meta+d"],
+        action: { id: "quick-deduct", type: "modal" },
+        id: "file.quick-deduct",
+        label: "Deduct Stock…",
       },
       {
         enabled: false,
@@ -359,13 +370,12 @@ export const MENUS: MenuDef[] = [
   },
 ];
 
-// Mark separators via separatorBefore rather than dummy items — fix above filter was placeholder.
-// Rebuild cleanly with proper separatorBefore flags:
 for (const menu of MENUS) {
   // File separators
   if (menu.id === "file") {
     const ids = [
       "file.new-request",
+      "file.quick-deduct",
       "file.import",
       "file.settings",
       "file.exit",

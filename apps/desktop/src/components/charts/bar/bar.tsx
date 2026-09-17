@@ -356,8 +356,6 @@ const BarInner = memo(function BarInnerImpl({
   } = useChart();
   const stacked = stackedRaw ?? false;
 
-  // Calculate stagger delay automatically if not provided
-  // Total animation duration is ~1200ms, with 40% for stagger spread and 60% for bar animation
   const totalAnimDuration = animationDuration || 1100;
   const staggerSpread = totalAnimDuration * 0.4; // 40% of time for stagger spread
   const calculatedStaggerDelay =
@@ -383,7 +381,6 @@ const BarInner = memo(function BarInnerImpl({
   const seriesCount = lines.length;
   const isLastSeries = seriesIndex === seriesCount - 1;
 
-  // Calculate the width for each bar within a group (for non-stacked)
   const barWidth = useMemo(() => {
     if (!bandWidth || seriesCount === 0) {
       return 0;
@@ -397,7 +394,6 @@ const BarInner = memo(function BarInnerImpl({
     return (bandWidth - effectiveGroupGap * (seriesCount - 1)) / seriesCount;
   }, [bandWidth, seriesCount, stacked, groupGap]);
 
-  // Calculate corner radius based on lineCap. Perspective bars force a flat
   // top (radius 0) so the 3D lid from `<BarDepthBack>` meets the bar with no
   // gap — rounded corners would leave a wedge, so `perspective` overrides it.
   const cornerRadius = useMemo(() => {
@@ -467,7 +463,6 @@ const BarInner = memo(function BarInnerImpl({
         const isFaded =
           (hoveredBarIndex !== null && hoveredBarIndex !== i) || isLegendDimmed;
 
-        // Use categoryValue as key since it's the unique identifier from data
         const barKey = `bar-${dataKey}-${categoryValue}`;
 
         // Apply rounded corners:
@@ -502,7 +497,6 @@ const BarInner = memo(function BarInnerImpl({
           );
         }
 
-        // Static bar after animation completes
         return (
           <rect
             fill={fill}

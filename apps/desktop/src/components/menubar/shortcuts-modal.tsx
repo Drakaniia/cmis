@@ -23,7 +23,8 @@ const SHORTCUTS: { group: string; items: { keys: string; label: string }[] }[] =
     {
       group: "Navigation",
       items: [
-        { keys: "Ctrl + N", label: "New Request" },
+        { keys: "Ctrl + N  /  ⌘N", label: "New Request" },
+        { keys: "Ctrl + D  /  ⌘D", label: "Deduct Stock" },
         { keys: "Alt + F / E / V / W / H", label: "Open Menu" },
         { keys: "← →  ↑ ↓", label: "Move Across / Within Menu" },
         { keys: "Enter / Esc", label: "Activate / Close Menu" },

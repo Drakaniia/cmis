@@ -79,7 +79,6 @@ function useGrowExitClip(
   });
 
   // §14 Reduced motion — skip the looping clip animation entirely.
-  // Show the full-width clip immediately and signal completion for transitions.
   useEffect(() => {
     if (!reduceMotion) {
       return;

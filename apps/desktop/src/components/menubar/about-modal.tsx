@@ -25,7 +25,7 @@ export function AboutModal({
         <DialogHeader>
           <DialogTitle>About CMIS</DialogTitle>
           <DialogDescription>
-            Clinic Management Information System — BukSU Clinic
+            Clinic Medicine Inventory System — BukSU Clinic
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3 py-1">
@@ -47,7 +47,7 @@ export function AboutModal({
             <div>
               <p className="font-semibold text-[13px] leading-tight">CMIS</p>
               <p className="text-[11.5px] text-muted-foreground">
-                Clinical Inventory System
+                Clinic Medicine Inventory System
               </p>
             </div>
           </div>

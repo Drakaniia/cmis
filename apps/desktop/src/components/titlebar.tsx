@@ -54,7 +54,6 @@ export function TitleBar({
       try {
         const win = getCurrentWindow();
         // onResized is the idiomatic Tauri v2 helper; fallback to
-        // generic listen("tauri://resize") if not available.
         const maybeOnResized = (
           win as unknown as {
             onResized?: (cb: () => void) => Promise<() => void>;
@@ -140,7 +139,6 @@ export function TitleBar({
       await syncMaximized();
     } catch (error) {
       console.error("[TitleBar] toggleMaximize failed", error);
-      // fallback for Tauri builds without toggleMaximize permission
       try {
         const m = await getCurrentWindow().isMaximized();
         if (m) {
