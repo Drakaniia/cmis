@@ -1,4 +1,5 @@
 import { AppleDatePicker } from "@cmis/ui/components/apple-date-picker";
+import { Button } from "@cmis/ui/components/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -7,7 +8,14 @@ import {
   DropdownMenuLabel,
   DropdownMenuTrigger,
 } from "@cmis/ui/components/dropdown-menu";
-import { CalendarRange, Check, ChevronDown, Search, X } from "lucide-react";
+import {
+  CalendarRange,
+  Check,
+  ChevronDown,
+  Plus,
+  Search,
+  X,
+} from "lucide-react";
 import { type ChangeEvent, type KeyboardEvent, useCallback } from "react";
 import type { RequestDatePreset, RequestFilters } from "../types";
 import { REQUEST_DATE_PRESETS } from "../types";
@@ -73,6 +81,7 @@ export function RequestsFilterBar({
   filters,
   onCategoryChange,
   onClearFilters,
+  onNewRequest,
   onRemoveChip,
   onRequestorChange,
   onSearchChange,
@@ -84,6 +93,11 @@ export function RequestsFilterBar({
   filters: RequestFilters;
   onCategoryChange: (value: string) => void;
   onClearFilters: () => void;
+  /**
+   * Opens the New Request form. The same dialog `Ctrl+N` opens — a button here
+   * because a shortcut is not a discoverable interface (F1).
+   */
+  onNewRequest?: () => void;
   onRemoveChip: (key: ChipKey) => void;
   onRequestorChange: (value: string) => void;
   onSearchChange: (value: string) => void;
@@ -217,6 +231,17 @@ export function RequestsFilterBar({
             </DropdownMenuGroup>
           </DropdownMenuContent>
         </DropdownMenu>
+
+        {onNewRequest ? (
+          <Button
+            className="press-feedback ml-auto"
+            onClick={onNewRequest}
+            size="sm"
+          >
+            <Plus className="size-3.5" />
+            New request
+          </Button>
+        ) : null}
       </div>
 
       {filters.datePreset === "custom" ? (

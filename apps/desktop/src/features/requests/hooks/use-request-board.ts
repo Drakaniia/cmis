@@ -14,11 +14,21 @@ export type MoveOutcome =
   | { from: RequestStatus; item: RequestItem; index: number; ok: true }
   | { ok: false; reason: "forbidden" };
 
-/** The staff actor is filled in here, so callers cannot record the wrong name. */
-export interface DispensePayload {
-  batch: string;
-  expiry: string;
-  qty: number;
+/**
+ * What a completed hand-over produced: the record to append, and how much of the
+ * request is still outstanding.
+ *
+ * The stock movement itself happens in `deduct-stock.ts` *before* this is
+ * applied — the board records the outcome rather than reaching for the database,
+ * which keeps it the pure, synchronous state machine it has always been.
+ */
+export interface DispenseOutcome {
+  record: DispensingRecord;
+  /**
+   * Above zero keeps the card in Ready to Claim with a reduced `qty` (a partial
+   * hand-over, D4); zero moves it to Claimed.
+   */
+  remainingQty: number;
 }
 
 const ACTOR = "You";
@@ -262,26 +272,33 @@ export function useRequestBoard(
     [items, persist]
   );
 
-  const dispenseRequest = useCallback(
-    (id: string, payload: DispensePayload): boolean => {
+  /**
+   * Records one completed hand-over. A partial keeps the card in Ready to Claim
+   * with the outstanding quantity and an explicit history entry, so the skip is
+   * visible in the audit trail rather than hidden behind a reduced number.
+   */
+  const markDispensed = useCallback(
+    (id: string, outcome: DispenseOutcome): boolean => {
       const current = items.find((item) => item.id === id);
       if (!(current && canMove(current.status, "claimed"))) {
         return false;
       }
-      const record: DispensingRecord = {
-        at: new Date().toISOString(),
-        batch: payload.batch,
-        expiry: payload.expiry,
-        qty: payload.qty,
-        staff: ACTOR,
-      };
+      const partial = outcome.remainingQty > 0;
       const next: RequestItem = {
         ...current,
-        dispensing: record,
-        history: appendHistory(current, "claimed"),
-        status: "claimed",
+        dispensingRecords: [...current.dispensingRecords, outcome.record],
+        history: partial
+          ? appendHistory(
+              current,
+              "ready",
+              `Dispensed ${outcome.record.qty} ${current.unit} — ${outcome.remainingQty} still outstanding`
+            )
+          : appendHistory(current, "claimed"),
+        qty: partial ? outcome.remainingQty : current.qty,
+        status: partial ? "ready" : "claimed",
       };
       setItems((prev) => prev.map((item) => (item.id === id ? next : item)));
+      // A dispense moves real stock, so it is never offered an undo (D12/F12).
       setLastMove(null);
       persist([next]);
       return true;
@@ -290,30 +307,31 @@ export function useRequestBoard(
   );
 
   /**
-   * Bulk dispense — each request keeps its own batch, so staff can confirm a
-   * whole column without the records collapsing into one.
+   * Bulk dispense — each request keeps its own record, so staff can confirm a
+   * whole column without the hand-overs collapsing into one.
    */
-  const dispenseRequests = useCallback(
-    (payloads: { id: string; payload: DispensePayload }[]): number => {
-      const at = new Date().toISOString();
-      const byId = new Map(payloads.map((entry) => [entry.id, entry.payload]));
+  const markDispensedMany = useCallback(
+    (outcomes: { id: string; outcome: DispenseOutcome }[]): number => {
+      const byId = new Map(outcomes.map((entry) => [entry.id, entry.outcome]));
       const updated: RequestItem[] = [];
       for (const item of items) {
-        const payload = byId.get(item.id);
-        if (!(payload && canMove(item.status, "claimed"))) {
+        const outcome = byId.get(item.id);
+        if (!(outcome && canMove(item.status, "claimed"))) {
           continue;
         }
+        const partial = outcome.remainingQty > 0;
         updated.push({
           ...item,
-          dispensing: {
-            at,
-            batch: payload.batch,
-            expiry: payload.expiry,
-            qty: payload.qty,
-            staff: ACTOR,
-          },
-          history: appendHistory(item, "claimed"),
-          status: "claimed",
+          dispensingRecords: [...item.dispensingRecords, outcome.record],
+          history: partial
+            ? appendHistory(
+                item,
+                "ready",
+                `Dispensed ${outcome.record.qty} ${item.unit} — ${outcome.remainingQty} still outstanding`
+              )
+            : appendHistory(item, "claimed"),
+          qty: partial ? outcome.remainingQty : item.qty,
+          status: partial ? "ready" : "claimed",
         });
       }
       if (updated.length === 0) {
@@ -327,6 +345,26 @@ export function useRequestBoard(
     },
     [items, persist]
   );
+
+  /**
+   * Drops requests from the board after they have been deleted on disk. Only
+   * Pending cards are ever offered Cancel (F6), so the caller has already
+   * applied that guard — this is the state half of the removal.
+   */
+  const removeRequests = useCallback((ids: string[]): number => {
+    const removing = new Set(ids);
+    setItems((prev) => prev.filter((item) => !removing.has(item.id)));
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      for (const id of ids) {
+        next.delete(id);
+      }
+      return next;
+    });
+    // A deleted card cannot be undone back into existence.
+    setLastMove(null);
+    return removing.size;
+  }, []);
 
   const addNote = useCallback(
     (id: string, text: string) => {
@@ -350,7 +388,8 @@ export function useRequestBoard(
 
   /**
    * Undo the last structural move — Apple §16 Agency: easy undo for slips.
-   * Dispense and Deny are excluded: both write audit records.
+   * Dispense and Deny are excluded: both write audit records, and a dispense has
+   * moved real stock off the shelf as well (D12).
    */
   const undoLastMove = useCallback(() => {
     if (!lastMove) {
@@ -384,12 +423,13 @@ export function useRequestBoard(
     addNote,
     clearSelection,
     denyRequests,
-    dispenseRequest,
-    dispenseRequests,
     items,
+    markDispensed,
+    markDispensedMany,
     moveRequest,
     moveRequestAt,
     moveRequests,
+    removeRequests,
     replaceAll,
     selectedIds,
     selectedItems,
