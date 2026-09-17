@@ -1,12 +1,13 @@
-# CMIS — Clinic Management Information System
+# CMIS — Clinic Medicine Inventory System
 
 A Tauri desktop application for clinic inventory management, medication dispensing, and analytics. Built with TanStack Router, Vite, and TypeScript.
 
 ## Features
 
 - **Inventory Management** — Track and manage clinic supplies and medications
-- **Request Queue** — Handle medication and supply requests with approval workflows
-- **Dispensing** — Process and record medication dispensing transactions
+- **Request Queue** — Create requests from anywhere with Ctrl+N / ⌘N and move them through an approval workflow
+- **Quick Deduct** — Take stock off the shelf for a counter hand-over with Ctrl+D / ⌘D: one item, one quantity, one confirm, no queue and no wizard. The deduction still comes off the FEFO batch, is logged in the Dispensing Log, counts in analytics, and leaves a card in Claimed marked "Quick deduct" — with a few seconds of undo
+- **Dispensing** — Hand a request over and the quantity leaves the shelf automatically: the FEFO batch is decremented, the item status recomputed, and the hand-over recorded in the dispensing log and analytics
 - **Analytics Dashboard** — Visualize inventory trends and usage patterns with interactive charts
 
 ## Tech Stack

@@ -26,24 +26,35 @@ export function DispensingSection() {
           are packed.
         </DocsStep>
         <DocsStep title="Dispense at hand-over.">
-          Use Dispense → Claimed on the card, or the primary button in the
-          card’s detail view.
+          Use Dispense → Claimed on the card, the primary button in the card’s
+          detail view, or drag the card into the Claimed column. Dragging asks
+          for the same confirmation rather than moving the card on its own.
         </DocsStep>
-        <DocsStep title="Confirm the batch and quantity.">
-          CMIS suggests the batch that expires soonest; change it if you pulled
-          a different box. The quantity is checked against stock before it is
-          accepted.
+        <DocsStep title="Read the plan and confirm it.">
+          CMIS picks the batches for you, earliest expiry first, and the
+          confirmation states what will happen before anything moves: which
+          batch, how much is taken, and how much is left on the shelf
+          afterwards.
         </DocsStep>
         <DocsStep title="Check the totals.">
           Stock is reduced, the request moves to Claimed and the entry appears
-          here immediately.
+          here immediately. If the request asked for more than is on hand, only
+          what exists is taken and the card stays in Ready to Claim with the
+          remainder.
         </DocsStep>
       </DocsSteps>
 
       <DocsCallout title="Expired batches are not offered" tone="warning">
-        A batch past its expiry date cannot be dispensed. If the batch you are
-        holding was pulled from the shelf, dispose of it and record the
-        replacement batch instead.
+        A batch past its expiry date can never be dispensed — it is excluded
+        before the plan is built, not warned about afterwards. If the batch you
+        are holding was pulled from the shelf, dispose of it and record the
+        replacement instead.
+      </DocsCallout>
+
+      <DocsCallout title="One request can be dispensed more than once">
+        A partial hand-over is a real, recorded event: it gets its own row in
+        this log, and the card keeps its remaining quantity in Ready to Claim
+        for the next visit. Open the request to see every hand-over it has had.
       </DocsCallout>
 
       <DocsSubHeading>Looking something up</DocsSubHeading>
