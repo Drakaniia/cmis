@@ -110,7 +110,8 @@ export function useQuickDeductPlan(item: InventoryItem | null, qty: number) {
             item.displayName,
             qty,
             defaultUnitForItem(item),
-            QUICK_DEDUCT_OPTIONS
+            QUICK_DEDUCT_OPTIONS,
+            item.id
           ),
     queryKey: ["quick-deduct-plan", item?.id ?? "none", qty],
     retry: false,
@@ -201,7 +202,7 @@ export function useQuickDeduct() {
 
       // Stock first, card second: the reverse is exactly the bug this fixes.
       const result = await deductStock(
-        { id, medicine: item.displayName, qty, unit },
+        { id, itemId: item.id, medicine: item.displayName, qty, unit },
         QUICK_DEDUCT_OPTIONS
       );
       if (!result.ok) {
@@ -221,6 +222,7 @@ export function useQuickDeduct() {
           },
         ],
         id,
+        itemId: item.id,
         medicine: item.displayName,
         notes: [],
         qty,
@@ -234,7 +236,27 @@ export function useQuickDeduct() {
         submittedAt: at,
         unit,
       };
-      await saveRequest(card);
+      try {
+        await saveRequest(card);
+      } catch (error) {
+        // The stock is already taken, but the card would not survive a restart.
+        // Surface the failure so the operator knows the record is missing.
+        console.error(
+          "[persistence] saveRequest failed for quick deduct",
+          error
+        );
+        toast.error(
+          "Deduction saved to shelf, but the record did not persist",
+          {
+            description:
+              error instanceof Error
+                ? error.message
+                : "Restart will lose this card.",
+            id: TOAST_ID,
+          }
+        );
+        throw error;
+      }
       notifyRequestsChanged();
       await invalidate();
 

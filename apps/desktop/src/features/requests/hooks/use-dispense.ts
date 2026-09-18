@@ -12,6 +12,7 @@ import type { DispenseOutcome } from "./use-request-board";
 
 /** The minimum a hand-over needs — a card, or a draft row on the way in. */
 export interface DispensableRequest {
+  itemId?: string | null;
   medicine: string;
   qty: number;
   unit: string;
@@ -52,7 +53,13 @@ export function useDispensePlan(
           ok: false,
         });
       }
-      return planDeduction(request.medicine, request.qty, request.unit);
+      return planDeduction(
+        request.medicine,
+        request.qty,
+        request.unit,
+        {},
+        request.itemId ?? null
+      );
     },
     queryKey: request ? planKey(request) : ["dispense-plan", "none", 0, ""],
     retry: false,
@@ -69,7 +76,13 @@ export function useDispensePlans(
     queries: requests.map((request) => ({
       enabled,
       queryFn: (): Promise<DeductPlanResult> =>
-        planDeduction(request.medicine, request.qty, request.unit),
+        planDeduction(
+          request.medicine,
+          request.qty,
+          request.unit,
+          {},
+          request.itemId ?? null
+        ),
       queryKey: planKey(request),
       retry: false,
       staleTime: 0,
@@ -109,6 +122,7 @@ export function useDispense() {
         // biome-ignore lint/performance/noAwaitInLoops: hand-overs must commit in sequence (E5)
         const result = await deductStock({
           id: item.id,
+          itemId: item.itemId ?? null,
           medicine: item.medicine,
           qty: item.qty,
           unit: item.unit,

@@ -60,7 +60,9 @@ export function useRequestPersistence(_seed: RequestItem[]) {
   }, [reload]);
 
   const persist = useCallback((item: RequestItem) => {
-    saveRequest(item);
+    saveRequest(item).catch((error) => {
+      console.error("[persistence] persist failed", error);
+    });
   }, []);
 
   return { hydrated, persist, ready, reload } as const;
