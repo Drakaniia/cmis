@@ -46,6 +46,8 @@ interface RequestRow {
   denied_note: string | null;
   denied_reason: string | null;
   id: string;
+  /** Added by migration 0009; absent on a build that has not run it yet. */
+  item_id?: string | null;
   medicine: string;
   qty: number;
   reason: string;
@@ -176,6 +178,7 @@ function assemble(
       dispensingRecords: dispensingByRequest.get(row.id) ?? [],
       history: historyByRequest.get(row.id) ?? [],
       id: row.id,
+      ...(row.item_id ? { itemId: row.item_id } : { itemId: null }),
       medicine: row.medicine,
       notes: notesByRequest.get(row.id) ?? [],
       qty: row.qty,
@@ -228,7 +231,8 @@ export async function loadRequestIds(): Promise<string[]> {
   try {
     const rows = await db.select<{ id: string }[]>("SELECT id FROM requests");
     return rows.map((row) => row.id);
-  } catch {
+  } catch (error) {
+    console.error("[persistence] loadRequestIds failed", error);
     return [];
   }
 }
@@ -247,7 +251,8 @@ export async function deleteRequest(id: string): Promise<boolean> {
   try {
     await db.execute("DELETE FROM requests WHERE id = $1", [id]);
     return true;
-  } catch {
+  } catch (error) {
+    console.error("[persistence] deleteRequest failed", error);
     return false;
   }
 }
@@ -266,7 +271,8 @@ export async function loadRequests(): Promise<RequestItem[] | null> {
       db.select<DispensingRow[]>("SELECT * FROM dispensing_records"),
     ]);
     return orderRequests(assemble(rows, history, notes, dispensing));
-  } catch {
+  } catch (error) {
+    console.error("[persistence] loadRequests failed", error);
     return null;
   }
 }
@@ -278,40 +284,89 @@ export async function saveRequest(item: RequestItem): Promise<void> {
     return;
   }
   try {
-    // 14 columns bind 14 values. `branch` used to be listed here and does not
+    // 15 columns bind 15 values. `branch` used to be listed here and does not
     // exist on `requests` (it is `audit_log`'s column), which made every write
     // throw "no such column" into the catch below — the board looked saved and
     // lost everything on restart (AF5/F13). Count the columns when adding one:
-    // that bug was invisible for exactly this reason.
-    await db.execute(
-      `INSERT INTO requests (
-         id, requestor_name, requestor_id, requestor_email, medicine, category,
-         qty, unit, reason, status, submitted_at, denied_reason, denied_note,
-         source
-       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
-       ON CONFLICT(id) DO UPDATE SET
-         status = excluded.status,
-         qty = excluded.qty,
-         denied_reason = excluded.denied_reason,
-         denied_note = excluded.denied_note,
-         source = excluded.source`,
-      [
-        item.id,
-        item.requestor.name,
-        item.requestor.id,
-        item.requestor.email,
-        item.medicine,
-        item.category,
-        item.qty,
-        item.unit,
-        item.reason,
-        item.status,
-        item.submittedAt,
-        item.deniedReason ?? null,
-        item.deniedNote ?? null,
-        item.source,
-      ]
-    );
+    // that bug was invisible for exactly this reason. `item_id` (migration 0009)
+    // is the stable link that survives a rename — history no longer detaches
+    // when the display name changes (AF13).
+    const withItemId = async () =>
+      db.execute(
+        `INSERT INTO requests (
+           id, requestor_name, requestor_id, requestor_email, medicine, category,
+           qty, unit, reason, status, submitted_at, denied_reason, denied_note,
+           source, item_id
+         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+         ON CONFLICT(id) DO UPDATE SET
+           status = excluded.status,
+           qty = excluded.qty,
+           denied_reason = excluded.denied_reason,
+           denied_note = excluded.denied_note,
+           source = excluded.source,
+           item_id = excluded.item_id`,
+        [
+          item.id,
+          item.requestor.name,
+          item.requestor.id,
+          item.requestor.email,
+          item.medicine,
+          item.category,
+          item.qty,
+          item.unit,
+          item.reason,
+          item.status,
+          item.submittedAt,
+          item.deniedReason ?? null,
+          item.deniedNote ?? null,
+          item.source,
+          item.itemId ?? null,
+        ]
+      );
+
+    try {
+      await withItemId();
+    } catch (error) {
+      // Graceful downgrade: a build that has not yet run migration 0009 has no
+      // `item_id` column — retry without it rather than losing the whole board.
+      const message = error instanceof Error ? error.message : String(error);
+      if (message.includes("item_id") && message.includes("no such column")) {
+        console.warn(
+          "[persistence] requests.item_id missing — saving without link (run migration 0009)"
+        );
+        await db.execute(
+          `INSERT INTO requests (
+             id, requestor_name, requestor_id, requestor_email, medicine, category,
+             qty, unit, reason, status, submitted_at, denied_reason, denied_note,
+             source
+           ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+           ON CONFLICT(id) DO UPDATE SET
+             status = excluded.status,
+             qty = excluded.qty,
+             denied_reason = excluded.denied_reason,
+             denied_note = excluded.denied_note,
+             source = excluded.source`,
+          [
+            item.id,
+            item.requestor.name,
+            item.requestor.id,
+            item.requestor.email,
+            item.medicine,
+            item.category,
+            item.qty,
+            item.unit,
+            item.reason,
+            item.status,
+            item.submittedAt,
+            item.deniedReason ?? null,
+            item.deniedNote ?? null,
+            item.source,
+          ]
+        );
+      } else {
+        throw error;
+      }
+    }
 
     await db.execute("DELETE FROM request_history WHERE request_id = $1", [
       item.id,
@@ -372,8 +427,9 @@ export async function saveRequest(item: RequestItem): Promise<void> {
         )
       )
     );
-  } catch {
-    // Persistence is best-effort; the board stays usable in memory.
+  } catch (error) {
+    console.error("[persistence] saveRequest failed", error);
+    throw error;
   }
 }
 

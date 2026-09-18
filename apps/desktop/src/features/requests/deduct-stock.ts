@@ -118,14 +118,22 @@ export type DeductResult =
  * Read-only: resolves the item, picks batches FEFO and works out how much fits.
  * Expired batches are excluded by `checkStockAsync`, so dispensing expired
  * medicine is not something this can be talked into.
+ *
+ * When `itemId` is provided (requests created after migration 0009 carry it),
+ * the item is resolved directly by id so a rename does not detach the stock
+ * check from its history (AF13). Legacy rows with a null item_id fall back to
+ * the normalized text match.
  */
 export async function planDeduction(
   medicine: string,
   qty: number,
   unit: string,
-  options: DeductOptions = {}
+  options: DeductOptions = {},
+  itemId?: string | null
 ): Promise<DeductPlanResult> {
-  const check = await checkStockAsync({ medicine, qty, unit });
+  const check = itemId
+    ? await checkStockAsync({ itemId, medicine, qty, unit })
+    : await checkStockAsync({ medicine, qty, unit });
 
   if (check.state === "no-inventory-item" || check.itemId === null) {
     return {
@@ -187,6 +195,7 @@ export async function planDeduction(
 export async function deductStock(
   request: {
     id: string;
+    itemId?: string | null;
     medicine: string;
     qty: number;
     unit: string;
@@ -197,7 +206,8 @@ export async function deductStock(
     request.medicine,
     request.qty,
     request.unit,
-    options
+    options,
+    request.itemId ?? null
   );
   if (!planned.ok) {
     return planned;
@@ -357,18 +367,15 @@ export async function undoStock(
 
   // The day's total goes back down, floored at zero: a reversal can never make
   // a day negative, even if the aggregate has already been written down by some
-  // other correction (F5, spec §12).
-  const eventRows = await db.select<{ id: number; qty: number }[]>(
-    "SELECT id, qty FROM dispensing_events WHERE item_id = ? AND date = ?",
-    [snapshot.itemId, snapshot.date]
+  // other correction (F5, spec §12). Atomic so a concurrent dispense that added
+  // 3 between the read and the write does not lose its +3 (the old read-modify-
+  // write would read 10, the concurrent write make it 13, the undo write 6).
+  // If the day is busy, the floor hides a concurrent write — follow-up is to
+  // track per-request deltas rather than a shared daily counter.
+  await db.execute(
+    "UPDATE dispensing_events SET qty = CASE WHEN qty - ? < 0 THEN 0 ELSE qty - ? END WHERE item_id = ? AND date = ?",
+    [snapshot.take, snapshot.take, snapshot.itemId, snapshot.date]
   );
-  const [event] = eventRows;
-  if (event) {
-    await db.execute("UPDATE dispensing_events SET qty = ? WHERE id = ?", [
-      Math.max(event.qty - snapshot.take, 0),
-      event.id,
-    ]);
-  }
 
   // The record is deleted by the caller, so the reversal has to be traceable on
   // its own: the log says what went back, when, and under which reference.

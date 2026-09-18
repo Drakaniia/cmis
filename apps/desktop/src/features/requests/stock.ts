@@ -144,18 +144,33 @@ export async function onHandForAsync(medicine: string): Promise<number> {
 /**
  * Read-only plan for handing one request over: what fits now, from which
  * batches, and what would be left on the card.
+ *
+ * When `item.itemId` is provided (requests created after migration 0009), the
+ * item is resolved directly by id so a rename does not detach the check
+ * (AF13). Otherwise the normalized text match is used as before.
  */
 export async function checkStockAsync(item: {
+  itemId?: string | null;
   medicine: string;
   qty: number;
   unit: string;
 }): Promise<StockCheck> {
   const db = await getDb();
-  const itemRows = await db.select<InventoryItemRow[]>(
-    `SELECT id, name, dosage, qty, threshold FROM inventory_items WHERE ${MEDICINE_WHERE_SQL} LIMIT 1`,
-    medicineMatchParams(item.medicine)
-  );
-  const inventoryItem = itemRows[0] ?? null;
+  let inventoryItem: InventoryItemRow | null = null;
+  if (item.itemId) {
+    const direct = await db.select<InventoryItemRow[]>(
+      "SELECT id, name, dosage, qty, threshold FROM inventory_items WHERE id = ? LIMIT 1",
+      [item.itemId]
+    );
+    inventoryItem = direct[0] ?? null;
+  }
+  if (!inventoryItem) {
+    const itemRows = await db.select<InventoryItemRow[]>(
+      `SELECT id, name, dosage, qty, threshold FROM inventory_items WHERE ${MEDICINE_WHERE_SQL} LIMIT 1`,
+      medicineMatchParams(item.medicine)
+    );
+    inventoryItem = itemRows[0] ?? null;
+  }
 
   if (!inventoryItem) {
     return {
