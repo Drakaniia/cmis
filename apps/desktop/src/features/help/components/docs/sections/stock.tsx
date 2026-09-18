@@ -73,6 +73,13 @@ export function StockSection() {
         underneath shows which batch leaves the shelf and what is left
         afterwards.
       </DocsP>
+      <DocsCallout title="In a browser tab Ctrl+D may bookmark" tone="note">
+        Inside the Tauri desktop shell <DocsKey>Ctrl</DocsKey>
+        <DocsKey>D</DocsKey> opens the deduct form. In a plain browser tab the
+        browser may claim that shortcut for bookmarking — use{" "}
+        <DocsKey>Ctrl</DocsKey>
+        <DocsKey>K</DocsKey> then type “Deduct stock…” as the fallback.
+      </DocsCallout>
       <DocsP>
         Confirming decrements the earliest-expiring batch (splitting across two
         batches when one cannot cover the quantity), recomputes the item’s

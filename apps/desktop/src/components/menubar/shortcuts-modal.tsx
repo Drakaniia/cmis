@@ -24,7 +24,10 @@ const SHORTCUTS: { group: string; items: { keys: string; label: string }[] }[] =
       group: "Navigation",
       items: [
         { keys: "Ctrl + N  /  ⌘N", label: "New Request" },
-        { keys: "Ctrl + D  /  ⌘D", label: "Deduct Stock" },
+        {
+          keys: "Ctrl + D  /  ⌘D",
+          label: "Deduct Stock (in browser: Ctrl+K → Deduct stock…)",
+        },
         { keys: "Alt + F / E / V / W / H", label: "Open Menu" },
         { keys: "← →  ↑ ↓", label: "Move Across / Within Menu" },
         { keys: "Enter / Esc", label: "Activate / Close Menu" },

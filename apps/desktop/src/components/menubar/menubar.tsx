@@ -29,7 +29,7 @@ import { useHelpDialogs } from "@/features/help/help-dialogs-context";
 import { useQuickDeductDialog } from "@/features/inventory/quick-deduct-dialog-context";
 import { useNewRequestDialog } from "@/features/requests/new-request-dialog-context";
 import { useUpdaterOptional } from "@/features/updater/use-updater";
-import { openExternal } from "@/lib/open-external";
+import { isTauriRuntime, openExternal } from "@/lib/open-external";
 import { acceptsTypedText } from "@/lib/typed-text";
 
 import { AboutModal } from "./about-modal";
@@ -455,6 +455,28 @@ export function DesktopMenubar({
       unlisten?.();
     };
   }, [dispatchById]);
+
+  // In a plain browser tab Ctrl+D is a bookmark — the Tauri shell owns that
+  // shortcut natively, but outside it the browser may win even after a bubbling
+  // preventDefault. Capture early so the bookmark never fires, then let the
+  // normal accelerator dispatch open the modal. The palette (Ctrl+K → "Deduct
+  // stock…") remains the fallback when the browser cannot be prevented.
+  useEffect(() => {
+    if (isTauriRuntime()) {
+      return;
+    }
+    const capture = (event: KeyboardEvent) => {
+      const combo = buildCombo(event);
+      if (
+        (combo === "ctrl+d" || combo === "meta+d") &&
+        !acceptsTypedText(event.target)
+      ) {
+        event.preventDefault();
+      }
+    };
+    window.addEventListener("keydown", capture, true);
+    return () => window.removeEventListener("keydown", capture, true);
+  }, []);
 
   // Global accelerator + Alt mnemonics
   useEffect(() => {
