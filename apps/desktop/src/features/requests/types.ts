@@ -84,6 +84,14 @@ export interface RequestItem {
   history: StatusHistoryEntry[];
   /** e.g. REQ-2026-0141 */
   id: string;
+  /**
+   * Stable link to the inventory item this request was created for (migration
+   * 0009). Null for rows created before the column existed, and for the
+   * textual fallback when the item has since been deleted. Existing history
+   * queries join on this first and fall back to the `medicine` text only when
+   * it is null, so renaming an item no longer detaches its history (AF13).
+   */
+  itemId?: string | null;
   /** Medicine + strength, matching the inventory item name verbatim */
   medicine: string;
   notes: InternalNote[];

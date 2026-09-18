@@ -38,6 +38,14 @@ export const MEDICINE_WHERE_SQL =
 export const REQUEST_MEDICINE_WHERE_SQL =
   "lower(trim(r.medicine)) = lower(trim(?))";
 
+/**
+ * History lookup that survives a rename (AF13, migration 0009).
+ * `requests.item_id` is the stable link; the normalized text is the fallback
+ * for rows created before the column existed. Binds `requestHistoryParams`.
+ */
+export const REQUEST_HISTORY_WHERE_SQL =
+  "(r.item_id = ? OR lower(trim(r.medicine)) = lower(trim(?)))";
+
 /** The three `?` values `MEDICINE_WHERE_SQL` binds. */
 export function medicineMatchParams(
   medicine: string
@@ -48,4 +56,12 @@ export function medicineMatchParams(
 /** The single `?` value `REQUEST_MEDICINE_WHERE_SQL` binds. */
 export function requestMedicineParams(displayName: string): [string] {
   return [displayName.trim()];
+}
+
+/** The two `?` values `REQUEST_HISTORY_WHERE_SQL` binds. */
+export function requestHistoryParams(
+  itemId: string,
+  displayName: string
+): [string, string] {
+  return [itemId, displayName.trim()];
 }
