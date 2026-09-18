@@ -77,6 +77,14 @@ cmis/
 └── package.json          # Root package.json
 ```
 
+## Download
+
+Get Windows installers (`.exe` / `.msi`) from [GitHub Releases](https://github.com/Drakaniia/cmis/releases). Windows builds are Authenticode-signed via [SignPath Foundation](https://signpath.org) (free OSS code signing) — see [Code Signing Policy](docs/signing-policy.md).
+
+## Privacy
+
+CMIS is local-first — no cloud, no telemetry. See [Privacy Policy](docs/privacy.md).
+
 ## License
 
 [MIT](LICENSE)
