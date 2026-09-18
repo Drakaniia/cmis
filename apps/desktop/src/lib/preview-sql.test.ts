@@ -47,11 +47,14 @@ describe("bindPlaceholders", () => {
   });
 
   it("leaves a placeholder inside a string literal alone", () => {
-    const bound = bindPlaceholders("SELECT 'a ? b $1' AS lit, t.a FROM t WHERE t.a = ?", [
-      "value",
-    ]);
+    const bound = bindPlaceholders(
+      "SELECT 'a ? b $1' AS lit, t.a FROM t WHERE t.a = ?",
+      ["value"]
+    );
 
-    expect(bound.sql).toBe("SELECT 'a ? b $1' AS lit, t.a FROM t WHERE t.a = ?");
+    expect(bound.sql).toBe(
+      "SELECT 'a ? b $1' AS lit, t.a FROM t WHERE t.a = ?"
+    );
     expect(bound.params).toEqual(["value"]);
   });
 });
