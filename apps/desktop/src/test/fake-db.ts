@@ -329,6 +329,32 @@ export function createFakeDb(
   }
 
   function insert(sql: string, params: unknown[]): void {
+    // Atomic upsert for dispensing_events: INSERT ... ON CONFLICT(item_id, date) DO UPDATE SET qty = qty + excluded.qty
+    if (sql.includes("ON CONFLICT")) {
+      const match = INSERT_RE.exec(sql.trim());
+      if (!match) {
+        unsupported(sql);
+        return;
+      }
+      const columns = match[2].split(",").map((column) => column.trim());
+      const row: DbRow = {};
+      columns.forEach((column, index) => {
+        row[column] = params[index] ?? null;
+      });
+      const table = readTable(match[1]);
+      const existing = table.find(
+        (candidate) =>
+          String(candidate.item_id) === String(row.item_id) &&
+          String(candidate.date) === String(row.date)
+      );
+      if (existing) {
+        const add = Number(row.qty ?? 0);
+        existing.qty = Number(existing.qty ?? 0) + add;
+        return;
+      }
+      table.push(row);
+      return;
+    }
     const match = INSERT_RE.exec(sql.trim());
     if (!match) {
       unsupported(sql);
@@ -347,7 +373,38 @@ export function createFakeDb(
    * updates, and the rollback's `SET qty = (SELECT b.qty FROM "backup" b …)`
    * column copy. SQLite binds `?` in text order, which is the order parsed.
    */
+  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: test helper with branching for SQL shapes
   function update(sql: string, params: unknown[]): void {
+    // Atomic undo: UPDATE dispensing_events SET qty = CASE WHEN qty - ? < 0 THEN 0 ELSE qty - ? END WHERE item_id = ? AND date = ?
+    if (sql.includes("CASE WHEN qty - ?")) {
+      const take = Number(params[0]);
+      const itemId = String(params[2]);
+      const date = String(params[3]);
+      const rows = readTable("dispensing_events").filter(
+        (row) => String(row.item_id) === itemId && String(row.date) === date
+      );
+      for (const row of rows) {
+        const current = Number(row.qty ?? 0);
+        row.qty = Math.max(current - take, 0);
+      }
+      return;
+    }
+    // Atomic daily add: UPDATE dispensing_events SET qty = qty + ? WHERE item_id = ? AND date = ?
+    if (
+      sql.includes("SET qty = qty + ? WHERE item_id = ? AND date = ?") &&
+      params.length === 3
+    ) {
+      const add = Number(params[0]);
+      const itemId = String(params[1]);
+      const date = String(params[2]);
+      const rows = readTable("dispensing_events").filter(
+        (row) => String(row.item_id) === itemId && String(row.date) === date
+      );
+      for (const row of rows) {
+        row.qty = Number(row.qty ?? 0) + add;
+      }
+      return;
+    }
     const head = UPDATE_HEAD_RE.exec(sql.trim());
     if (!head) {
       unsupported(sql);
