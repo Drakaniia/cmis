@@ -65,6 +65,18 @@ fn db_migrations() -> Vec<Migration> {
             sql: include_str!("../migrations/0008_request_source.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 9,
+            description: "request_item_id",
+            sql: include_str!("../migrations/0009_request_item_id.sql"),
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 10,
+            description: "dispensing_events_unique",
+            sql: include_str!("../migrations/0010_dispensing_events_unique.sql"),
+            kind: MigrationKind::Up,
+        },
     ]
 }
 
