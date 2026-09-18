@@ -60,6 +60,7 @@ interface RouteCommandEntry {
 interface ActionCommandEntry {
   action: "quick-deduct";
   icon: LucideIcon;
+  keywords?: string[];
   kind: "action";
   label: string;
   section: string;
@@ -139,6 +140,7 @@ const ACTION_ITEMS: ActionCommandEntry[] = [
   {
     action: "quick-deduct",
     icon: PackageMinus,
+    keywords: ["deduct", "stock", "inventory", "ctrl+d", "quick deduct"],
     kind: "action",
     label: "Deduct stock…",
     section: "Inventory",
@@ -332,17 +334,26 @@ export function CommandPalette() {
                     <CommandEmpty>No results found.</CommandEmpty>
                     {Object.entries(groupedItems).map(([section, items]) => (
                       <CommandGroup heading={section} key={section}>
-                        {items.map((item) => (
-                          <CommandItem
-                            className="press-feedback"
-                            key={commandKey(item)}
-                            onSelect={selectHandlers[commandKey(item)]}
-                            value={item.label}
-                          >
-                            <item.icon className="mr-2 size-4" />
-                            <span>{item.label}</span>
-                          </CommandItem>
-                        ))}
+                        {items.map((item) => {
+                          const keywords =
+                            item.kind === "action" && item.keywords
+                              ? item.keywords.join(" ")
+                              : "";
+                          const value = keywords
+                            ? `${item.label} ${keywords}`
+                            : item.label;
+                          return (
+                            <CommandItem
+                              className="press-feedback"
+                              key={commandKey(item)}
+                              onSelect={selectHandlers[commandKey(item)]}
+                              value={value}
+                            >
+                              <item.icon className="mr-2 size-4" />
+                              <span>{item.label}</span>
+                            </CommandItem>
+                          );
+                        })}
                       </CommandGroup>
                     ))}
                   </CommandList>
