@@ -53,7 +53,26 @@ export async function recordDispensing(
   const today = new Date().toISOString().slice(0, 10);
   const day = new Date().getDate();
   const month = today.slice(0, 7);
-  // Upsert daily event: insert or add
+  // Atomic daily upsert so two concurrent dispenses for the same item on the
+  // same day do not both INSERT or both read 10 and both write 13, losing one
+  // take. Requires the unique index on (item_id, date) added in migration
+  // 0010 — without it ON CONFLICT has no target. The fallback keeps the old
+  // SELECT-then-write working on a build that has not yet migrated.
+  try {
+    await db.execute(
+      `INSERT INTO dispensing_events (item_id, date, day, month, qty) VALUES (?, ?, ?, ?, ?)
+       ON CONFLICT(item_id, date) DO UPDATE SET qty = qty + excluded.qty`,
+      [itemId, today, day, month, qty]
+    );
+    return;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    const isConflictUnsupported =
+      message.includes("ON CONFLICT") || message.includes("no such column");
+    if (!isConflictUnsupported) {
+      throw error;
+    }
+  }
   const existing = await db.select<{ qty: number }[]>(
     "SELECT qty FROM dispensing_events WHERE item_id = ? AND date = ?",
     [itemId, today]

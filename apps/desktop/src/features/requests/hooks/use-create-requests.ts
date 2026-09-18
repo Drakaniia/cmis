@@ -169,6 +169,7 @@ export function buildRequestItems(
       dispensingRecords: [],
       history: [entry],
       id,
+      itemId: item.id,
       medicine: item.displayName,
       notes: [],
       qty,
@@ -249,7 +250,17 @@ export function useCreateRequests() {
         ids,
         new Date().toISOString()
       );
-      await saveRequests(created);
+      try {
+        await saveRequests(created);
+      } catch (error) {
+        console.error("[persistence] saveRequests failed", error);
+        throw new Error(
+          "Failed to save request — it will not survive a restart.",
+          {
+            cause: error,
+          }
+        );
+      }
       notifyRequestsChanged();
       return { created, skipped };
     },

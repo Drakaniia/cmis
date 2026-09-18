@@ -2,8 +2,8 @@ import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { getDb } from "@/lib/db";
 import {
-  REQUEST_MEDICINE_WHERE_SQL,
-  requestMedicineParams,
+  REQUEST_HISTORY_WHERE_SQL,
+  requestHistoryParams,
 } from "../domain/medicine-match";
 import type { InventoryItem } from "../types";
 
@@ -75,7 +75,7 @@ export function useItemHistory(
   enabled: boolean
 ): ItemHistory {
   const itemId = item?.id ?? null;
-  const displayName = item?.name ?? "";
+  const displayName = item?.displayName ?? item?.name ?? "";
   // Deriving the limit from the item it belongs to resets the paging when the
   // modal moves to another product, without a state-resetting effect.
   const [paging, setPaging] = useState({
@@ -93,8 +93,8 @@ export function useItemHistory(
         [itemId]
       );
       const recordRows = await db.select<HistoryRow[]>(
-        `SELECT d.at, d.batch, d.qty, d.staff, r.requestor_name FROM dispensing_records d JOIN requests r ON r.id = d.request_id WHERE ${REQUEST_MEDICINE_WHERE_SQL} ORDER BY d.at DESC LIMIT ? OFFSET ?`,
-        [...requestMedicineParams(displayName), limit, 0]
+        `SELECT d.at, d.batch, d.qty, d.staff, r.requestor_name FROM dispensing_records d JOIN requests r ON r.id = d.request_id WHERE ${REQUEST_HISTORY_WHERE_SQL} ORDER BY d.at DESC LIMIT ? OFFSET ?`,
+        [...requestHistoryParams(itemId ?? "", displayName), limit, 0]
       );
       return {
         rows: recordRows.map((row) => ({
