@@ -33,6 +33,31 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      # ── App version ───────────────────────────────────────────────────────
+      # The tag is the release identity, so it is the app version too. Without
+      # this, the version committed in tauri.conf.json (not the tag) names the
+      # installers and fills in latest.json, so a tagged release republishes
+      # whatever version happens to be committed.
+      # `--config` is the only override that works: the CLI *writes* TAURI_CONFIG
+      # from it for the Rust build scripts but never reads that variable, so
+      # exporting TAURI_CONFIG would version the app while leaving the installer
+      # filenames and latest.json at the committed version.
+      - name: Derive app version from tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $version = $tag -replace '^v', ''
+          if ($version -notmatch '^\d+\.\d+\.\d+$') {
+            throw "Tag '$tag' is not a plain vX.Y.Z version. The Windows bundlers require major.minor.build, and the updater compares this against latest.json."
+          }
+          # Forward slashes only: tauri-action parses its `args` input with
+          # string-argv, which would swallow backslashes as escape characters.
+          $conf = (Join-Path $env:RUNNER_TEMP 'version.conf.json') -replace '\\', '/'
+          @{ version = $version } | ConvertTo-Json -Compress | Set-Content $conf -Encoding utf8NoBOM
+          "VERSION_CONFIG=$conf" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8NoBOM
+          Write-Host "Stamping app version $version (from tag $tag)"
+
       - name: Build, sign and publish release (tauri-action)
         if: startsWith(github.ref, 'refs/tags/v')
         uses: tauri-apps/tauri-action@v0
@@ -42,6 +67,7 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           projectPath: apps/desktop
+          args: --config ${{ env.VERSION_CONFIG }}
           tagName: ${{ github.ref_name }}
           releaseName: "cmis ${{ github.ref_name }}"
           releaseBody: "See the assets to download and install this version."
