@@ -22,7 +22,7 @@ import { LowStockFiltersBar } from "./low-stock-filters";
 import { LowStockList } from "./low-stock-list";
 import { ReorderSheet } from "./reorder-sheet";
 import { StockDetailModal } from "./stock-detail-modal";
-import { StockInWizard } from "./stock-in-wizard";
+import { StockInWizard } from "./stock-in-wizard/stock-in-wizard";
 import { StockOutWizard } from "./stock-out-wizard";
 
 interface WizardStockInDraft {
