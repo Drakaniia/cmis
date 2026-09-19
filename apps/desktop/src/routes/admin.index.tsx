@@ -1,30 +1,63 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useCallback } from "react";
 
 import { AdminHealthRow } from "@/features/dashboard/components/admin-health-row";
 import { AlertsBand } from "@/features/dashboard/components/alerts-band";
+import { DashboardMonthFilter } from "@/features/dashboard/components/dashboard-month-filter";
 import { StatGrid } from "@/features/dashboard/components/stat-grid";
 import {
   useDashboardStats,
   useDispensingVelocity,
   useHourlyActivity,
+  useStockAdjustments,
 } from "@/features/dashboard/hooks/use-dashboard-stats";
 import { dashboardLinks } from "@/features/dashboard/links";
 import { NoInventoryEmptyState } from "@/features/inventory/components/no-inventory-empty-state";
 import { buildExpiryRows } from "@/features/inventory/domain/expiry";
 import { buildLowStockRows } from "@/features/inventory/domain/low-stock";
 import { useInventoryItems } from "@/features/inventory/hooks/use-inventory-items";
+import { isMonthKey, monthKey } from "@/lib/month";
+
+export interface AdminSearch {
+  month?: string;
+}
+
+function validateAdminSearch(search: Record<string, unknown>): AdminSearch {
+  const { month } = search;
+  if (typeof month === "string" && isMonthKey(month)) {
+    return { month };
+  }
+  return {};
+}
 
 export const Route = createFileRoute("/admin/")({
   component: AdminIndex,
+  validateSearch: validateAdminSearch,
 });
 
 const links = dashboardLinks();
 
 function AdminIndex() {
+  const { month } = Route.useSearch();
+  const navigate = Route.useNavigate();
+  const activeMonth = month ?? monthKey();
+
+  const handleMonthChange = useCallback(
+    (next: string) => {
+      const cur = monthKey();
+      navigate({
+        replace: true,
+        search: next === cur ? {} : { month: next },
+      });
+    },
+    [navigate]
+  );
+
   const { data: stats } = useDashboardStats();
   const { data: inventory, isLoading: inventoryLoading } = useInventoryItems();
-  const { data: velocity } = useDispensingVelocity("2026-08");
+  const { data: velocity } = useDispensingVelocity(activeMonth);
   const { data: hourly } = useHourlyActivity();
+  const { data: adjustments } = useStockAdjustments();
 
   const totalItems = stats?.totalItems ?? 0;
   const isEmpty = totalItems === 0 && inventory?.length === 0;
@@ -114,7 +147,7 @@ function AdminIndex() {
       hour,
       requests: 0,
     }));
-  const stockAdjustments = {
+  const stockAdjustments = adjustments ?? {
     discrepancies: { count: 0, items: [] },
     flagged: { count: 0, items: [] },
     transfers: { count: 0, items: [] },
@@ -135,7 +168,22 @@ function AdminIndex() {
           <StatGrid links={links} stats={homeStats} />
         </section>
       </div>
-      <div className="mt-4 space-y-4 sm:mt-5">
+      {/* Month filter — controls only Dispensing velocity (user choice), §12 pill, §1 press-feedback */}
+      <div className="mt-4 flex items-center justify-between gap-3 sm:mt-5">
+        <p className="text-caption text-muted-foreground">
+          <span className="hidden sm:inline">Dispensing velocity • </span>
+          <span className="sm:hidden">Velocity • </span>
+          <span className="font-medium text-foreground">{activeMonth}</span>
+          {activeMonth === monthKey() ? null : (
+            <span className="ml-1 text-muted-foreground">(filtered)</span>
+          )}
+        </p>
+        <DashboardMonthFilter
+          onChange={handleMonthChange}
+          value={activeMonth}
+        />
+      </div>
+      <div className="mt-3 space-y-4 sm:mt-4">
         <section aria-label="System health and activity">
           <AdminHealthRow
             dispensingVelocity={dispensingVelocity}
