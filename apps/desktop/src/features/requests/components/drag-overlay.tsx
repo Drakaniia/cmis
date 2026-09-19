@@ -1,9 +1,4 @@
-import {
-  type MotionValue,
-  motion,
-  useReducedMotion,
-  useTransform,
-} from "motion/react";
+import { type MotionValue, motion } from "motion/react";
 import type * as React from "react";
 import { createPortal } from "react-dom";
 
@@ -13,7 +8,10 @@ export type OverlayHandlers = Pick<
   "onPointerCancel" | "onPointerDown" | "onPointerMove" | "onPointerUp"
 >;
 
-import type { DragOverlay as DragOverlayState } from "../hooks/use-card-drag";
+import type {
+  DragOverlay as DragOverlayState,
+  DragPhase,
+} from "../hooks/use-card-drag/types";
 import { RequestCardContent } from "./request-card";
 
 /**
@@ -24,8 +22,14 @@ import { RequestCardContent } from "./request-card";
  * the settle spring animates. That shared value is what makes the card
  * re-grabbable mid-settle (Apple §3).
  *
- * The ~1.5° of rotation hints at the direction of travel (Apple §8); reduced
- * motion drops the rotation and scale entirely (Apple §14).
+ * No rotation — the card follows the pointer 1:1 without tilt for a fully
+ * smooth drag. Scale lift is also removed to avoid a pop at lift.
+ *
+ * The portal box is exactly the card's own box and never more. It keeps pointer
+ * events only while the gesture can continue (a live drag, or the re-grabbable
+ * settle of a committed move, D19); the moment a refused or cancelled card is
+ * released the phase is `idle` and the overlay stops swallowing clicks, so the
+ * card underneath is interactive again while its spring is still running (F1).
  */
 export function DragOverlayLayer({
   dragX,
@@ -33,29 +37,28 @@ export function DragOverlayLayer({
   handlers,
   now,
   overlay,
+  phase,
 }: {
   dragX: MotionValue<number>;
   dragY: MotionValue<number>;
   handlers: OverlayHandlers;
   now: number;
   overlay: DragOverlayState;
+  phase: DragPhase;
 }) {
-  const reduceMotion = useReducedMotion();
-  const rotate = useTransform(dragX, (value) => {
-    const hinted = 1.5 + value * 0.03;
-    return Math.max(-8, Math.min(8, hinted));
-  });
   const { originRect } = overlay;
 
   return createPortal(
     <motion.div
       aria-hidden
       className="fixed z-[70] touch-none select-none"
+      data-drag-overlay
       style={{
         height: originRect.height,
         left: originRect.left,
-        rotate: reduceMotion ? 0 : rotate,
-        scale: reduceMotion ? 1 : 1.02,
+        pointerEvents: phase === "idle" ? "none" : "auto",
+        rotate: 0,
+        scale: 1,
         top: originRect.top,
         width: originRect.width,
         willChange: "transform",

@@ -1,6 +1,7 @@
 import { type HTMLAttributes, type RefObject, useMemo } from "react";
 
 import type { Density } from "@/hooks/use-density";
+import type { DragPhase } from "../hooks/use-card-drag/types";
 import type { RequestAction } from "../transitions";
 import type { RequestColumnMeta, RequestItem, RequestStatus } from "../types";
 import { RequestColumn } from "./request-column";
@@ -26,14 +27,16 @@ export function RequestBoard({
   cardHandlers,
   deniedCollapsed,
   density,
-  dragActive,
+  dragPhase,
   draggedCardId,
   dropIndex,
   dropValid,
   filteredCount,
   groups,
+  illegalStatuses,
   now,
   onAction,
+  onClearClaimed,
   onClearFilters,
   onDropTargetStatus,
   onKeyboardMove,
@@ -49,14 +52,20 @@ export function RequestBoard({
   cardHandlers?: (item: RequestItem) => HTMLAttributes<HTMLElement>;
   deniedCollapsed: boolean;
   density: Density;
-  dragActive: boolean;
+  /** Board styling follows the phase, never "an overlay object exists" (D18). */
+  dragPhase: DragPhase;
+  /** The card currently in flight, ghosted in its home lane (F1/D19). */
   draggedCardId: string | null;
   dropIndex: number | null;
   dropValid: boolean;
   filteredCount: number;
   groups: RequestColumnGroup[];
+  /** Lanes that cannot accept the card in flight (F3.2). */
+  illegalStatuses: ReadonlySet<RequestStatus>;
   now: number;
   onAction: (item: RequestItem, action: RequestAction) => void;
+  /** F9 — the Claimed lane's clear action. */
+  onClearClaimed: () => void;
   onClearFilters: () => void;
   /** Status of the column currently under the pointer, if any. */
   onDropTargetStatus: RequestStatus | null;
@@ -73,14 +82,15 @@ export function RequestBoard({
   shake: RequestStatus | null;
   totalVisible: number;
 }) {
+  const dragging = dragPhase === "dragging";
   // A drag suspends scroll-snap; otherwise the board yanks the column back
   // under the card's home lane mid-gesture (Apple §3: don't fight the user).
   const className = useMemo(
     () =>
       `h-full overflow-x-auto overflow-y-hidden px-3 pb-3 ${
-        dragActive ? "snap-none" : "snap-x snap-mandatory"
+        dragging ? "snap-none" : "snap-x snap-mandatory"
       }`,
-    [dragActive]
+    [dragging]
   );
 
   if (totalVisible === 0) {
@@ -122,17 +132,20 @@ export function RequestBoard({
             collapsed={group.column.isOffFlow && deniedCollapsed}
             column={group.column}
             density={density}
-            dragActive={dragActive}
             draggedCardId={draggedCardId}
             dropIndex={
               onDropTargetStatus === group.column.status ? dropIndex : null
             }
             dropValid={dropValid}
+            illegal={dragging && illegalStatuses.has(group.column.status)}
             isTarget={onDropTargetStatus === group.column.status}
             items={group.items}
             key={group.column.status}
             now={now}
             onAction={onAction}
+            onClearClaimed={
+              group.column.status === "claimed" ? onClearClaimed : undefined
+            }
             onKeyboardMove={onKeyboardMove}
             onOpen={onOpen}
             onRegisterColumn={onRegisterColumn}

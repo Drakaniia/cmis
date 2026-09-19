@@ -4,7 +4,14 @@ import { toast } from "sonner";
 
 import { useDensity } from "@/hooks/use-density";
 import { acceptsTypedText } from "@/lib/typed-text";
-import { useCardDrag } from "../hooks/use-card-drag";
+import type { RefusalActionId } from "../drag-rules";
+import {
+  columnInDirection,
+  laneEligibility,
+  refusalAnnouncement,
+  refusalFor,
+} from "../drag-rules";
+import { useCardDrag } from "../hooks/use-card-drag/use-card-drag";
 import { useDispense } from "../hooks/use-dispense";
 import { useNow } from "../hooks/use-now";
 import type { DispenseOutcome } from "../hooks/use-request-board";
@@ -12,7 +19,7 @@ import { countInStatus, useRequestBoard } from "../hooks/use-request-board";
 import { useRequestFilters } from "../hooks/use-request-filters";
 import { useRequestPersistence } from "../hooks/use-request-persistence";
 import { useNewRequestDialog } from "../new-request-dialog-context";
-import { deleteRequest } from "../persistence";
+import { archiveRequests, deleteRequest } from "../persistence";
 import type { RequestsSearch } from "../request-search";
 import {
   filtersFromSearch,
@@ -24,6 +31,7 @@ import { batchActions, canMove } from "../transitions";
 import type { RequestItem, RequestStatus } from "../types";
 import { REQUEST_COLUMNS, statusMetaOf } from "../types";
 import { CancelRequestModal } from "./cancel-request-modal";
+import { ClearClaimedModal } from "./clear-claimed-modal";
 import { DenyRequestModal } from "./deny-request-modal";
 import { DispenseBatchModal } from "./dispense-batch-modal";
 import { DispenseRequestModal } from "./dispense-request-modal";
@@ -33,11 +41,10 @@ import { RequestDetailModal } from "./request-detail-modal";
 import { RequestsBatchToolbar } from "./requests-batch-toolbar";
 import { RequestsFilterBar } from "./requests-filter-bar";
 
-const FORBIDDEN_MESSAGE =
-  "Complete requests cannot be denied — use detail view audit correction.";
-
 /** Drops that must be confirmed before they commit — a hand-over deducts stock. */
 const DEFERRED_DROP_STATUSES: RequestStatus[] = ["claimed"];
+
+const NO_STATUSES: ReadonlySet<RequestStatus> = new Set<RequestStatus>();
 
 const COLUMN_ORDER: RequestStatus[] = REQUEST_COLUMNS.map(
   (column) => column.status
@@ -98,6 +105,7 @@ export function RequestsPage({ to }: { to: "/admin/requests" }) {
   } = useRequestFilters(board.items, now, initialFilters);
 
   const [deniedCollapsed, setDeniedCollapsed] = useState(true);
+  const [clearOpen, setClearOpen] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
   const [originRect, setOriginRect] = useState<DOMRect | null>(null);
   const [denyTarget, setDenyTarget] = useState<{
@@ -110,6 +118,10 @@ export function RequestsPage({ to }: { to: "/admin/requests" }) {
   const [announcement, setAnnouncement] = useState("");
 
   const boardRef = useRef<HTMLDivElement | null>(null);
+  // F7 — the Denied rail's collapse state survives a drag: it opens to receive
+  // a card, then returns to however the user left it unless the card landed.
+  const deniedAutoExpandedRef = useRef(false);
+  const droppedToDeniedRef = useRef(false);
 
   // Rows read from disk replace the mock seed, unless the user got there first.
   const { replaceAll } = board;
@@ -130,7 +142,10 @@ export function RequestsPage({ to }: { to: "/admin/requests" }) {
       }
       const outcome = board.moveRequestAt(item.id, status, index);
       if (!outcome.ok) {
-        toast.error(FORBIDDEN_MESSAGE);
+        toast.error(
+          refusalFor(item.status, status)?.message ??
+            `${statusMetaOf(status).label} cannot take this card.`
+        );
         return;
       }
       const { label } = statusMetaOf(status);
@@ -145,11 +160,74 @@ export function RequestsPage({ to }: { to: "/admin/requests" }) {
     [board]
   );
 
+  /** Menu / detail / keyboard moves append to the end of the destination lane. */
+  const handleMove = useCallback(
+    (item: RequestItem, target: RequestStatus) => {
+      commitMove(item, target, countInStatus(board.items, target));
+    },
+    [board.items, commitMove]
+  );
+
+  /**
+   * The legal path a refusal offers, run through the same guarded functions the
+   * board uses — a read-only view, or one adjacent shipped move (F2/D9).
+   */
+  const runRefusalAction = useCallback(
+    (item: RequestItem, id: RefusalActionId, target?: RequestStatus) => {
+      if (id === "view-dispensing-record") {
+        setOriginRect(null);
+        setOpenId(item.id);
+        return;
+      }
+      if (target) {
+        handleMove(item, target);
+      }
+    },
+    [handleMove]
+  );
+
+  /**
+   * F2/F4 — the refusal, in one voice: a rule-specific toast (one per
+   * destination lane, replaced rather than stacked, D10) whose action re-runs
+   * the same guarded board functions the menu does, plus the same sentence in
+   * the live region (D17). Nothing is written: no queue mutation, no history
+   * entry, nothing for an undo to reverse.
+   */
+  const refuseMove = useCallback(
+    (item: RequestItem, status: RequestStatus) => {
+      const refusal = refusalFor(item.status, status);
+      if (!refusal) {
+        return;
+      }
+      setAnnouncement(refusalAnnouncement(item.status, status, refusal));
+      const { action } = refusal;
+      toast.error(refusal.message, {
+        ...(action
+          ? {
+              action: {
+                label: action.label,
+                onClick: () => runRefusalAction(item, action.id, action.to),
+              },
+            }
+          : {}),
+        duration: 3200,
+        id: refusal.toastId,
+      });
+    },
+    [runRefusalAction]
+  );
+
   const drag = useCardDrag({
     boardRef,
     deferredStatuses: DEFERRED_DROP_STATUSES,
+    onCancel: useCallback(() => setAnnouncement("Drag cancelled."), []),
     onCommit: useCallback(
       (id: string, status: RequestStatus, index: number) => {
+        // F7.3 — a card dropped into Denied is a structural move, and the rail
+        // stays open afterwards so the card is visible where it landed.
+        if (status === "denied") {
+          droppedToDeniedRef.current = true;
+        }
         const item = board.items.find((candidate) => candidate.id === id);
         if (item) {
           commitMove(item, status, index);
@@ -160,12 +238,7 @@ export function RequestsPage({ to }: { to: "/admin/requests" }) {
     // Dropping into Claimed needs the hand-over plan accepted first, so the card
     // springs back and the confirmation opens (F10).
     onDeferred: useCallback((id: string) => setDispenseId(id), []),
-    onForbidden: useCallback((status: RequestStatus) => {
-      toast.error(FORBIDDEN_MESSAGE);
-      setAnnouncement(
-        `Cannot move to ${statusMetaOf(status).label}. ${FORBIDDEN_MESSAGE}`
-      );
-    }, []),
+    onForbidden: refuseMove,
   });
 
   useEffect(() => {
@@ -185,6 +258,15 @@ export function RequestsPage({ to }: { to: "/admin/requests" }) {
           .length,
       })),
     [filteredItems, visibleItems]
+  );
+
+  /** F9 — exactly the cards the Claimed lane is showing right now (E17). */
+  const claimedIds = useMemo(
+    () =>
+      visibleItems
+        .filter((item) => item.status === "claimed")
+        .map((item) => item.id),
+    [visibleItems]
   );
 
   const openItem = board.items.find((item) => item.id === openId) ?? null;
@@ -221,6 +303,31 @@ export function RequestsPage({ to }: { to: "/admin/requests" }) {
 
   const { consumeSuppressedClick, animateMove } = drag;
 
+  /**
+   * F3 — every lane that cannot accept the card in flight. Derived from
+   * `layerEligibility`, so the fade, the chip and the cursor agree with the drop
+   * engine by construction rather than by a second copy of the rules.
+   */
+  const draggedStatus = drag.overlay?.fromStatus ?? null;
+  const illegalStatuses = useMemo(() => {
+    if (draggedStatus === null) {
+      return NO_STATUSES;
+    }
+    const illegal = new Set<RequestStatus>();
+    for (const column of REQUEST_COLUMNS) {
+      if (laneEligibility(draggedStatus, column.status) === "illegal") {
+        illegal.add(column.status);
+      }
+    }
+    return illegal;
+  }, [draggedStatus]);
+  /**
+   * D19 — the origin card is ghosted for the whole flight (dragging *and* the
+   * re-grabbable settle), and interactive again the instant a refusal or cancel
+   * returns the phase to `idle` (F1).
+   */
+  const cardInFlight = drag.phase !== "idle";
+
   const handleOpen = useCallback(
     (item: RequestItem, rect: DOMRect | null) => {
       // Suppress the click that follows a drag-cancel gesture — the card
@@ -234,19 +341,21 @@ export function RequestsPage({ to }: { to: "/admin/requests" }) {
     [consumeSuppressedClick]
   );
 
-  const handleMove = useCallback(
-    (item: RequestItem, target: RequestStatus) => {
-      commitMove(item, target, countInStatus(board.items, target));
-    },
-    [board.items, commitMove]
-  );
-
   const handleKeyboardMove = useCallback(
     (item: RequestItem, direction: -1 | 1, rect: DOMRect) => {
       const target = keyboardTargetStatus(item.status, direction);
       if (!target) {
+        // F11 — the keyboard announces the same refusal copy the drag does.
+        const neighbour = columnInDirection(
+          item.status,
+          direction,
+          COLUMN_ORDER
+        );
+        const refusal = neighbour ? refusalFor(item.status, neighbour) : null;
         setAnnouncement(
-          `No column to the ${direction > 0 ? "right" : "left"} of ${statusMetaOf(item.status).label}.`
+          refusal && neighbour
+            ? refusalAnnouncement(item.status, neighbour, refusal)
+            : `No column to the ${direction > 0 ? "right" : "left"} of ${statusMetaOf(item.status).label}.`
         );
         return;
       }
@@ -312,7 +421,9 @@ export function RequestsPage({ to }: { to: "/admin/requests" }) {
       }
       const moved = board.moveRequests(ids, action.to);
       if (moved === 0) {
-        toast.error(FORBIDDEN_MESSAGE);
+        toast.error(
+          `None of the selected requests can move to ${statusMetaOf(action.to).label}.`
+        );
         return;
       }
       const { label } = statusMetaOf(action.to);
@@ -464,6 +575,67 @@ export function RequestsPage({ to }: { to: "/admin/requests" }) {
     setDeniedCollapsed((value) => !value);
   }, []);
 
+  const dropTargetStatus = drag.overlay?.target?.status ?? null;
+
+  // F7.1/F7.2 — carrying a card into the collapsed rail opens it so the target
+  // is visible and its live geometry can be hit-tested.
+  useEffect(() => {
+    if (
+      drag.phase === "dragging" &&
+      dropTargetStatus === "denied" &&
+      deniedCollapsed
+    ) {
+      deniedAutoExpandedRef.current = true;
+      setDeniedCollapsed(false);
+    }
+  }, [deniedCollapsed, drag.phase, dropTargetStatus]);
+
+  // F7.4 — and closes again after a cancelled or refused gesture, unless the
+  // card actually landed there.
+  useEffect(() => {
+    if (drag.overlay !== null || !deniedAutoExpandedRef.current) {
+      return;
+    }
+    deniedAutoExpandedRef.current = false;
+    // biome-ignore lint/suspicious/noUnnecessaryConditions: ref is assigned by onCommit
+    if (droppedToDeniedRef.current) {
+      droppedToDeniedRef.current = false;
+      return;
+    }
+    setDeniedCollapsed(true);
+  }, [drag.overlay]);
+
+  const handleClearOpen = useCallback(() => setClearOpen(true), []);
+
+  /**
+   * F9 — clearing the Claimed lane. The database write happens first: a build
+   * with no database reports an honest failure rather than showing cards leave a
+   * board that never stored them (E18).
+   */
+  const handleClearConfirm = useCallback(() => {
+    const ids = claimedIds;
+    setClearOpen(false);
+    archiveRequests(ids)
+      .then((archived) => {
+        if (!archived) {
+          toast.error("Could not clear the Claimed lane", {
+            description: "Nothing was cleared — this build has no database.",
+          });
+          return;
+        }
+        const count = board.clearClaimed(ids);
+        if (count === 0) {
+          return;
+        }
+        const noun = count === 1 ? "card" : "cards";
+        setAnnouncement(`${count} claimed ${noun} cleared from the board.`);
+        toast.success(`${count} claimed ${noun} cleared from the board`, {
+          description: "Still in the Dispensing Log",
+        });
+      })
+      .catch(() => undefined);
+  }, [board, claimedIds]);
+
   const handleDetailOpenChange = useCallback((next: boolean) => {
     if (!next) {
       setOpenId(null);
@@ -509,14 +681,16 @@ export function RequestsPage({ to }: { to: "/admin/requests" }) {
           cardHandlers={drag.cardHandlers}
           deniedCollapsed={deniedCollapsed}
           density={density}
-          dragActive={drag.isDragging}
-          draggedCardId={drag.overlay?.item.id ?? null}
+          draggedCardId={cardInFlight ? (drag.overlay?.item.id ?? null) : null}
+          dragPhase={drag.phase}
           dropIndex={drag.overlay?.target?.index ?? null}
           dropValid={drag.overlay?.target?.valid ?? false}
           filteredCount={filteredItems.length}
           groups={groups}
+          illegalStatuses={illegalStatuses}
           now={now}
           onAction={handleAction}
+          onClearClaimed={handleClearOpen}
           onClearFilters={clearFilters}
           onDropTargetStatus={drag.overlay?.target?.status ?? null}
           onKeyboardMove={handleKeyboardMove}
@@ -544,6 +718,7 @@ export function RequestsPage({ to }: { to: "/admin/requests" }) {
           handlers={drag.overlayHandlers(drag.overlay.item)}
           now={now}
           overlay={drag.overlay}
+          phase={drag.phase}
         />
       ) : null}
 
@@ -554,6 +729,13 @@ export function RequestsPage({ to }: { to: "/admin/requests" }) {
         onOpenChange={handleDetailOpenChange}
         open={openId !== null}
         originRect={originRect}
+      />
+
+      <ClearClaimedModal
+        count={claimedIds.length}
+        onConfirm={handleClearConfirm}
+        onOpenChange={setClearOpen}
+        open={clearOpen}
       />
 
       <CancelRequestModal
