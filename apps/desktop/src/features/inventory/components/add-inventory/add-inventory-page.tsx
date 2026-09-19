@@ -12,13 +12,10 @@ import {
   newProductDraft,
   type ProductDraft,
 } from "../../creation/draft";
-import {
-  emptySheetDefaults,
-  groupsToDraft,
-  type SheetDefaults,
-  type SheetGroup,
-  validateSheet,
-} from "../../creation/sheet";
+import { groupsToDraft } from "../../creation/sheet";
+import { emptySheetDefaults } from "../../creation/sheet-defaults";
+import type { SheetDefaults, SheetGroup } from "../../creation/sheet-types";
+import { validateSheet } from "../../creation/sheet-validation";
 import type {
   DraftIssue,
   DraftValidation,
@@ -35,7 +32,7 @@ import {
 import { useInventoryItems } from "../../hooks/use-inventory-items";
 import { AddBatchesForm } from "./add-batches-form";
 import { ChoiceScreen } from "./choice-screen";
-import { DeliverySheet } from "./delivery-sheet";
+import { DeliverySheet } from "./delivery-sheet/delivery-sheet";
 import { NewProductForm } from "./new-product-form";
 import { ReviewStep } from "./review-step";
 import { plural } from "./summary-text";
@@ -261,7 +258,7 @@ export function AddInventoryPage() {
   const loading = itemsLoading || indexLoading;
 
   return (
-    <div className="flex h-[calc(100svh-48px)] flex-col overflow-hidden">
+    <div className="flex h-full flex-col overflow-hidden">
       <header className="flex shrink-0 items-center gap-3 border-border/50 border-b bg-card px-4 py-3">
         <div className="min-w-0 flex-1">
           <h1 className="font-semibold text-lg">Add Inventory</h1>
@@ -281,7 +278,7 @@ export function AddInventoryPage() {
         </Button>
       </header>
 
-      <div className="min-h-0 flex-1 overflow-y-auto p-4">
+      <div className="min-h-0 flex-1 overflow-y-auto p-4 pb-8">
         <div className="mx-auto max-w-5xl space-y-4">
           {indexError ? (
             <p
