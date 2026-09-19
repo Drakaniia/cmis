@@ -383,7 +383,7 @@ export async function undoStock(
     db,
     {
       action: "stock-in",
-      after: { qty: newQty, status: newStatus },
+      after: { qty: newQty, received: snapshot.take, status: newStatus },
       before: { qty: item.qty },
       detail: `${snapshot.medicine}: quick deduction of ${snapshot.take} ${snapshot.unit} undone — ${newQty} back on the shelf`,
       targetId: snapshot.itemId,
