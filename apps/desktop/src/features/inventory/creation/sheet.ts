@@ -2,18 +2,22 @@ import {
   type BatchDraft,
   batchQty,
   type CreationDraft,
-  identityKeysOf,
   newBatchDraftRow,
-  newProductDraft,
   type ProductDraft,
 } from "./draft";
 import {
-  activeRows,
-  type DraftIssue,
-  draftLabel,
-  type IdentityMatch,
-  validateNewProduct,
-} from "./validate-draft";
+  applyDefaultFields,
+  newSheetGroup,
+  nextGroupId,
+} from "./sheet-defaults";
+import {
+  SHEET_DEFAULT_FIELDS,
+  type SheetDefaultField,
+  type SheetDefaults,
+  type SheetGroup,
+  type SheetTotals,
+} from "./sheet-types";
+import { activeRows } from "./validate-draft";
 
 /**
  * The delivery sheet's model (spec §7.4): N product groups, each holding its
@@ -26,69 +30,6 @@ import {
  * from quietly growing a third, accidental meaning.
  */
 
-/** The five headers the strip can stamp — decision 38 keeps threshold among them. */
-export const SHEET_DEFAULT_FIELDS = [
-  "category",
-  "form",
-  "strengthUnit",
-  "supplier",
-  "threshold",
-] as const;
-
-export type SheetDefaultField = (typeof SHEET_DEFAULT_FIELDS)[number];
-
-export type SheetDefaults = Pick<ProductDraft, SheetDefaultField>;
-
-export interface SheetGroup {
-  /** Local row key only; never written to the database. */
-  id: string;
-  /** Fields the operator typed by hand — shown marked, cleared on re-stamp. */
-  overridden: SheetDefaultField[];
-  product: ProductDraft;
-  /** Once true the SKU is the operator's, so `deriveSku` never overwrites it. */
-  skuTouched: boolean;
-}
-
-export interface SheetTotals {
-  batches: number;
-  groups: number;
-  units: number;
-}
-
-export interface SheetIssue extends DraftIssue {
-  /** Which group produced the issue, so the review step can jump back to it. */
-  groupId: string;
-}
-
-export interface SheetValidation {
-  errors: SheetIssue[];
-  warnings: SheetIssue[];
-}
-
-export interface SheetContext {
-  identities?: Map<string, IdentityMatch>;
-  now?: Date;
-  skus: Set<string>;
-}
-
-/** Blank means "not set" — it never wipes a value off a group (see §7.4). */
-export function emptySheetDefaults(): SheetDefaults {
-  return {
-    category: "",
-    form: "",
-    strengthUnit: "",
-    supplier: "",
-    threshold: "",
-  };
-}
-
-let groupCounter = 0;
-
-function nextGroupId(): string {
-  groupCounter += 1;
-  return `group-${groupCounter}`;
-}
-
 /**
  * A copy of a batch row without its lot number or row key: duplicating a
  * delivery rarely means "and the same lot again", which is blocked anyway.
@@ -100,75 +41,6 @@ function copyBatchRow(row: BatchDraft): BatchDraft {
     qty: row.qty,
     supplier: row.supplier,
   });
-}
-
-function applyOneDefault(
-  product: ProductDraft,
-  defaults: SheetDefaults,
-  field: SheetDefaultField
-): ProductDraft {
-  switch (field) {
-    case "category":
-      return defaults.category.trim() === ""
-        ? product
-        : { ...product, category: defaults.category };
-    case "form":
-      return defaults.form.trim() === ""
-        ? product
-        : { ...product, form: defaults.form };
-    case "strengthUnit":
-      return defaults.strengthUnit.trim() === ""
-        ? product
-        : { ...product, strengthUnit: defaults.strengthUnit };
-    case "supplier":
-      return defaults.supplier.trim() === ""
-        ? product
-        : { ...product, supplier: defaults.supplier };
-    case "threshold":
-      return defaults.threshold === ""
-        ? product
-        : { ...product, threshold: defaults.threshold };
-    default:
-      return product;
-  }
-}
-
-export function applyDefaultFields(
-  product: ProductDraft,
-  defaults: SheetDefaults,
-  fields: readonly SheetDefaultField[] = SHEET_DEFAULT_FIELDS
-): ProductDraft {
-  let next = product;
-  for (const field of fields) {
-    next = applyOneDefault(next, defaults, field);
-  }
-  return next;
-}
-
-/**
- * Wraps a product the caller has already assembled — the paste path builds one
- * row at a time and must not have a stencil write over what the file said.
- */
-export function sheetGroupFromProduct(
-  product: ProductDraft,
-  opts: { overridden?: SheetDefaultField[]; skuTouched?: boolean } = {}
-): SheetGroup {
-  return {
-    id: nextGroupId(),
-    overridden: opts.overridden ?? [],
-    product,
-    skuTouched: opts.skuTouched ?? false,
-  };
-}
-
-/** A blank group: the per-product defaults, with the stencil stamped on top. */
-export function newSheetGroup(
-  defaults: SheetDefaults,
-  seed: Partial<ProductDraft> = {}
-): SheetGroup {
-  return sheetGroupFromProduct(
-    applyDefaultFields({ ...newProductDraft(), ...seed }, defaults)
-  );
 }
 
 export function addSheetGroup(
@@ -430,84 +302,4 @@ export function groupsToDraft(groups: SheetGroup[]): CreationDraft {
     additions: [],
     newProducts: groups.map((group) => group.product),
   };
-}
-
-/**
- * Sheet-wide validation (spec §9.3, §10.1). Each group is judged against the
- * real inventory *and* against the groups above it, so two rows claiming the
- * same medicine or the same SKU block before the commit rather than racing
- * inside it.
- */
-export function validateSheet(
-  groups: SheetGroup[],
-  ctx: SheetContext
-): SheetValidation {
-  const errors: SheetIssue[] = [];
-  const warnings: SheetIssue[] = [];
-  const sheetSkus = new Map<string, number>();
-  const sheetIdentities = new Map<string, number>();
-
-  for (const [index, group] of groups.entries()) {
-    const attach = (issue: DraftIssue): SheetIssue => ({
-      ...issue,
-      groupId: group.id,
-    });
-    const result = validateNewProduct(group.product, {
-      identities: ctx.identities,
-      now: ctx.now,
-      skus: ctx.skus,
-    });
-    errors.push(...result.errors.map(attach));
-    warnings.push(...result.warnings.map(attach));
-
-    const label = draftLabel(group.product);
-    const key = identityKeysOf(group.product).find((candidate) =>
-      ctx.identities?.has(candidate)
-    );
-    if (key) {
-      const match = ctx.identities?.get(key);
-      errors.push({
-        field: "name",
-        groupId: group.id,
-        message: `${label} is already in inventory${
-          match?.sku ? ` (${match.sku})` : ""
-        } — add batches to it instead of creating a second product.`,
-      });
-    }
-
-    const sku = group.product.sku.trim();
-    if (sku !== "") {
-      const takenAt = sheetSkus.get(sku.toLowerCase());
-      if (takenAt === undefined) {
-        sheetSkus.set(sku.toLowerCase(), index);
-      } else {
-        errors.push({
-          field: "sku",
-          groupId: group.id,
-          message: `${sku} is already used by group ${takenAt + 1} on this sheet.`,
-        });
-      }
-    }
-
-    const repeated = identityKeysOf(group.product).find((candidate) => {
-      const seenAt = sheetIdentities.get(candidate);
-      return seenAt !== undefined && seenAt !== index;
-    });
-    if (repeated) {
-      errors.push({
-        field: "name",
-        groupId: group.id,
-        message: `${label} is the same medicine as group ${
-          (sheetIdentities.get(repeated) ?? 0) + 1
-        } on this sheet — merge their batches into one group.`,
-      });
-    }
-    for (const candidate of identityKeysOf(group.product)) {
-      if (!sheetIdentities.has(candidate)) {
-        sheetIdentities.set(candidate, index);
-      }
-    }
-  }
-
-  return { errors, warnings };
 }

@@ -7,7 +7,8 @@ import {
   SHEET_COLUMNS,
   splitCells,
 } from "./paste";
-import { emptySheetDefaults, type SheetDefaults } from "./sheet";
+import { emptySheetDefaults } from "./sheet-defaults";
+import type { SheetDefaults } from "./sheet-types";
 
 const STENCIL: SheetDefaults = {
   category: "Analgesic",
