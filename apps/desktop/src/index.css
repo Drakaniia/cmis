@@ -1,5 +1,34 @@
 @import "@cmis/ui/globals.css";
 
+/* ── Desktop chrome: text is UI, not content ─────────────────────
+   Nothing is selectable by default so a click/drag on a label, row, or
+   card never starts a text selection (native desktop behavior). Editable
+   controls and any element opting in with `.selectable` keep normal
+   selection so users can still copy IDs, serials, and form values. */
+*,
+*::before,
+*::after {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+input,
+textarea,
+[contenteditable="true"],
+.selectable,
+.selectable * {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* Media and links must not be draggable out of the window — a desktop app
+   never exposes an OS-level drag source for its own chrome. Copy is offered
+   through the app's own controls instead. */
+img,
+a {
+  -webkit-user-drag: none;
+}
+
 /* Prevent scrolling beyond the viewport in the desktop app */
 html,
 body {
@@ -14,4 +43,11 @@ body,
   max-width: 100vw;
   height: 100%;
   max-height: 100vh;
+}
+
+/* Desktop Tauri window — minimized height must keep bottom content reachable.
+   The app shell (<main.page-canvas>) is the single scroll container; inner
+   lanes use their own overflow but must never be sized by viewport height. */
+.page-canvas {
+  -webkit-overflow-scrolling: touch;
 }
