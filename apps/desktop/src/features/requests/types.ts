@@ -72,6 +72,17 @@ export const REQUEST_SOURCES: RequestSource[] = ["queue", "quick-deduct"];
 export const QUICK_DEDUCT_LABEL = "Quick deduct";
 
 export interface RequestItem {
+  /**
+   * Explicit board archive marker (migration 0011). Set when the Claimed lane is
+   * cleared on demand; the row stays in the database and in the Dispensing Log.
+   * Absent/null means "on the board".
+   */
+  archivedAt?: string | null;
+  /**
+   * Manual order within the lane, 0-based, `0` = top (migration 0011). Lanes
+   * sort by this, so a card stays where it was dropped across a restart.
+   */
+  boardPosition: number;
   category: string;
   deniedNote?: string;
   deniedReason?: DenyReason;
