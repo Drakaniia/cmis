@@ -13,7 +13,7 @@ import {
   SHEET_DEFAULT_FIELDS,
   type SheetDefaultField,
   type SheetDefaults,
-} from "../../creation/sheet";
+} from "../../creation/sheet-types";
 import { MEDICINE_FORMS, STRENGTH_UNITS } from "../../domain/vocabulary";
 import { CategoryPicker } from "../category-picker";
 import { CARD_CLASS } from "./field-styles";

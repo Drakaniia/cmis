@@ -2,22 +2,23 @@ import { describe, expect, it } from "vitest";
 import { newBatchDraftRow, newProductDraft } from "./draft";
 import {
   addSheetGroup,
-  applyDefaultFields,
   applyDefaultsToGroups,
   duplicateSheetGroup,
-  emptySheetDefaults,
   groupsToDraft,
   moveSheetGroup,
-  newSheetGroup,
   patchSheetGroup,
   removeSheetGroup,
   reorderSheetGroups,
-  type SheetDefaults,
-  type SheetGroup,
-  sheetGroupFromProduct,
   sheetTotals,
-  validateSheet,
 } from "./sheet";
+import {
+  applyDefaultFields,
+  emptySheetDefaults,
+  newSheetGroup,
+  sheetGroupFromProduct,
+} from "./sheet-defaults";
+import type { SheetDefaults, SheetGroup } from "./sheet-types";
+import { validateSheet } from "./sheet-validation";
 import type { IdentityMatch } from "./validate-draft";
 
 const STENCIL: SheetDefaults = {
