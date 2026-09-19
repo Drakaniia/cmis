@@ -10,7 +10,7 @@
 import { cn } from "@cmis/ui/lib/utils";
 import { Link } from "@tanstack/react-router";
 import { Pill, TrendingDown, TrendingUp } from "lucide-react";
-import { motion } from "motion/react";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { densitySpring } from "@/lib/motion";
 import type { DashboardLinkKey, DispensingVelocityData } from "../types";
 
@@ -18,18 +18,6 @@ const SECTION = {
   animate: { opacity: 1, y: 0 },
   initial: { opacity: 0, y: 12 },
 } as const;
-
-const barVariants = {
-  hidden: { scaleY: 0 },
-  visible: (_height: number) => ({
-    scaleY: 1,
-    transition: {
-      damping: 25,
-      stiffness: 300,
-      type: "spring" as const,
-    },
-  }),
-};
 
 export function DispensingVelocityCard({
   data,
@@ -40,6 +28,10 @@ export function DispensingVelocityCard({
 }) {
   const maxCount = Math.max(...data.dailyCounts.map((d) => d.count));
   const isUp = data.changePercent > 0;
+  const reduceMotion = useReducedMotion();
+  const signature = data.dailyCounts
+    .map((d) => `${d.label}:${d.count}`)
+    .join("|");
 
   return (
     <motion.div
@@ -64,18 +56,31 @@ export function DispensingVelocityCard({
         </Link>
       </div>
 
-      {/* Total + trend */}
+      {/* Total + trend — §3 interruptible: keyed cross-fade from presentation value */}
       <div className="flex items-baseline gap-2 px-4 pt-3">
-        <span className="font-bold text-2xl text-foreground tabular-nums tracking-tight">
-          {data.todayTotal}
-        </span>
-        <span
+        <AnimatePresence initial={false} mode="popLayout">
+          <motion.span
+            animate={{ opacity: 1, y: 0 }}
+            className="font-bold text-2xl text-foreground tabular-nums tracking-tight"
+            exit={reduceMotion ? undefined : { opacity: 0, y: -4 }}
+            initial={reduceMotion ? false : { opacity: 0, y: 4 }}
+            key={`total-${data.todayTotal}-${signature}`}
+            transition={densitySpring}
+          >
+            {data.todayTotal}
+          </motion.span>
+        </AnimatePresence>
+        <motion.span
+          animate={{ opacity: 1, scale: 1 }}
           className={cn(
             "flex items-center gap-0.5 font-medium text-xs",
             isUp
               ? "text-green-600 dark:text-green-400"
               : "text-red-600 dark:text-red-400"
           )}
+          initial={reduceMotion ? false : { opacity: 0, scale: 0.96 }}
+          key={`trend-${data.changePercent}-${signature}`}
+          transition={densitySpring}
         >
           {isUp ? (
             <TrendingUp aria-hidden className="size-3" />
@@ -83,10 +88,10 @@ export function DispensingVelocityCard({
             <TrendingDown aria-hidden className="size-3" />
           )}
           {Math.abs(data.changePercent)}% vs yesterday
-        </span>
+        </motion.span>
       </div>
 
-      {/* Bar chart — 7 days */}
+      {/* Bar chart — 7 days — §3/§4 interruptible spring from presentation height */}
       <div className="mt-3 flex h-24 items-end gap-1.5 px-4">
         {data.dailyCounts.map((day, i) => {
           const heightPct = maxCount > 0 ? (day.count / maxCount) * 100 : 0;
@@ -97,19 +102,17 @@ export function DispensingVelocityCard({
               key={day.label}
             >
               <motion.div
-                animate="visible"
+                animate={{ height: `${heightPct}%`, opacity: 1 }}
                 aria-label={`${day.label}: ${day.count} dispensed`}
                 className={cn(
                   "w-full origin-bottom rounded-t-sm",
                   isToday ? "bg-primary" : "bg-muted"
                 )}
-                custom={heightPct}
-                initial="hidden"
+                initial={reduceMotion ? false : { height: "0%", opacity: 0 }}
                 style={{
-                  height: `${heightPct}%`,
                   minHeight: day.count > 0 ? 2 : 0,
                 }}
-                variants={barVariants}
+                transition={densitySpring}
               />
               <span
                 className={cn(

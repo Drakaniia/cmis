@@ -1,5 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { getDb } from "@/lib/db";
+import { monthKey } from "@/lib/month";
+import type { HourlyCount, StockAdjustmentsData } from "../types";
 
 export interface DashboardStats {
   expiring30d: number;
@@ -141,7 +143,7 @@ const CATEGORY_COLORS: Record<string, string> = {
   Uncategorized: "bg-muted",
 };
 
-export function useDispensingVelocity(month = "2026-08") {
+export function useDispensingVelocity(month = monthKey()) {
   return useQuery({
     placeholderData: (previousData) => previousData,
     queryFn: async (): Promise<DispensingVelocity> => {
@@ -179,17 +181,140 @@ export function useDispensingVelocity(month = "2026-08") {
   });
 }
 
-export function useHourlyActivity(_month = "2026-08") {
+/**
+ * Activity over the last 24 hours, bucketed by local hour.
+ *
+ * Two tables carry a real timestamp — `dispensing_records.at` for a hand-over
+ * and `requests.submitted_at` for a request — so the card is wired to those
+ * rather than the zeros it used to return unconditionally. Hours are resolved in
+ * JS because SQLite's `strftime` reads the stored `Z` timestamps as UTC, which
+ * would file an 11:00 hand-over under 09:00 for a UTC+2 clinic.
+ */
+export function useHourlyActivity() {
   return useQuery({
-    queryFn: () => {
-      // Until hourly timestamps exist, derive daily granularity placeholder
-      // Return 24 zeros with note handled at component level
-      return Array.from({ length: 24 }, (_, hour) => ({
+    placeholderData: (previousData) => previousData,
+    queryFn: async (): Promise<HourlyCount[]> => {
+      const empty = Array.from({ length: 24 }, (_, hour) => ({
         dispensed: 0,
         hour,
         requests: 0,
       }));
+      try {
+        const db = await getDb();
+        const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+        const [handOvers, submissions] = await Promise.all([
+          db.select<{ at: string }[]>(
+            "SELECT at FROM dispensing_records WHERE at >= ?",
+            [since]
+          ),
+          db.select<{ submitted_at: string }[]>(
+            "SELECT submitted_at FROM requests WHERE submitted_at >= ?",
+            [since]
+          ),
+        ]);
+        for (const row of handOvers) {
+          const bucket = empty[new Date(row.at).getHours()];
+          if (bucket) {
+            bucket.dispensed += 1;
+          }
+        }
+        for (const row of submissions) {
+          const bucket = empty[new Date(row.submitted_at).getHours()];
+          if (bucket) {
+            bucket.requests += 1;
+          }
+        }
+        return empty;
+      } catch {
+        return empty;
+      }
     },
     queryKey: ["hourly-activity"],
+  });
+}
+
+const EMPTY_ADJUSTMENTS: StockAdjustmentsData = {
+  discrepancies: { count: 0, items: [] },
+  flagged: { count: 0, items: [] },
+  transfers: { count: 0, items: [] },
+};
+
+/**
+ * The three adjustment categories, each from a column that actually records it:
+ * a count that disagreed with the dispensing grid (`total_mismatch`), a hand-over
+ * logged as a transfer (`audit_log.detail`), and a batch at or past its expiry
+ * window.
+ */
+export function useStockAdjustments() {
+  return useQuery({
+    placeholderData: (previousData) => previousData,
+    queryFn: async (): Promise<StockAdjustmentsData> => {
+      try {
+        const db = await getDb();
+        const [mismatchRows, transferRows, flaggedRows] = await Promise.all([
+          db.select<
+            { daily_sum: number; name: string; total_dispensed: number }[]
+          >(
+            `SELECT name, total_dispensed, daily_sum FROM inventory_items
+              WHERE total_mismatch = 1 ORDER BY name COLLATE NOCASE LIMIT 3`
+          ),
+          db.select<{ detail: string; medicine: string | null }[]>(
+            `SELECT a.detail AS detail, COALESCE(NULLIF(trim(i.name), ''), 'Unknown item') AS medicine
+               FROM audit_log a LEFT JOIN inventory_items i ON i.id = a.target_id
+              WHERE a.detail LIKE '%Transferred%' ORDER BY a.at DESC LIMIT 3`
+          ),
+          db.select<{ days_until: number; medicine: string }[]>(
+            `SELECT COALESCE(NULLIF(trim(i.display_name), ''), i.name) AS medicine,
+                    CAST(julianday(b.expiry) - julianday('now') AS INTEGER) AS days_until
+               FROM inventory_batches b JOIN inventory_items i ON i.id = b.item_id
+              WHERE b.expiry IS NOT NULL AND b.expiry != ''
+                AND julianday(b.expiry) - julianday('now') <= 30
+              ORDER BY b.expiry LIMIT 3`
+          ),
+        ]);
+        const [mismatchCount, transferCount, flaggedCount] = await Promise.all([
+          db.select<{ c: number }[]>(
+            "SELECT COUNT(*) AS c FROM inventory_items WHERE total_mismatch = 1"
+          ),
+          db.select<{ c: number }[]>(
+            "SELECT COUNT(*) AS c FROM audit_log WHERE detail LIKE '%Transferred%'"
+          ),
+          db.select<{ c: number }[]>(
+            `SELECT COUNT(*) AS c FROM inventory_batches
+              WHERE expiry IS NOT NULL AND expiry != ''
+                AND julianday(expiry) - julianday('now') <= 30`
+          ),
+        ]);
+        return {
+          discrepancies: {
+            count: mismatchCount[0]?.c ?? 0,
+            items: mismatchRows.map((row) => ({
+              detail: `counted ${row.daily_sum}, system ${row.total_dispensed}`,
+              medicine: row.name,
+            })),
+          },
+          flagged: {
+            count: flaggedCount[0]?.c ?? 0,
+            items: flaggedRows.map((row) => ({
+              detail:
+                row.days_until < 0
+                  ? `expired ${Math.abs(row.days_until)}d ago`
+                  : `expires in ${row.days_until}d`,
+              medicine: row.medicine,
+            })),
+          },
+          transfers: {
+            count: transferCount[0]?.c ?? 0,
+            items: transferRows.map((row) => ({
+              detail: row.detail,
+              medicine: row.medicine ?? "Unknown item",
+            })),
+          },
+        };
+      } catch {
+        return EMPTY_ADJUSTMENTS;
+      }
+    },
+    queryKey: ["stock-adjustments"],
   });
 }
