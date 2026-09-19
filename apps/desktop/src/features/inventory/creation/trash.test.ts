@@ -4,16 +4,12 @@ import {
   setOperatorName,
 } from "@/features/admin/audit/operator";
 import { createFakeDb, type DbRow } from "@/test/fake-db";
-import {
-  describeTrashEntry,
-  listTrash,
-  purgeTrash,
-  restoreBatch,
-  restoreItem,
-  softDeleteBatch,
-  softDeleteItem,
-  type TrashEntry,
-} from "./trash";
+import { restoreBatch, softDeleteBatch } from "./trash/batch-ops";
+import { restoreItem, softDeleteItem } from "./trash/item-ops";
+import { describeTrashEntry } from "./trash/labels";
+import { purgeTrash } from "./trash/purge";
+import { listTrash } from "./trash/records";
+import type { TrashEntry } from "./trash/types";
 
 const ITEM: DbRow = {
   category: "Analgesic",

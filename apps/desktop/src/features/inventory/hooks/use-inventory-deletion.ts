@@ -5,7 +5,7 @@ const EMPTY_SELECTION: Set<string> = new Set<string>();
 
 import { toast } from "sonner";
 import { describeImpact, type ItemImpact, sumImpact } from "../creation/impact";
-import type { TrashEntry } from "../creation/trash";
+import type { TrashEntry } from "../creation/trash/types";
 import type { InventoryFilters, InventoryItem } from "../types";
 import {
   useDeleteBatch,
