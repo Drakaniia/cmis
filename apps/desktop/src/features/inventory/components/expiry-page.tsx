@@ -25,7 +25,7 @@ import { ExpiryFiltersBar } from "./expiry-filters";
 import { ExpiryList } from "./expiry-list";
 import { ExtendExpiryModal } from "./extend-expiry-modal";
 import { StockDetailModal } from "./stock-detail-modal";
-import { StockInWizard } from "./stock-in-wizard";
+import { StockInWizard } from "./stock-in-wizard/stock-in-wizard";
 import { StockOutWizard } from "./stock-out-wizard";
 
 interface WizardStockInDraft {

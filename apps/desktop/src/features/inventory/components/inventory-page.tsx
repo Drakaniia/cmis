@@ -33,7 +33,7 @@ import { InventoryFiltersBar } from "./inventory-filters";
 import { InventoryList } from "./inventory-list";
 import { InventorySelectionToolbar } from "./inventory-selection-toolbar";
 import { NoInventoryEmptyState } from "./no-inventory-empty-state";
-import { StockInWizard } from "./stock-in-wizard";
+import { StockInWizard } from "./stock-in-wizard/stock-in-wizard";
 import { StockOutWizard } from "./stock-out-wizard";
 import { TrashList } from "./trash-list";
 
