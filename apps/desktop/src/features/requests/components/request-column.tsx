@@ -1,5 +1,5 @@
 import { cn } from "@cmis/ui/lib/utils";
-import { motion } from "motion/react";
+import { motion, useReducedMotion } from "motion/react";
 import {
   Fragment,
   type HTMLAttributes,
@@ -36,6 +36,88 @@ function DropIndicator() {
 }
 
 /**
+ * F9/F3.3 — the header: dot, label, count chip, the hovered illegal lane's
+ * refusal chip, and the optional lane action (Claimed's Clear, Denied's
+ * Collapse). Split out of `RequestColumn` so the column body stays readable.
+ */
+function ColumnHeader({
+  column,
+  countLabel,
+  headerId,
+  onClearClaimed,
+  onToggleCollapsed,
+  reduceMotion,
+  refuseChip,
+  shake,
+  total,
+}: {
+  column: RequestColumnMeta;
+  countLabel: string;
+  headerId: string;
+  onClearClaimed?: () => void;
+  onToggleCollapsed: () => void;
+  reduceMotion: boolean | null;
+  refuseChip: boolean;
+  shake?: boolean;
+  total: number;
+}) {
+  const shaking = Boolean(shake) && !reduceMotion;
+  return (
+    <motion.header
+      animate={shaking ? { x: [0, -4, 4, -4, 0] } : { x: 0 }}
+      className="flex shrink-0 items-center gap-2 rounded-t-xl border-border/50 border-b px-2 py-1.5"
+      id={headerId}
+      transition={
+        shaking
+          ? { bounce: 0.4, duration: 0.35, type: "spring" }
+          : { duration: 0.15 }
+      }
+    >
+      <span
+        aria-hidden
+        className={cn("size-2 shrink-0 rounded-full", column.accent)}
+      />
+      <h2 className="min-w-0 truncate font-semibold text-xs">{column.label}</h2>
+      <span
+        className={cn(
+          "shrink-0 rounded-full border px-1.5 py-px font-semibold text-[10px] leading-none",
+          column.badgeClass
+        )}
+      >
+        {countLabel}
+      </span>
+      {refuseChip ? (
+        <span className="shrink-0 truncate rounded-sm border border-border bg-muted px-1 text-caption text-muted-foreground">
+          Can&apos;t place here
+        </span>
+      ) : null}
+      {onClearClaimed ? (
+        <button
+          aria-label={`Clear ${total} claimed cards`}
+          className="press-feedback ml-auto shrink-0 rounded px-1 text-caption text-muted-foreground hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+          disabled={total === 0}
+          onClick={onClearClaimed}
+          type="button"
+        >
+          Clear
+        </button>
+      ) : null}
+      {column.isOffFlow ? (
+        <button
+          aria-expanded
+          aria-label={`Collapse ${column.label} column`}
+          className="press-feedback ml-auto rounded px-1 text-caption text-muted-foreground hover:bg-muted hover:text-foreground"
+          onClick={onToggleCollapsed}
+          type="button"
+        >
+          Collapse
+        </button>
+      ) : null}
+    </motion.header>
+  );
+}
+
+/**
  * CMIS-UI-05 §2 / §9 / §4.1 — one column: header with filtered count, an
  * independently scrolling card list with a bottom fade mask (Apple §12: scroll
  * edge effects, not hard dividers), a dashed placeholder when empty, and the
@@ -48,14 +130,15 @@ export function RequestColumn({
   collapsed,
   column,
   density,
-  dragActive,
   draggedCardId,
   dropIndex,
   dropValid,
+  illegal,
   items,
   isTarget,
   now,
   onAction,
+  onClearClaimed,
   onKeyboardMove,
   onOpen,
   onRegisterColumn,
@@ -70,15 +153,17 @@ export function RequestColumn({
   collapsed: boolean;
   column: RequestColumnMeta;
   density: Density;
-  /** A drag is in flight somewhere on the board. */
-  dragActive?: boolean;
   draggedCardId?: string | null;
   dropIndex?: number | null;
   dropValid?: boolean;
+  /** This lane cannot accept the card in flight (F3.2). */
+  illegal?: boolean;
   items: RequestItem[];
   isTarget?: boolean;
   now: number;
   onAction: (item: RequestItem, action: RequestAction) => void;
+  /** F9 — present only on Claimed; opens the clear confirmation. */
+  onClearClaimed?: () => void;
   /** Alt+←/→ — the Card lifts and springs into the adjacent legal column. */
   onKeyboardMove?: (
     item: RequestItem,
@@ -99,6 +184,7 @@ export function RequestColumn({
 }) {
   const bodyRef = useRef<HTMLUListElement>(null);
   const [showFade, setShowFade] = useState(false);
+  const reduceMotion = useReducedMotion();
   const headerId = `request-column-${column.status}`;
 
   const columnRef = useCallback(
@@ -120,20 +206,21 @@ export function RequestColumn({
     setShowFade(overflowsBottom(bodyRef.current));
   }, []);
 
-  const dimmed =
-    dragActive &&
-    !(isTarget && dropValid) &&
-    draggedCardId !== null &&
-    !isTarget;
+  // Only lanes that cannot take the card in flight fade, and only while a
+  // gesture is live — never because "an overlay exists" (D6/F3.2).
+  const dimmed = Boolean(illegal);
   const highlight = isTarget && dropValid;
+  // The hovered illegal lane says no in words while the drag is still in hand.
+  const refuseChip = Boolean(isTarget) && !dropValid;
 
   if (collapsed) {
     return (
       <section
         aria-label={`${column.label} column, collapsed`}
         className={cn(
-          "flex h-full w-12 shrink-0 snap-start flex-col items-center rounded-xl border border-border/50 bg-muted/20 py-2 transition-colors",
-          highlight && "border-[var(--ring)] border-dashed bg-primary/10"
+          "flex h-full w-12 shrink-0 snap-start flex-col items-center rounded-xl border border-border/50 bg-muted/20 py-2 transition-all duration-200 ease-out",
+          highlight && "border-[var(--ring)] border-dashed bg-primary/10",
+          dimmed && "opacity-45"
         )}
         ref={columnRef}
       >
@@ -167,7 +254,7 @@ export function RequestColumn({
     <section
       aria-labelledby={headerId}
       className={cn(
-        "flex h-full min-h-0 shrink-0 snap-start flex-col rounded-xl border bg-muted/20 transition-colors",
+        "flex h-full min-h-0 shrink-0 snap-start flex-col rounded-xl border bg-muted/20 transition-all duration-200 ease-out",
         // CMIS-UI-05 §2 — 260px at ≥1200, 220px at 800–1199 (48px when collapsed)
         "w-[220px] min-[1200px]:w-[260px]",
         highlight
@@ -178,47 +265,22 @@ export function RequestColumn({
       ref={columnRef}
       title={column.description}
     >
-      <motion.header
-        animate={shake ? { x: [0, -4, 4, -4, 0] } : { x: 0 }}
-        className="flex shrink-0 items-center gap-2 rounded-t-xl border-border/50 border-b px-2 py-1.5"
-        id={headerId}
-        transition={
-          shake
-            ? { bounce: 0.4, duration: 0.35, type: "spring" }
-            : { duration: 0.15 }
-        }
-      >
-        <span
-          aria-hidden
-          className={cn("size-2 shrink-0 rounded-full", column.accent)}
-        />
-        <h2 className="min-w-0 truncate font-semibold text-xs">
-          {column.label}
-        </h2>
-        <span
-          className={cn(
-            "shrink-0 rounded-full border px-1.5 py-px font-semibold text-[10px] leading-none",
-            column.badgeClass
-          )}
-        >
-          {countLabel}
-        </span>
-        {column.isOffFlow ? (
-          <button
-            aria-expanded
-            aria-label={`Collapse ${column.label} column`}
-            className="press-feedback ml-auto rounded px-1 text-caption text-muted-foreground hover:bg-muted hover:text-foreground"
-            onClick={onToggleCollapsed}
-            type="button"
-          >
-            Collapse
-          </button>
-        ) : null}
-      </motion.header>
+      <ColumnHeader
+        column={column}
+        countLabel={countLabel}
+        headerId={headerId}
+        onClearClaimed={onClearClaimed}
+        onToggleCollapsed={onToggleCollapsed}
+        reduceMotion={reduceMotion}
+        refuseChip={refuseChip}
+        shake={shake}
+        total={total}
+      />
 
       <div className="relative min-h-0 flex-1">
         <ul
           className="h-full list-none space-y-2 overflow-y-auto p-1.5"
+          data-lane-scroll={column.status}
           onScroll={handleScroll}
           ref={bodyRef}
         >
