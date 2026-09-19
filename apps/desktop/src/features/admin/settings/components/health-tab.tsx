@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { relativeTime } from "../../format";
 import { HealthCard } from "../../health/components/health-card";
 import { useHealth } from "../../health/hooks/use-health";
+import { useSystemHealth } from "../../health/hooks/use-system-health";
 import type { HealthAction, HealthCardId } from "../../health/types";
 import { SettingsCard } from "./settings-card";
 
@@ -12,7 +13,11 @@ import { SettingsCard } from "./settings-card";
  * A simplified grid of health cards without the full-page chrome.
  */
 export function HealthTab() {
-  const { cards, online, pendingSyncs, runAction } = useHealth();
+  const { data: health } = useSystemHealth();
+  const { cards, online, pendingSyncs, runAction } = useHealth(
+    health?.cards,
+    health?.pendingSyncs
+  );
 
   const handleAction = useCallback(
     (id: HealthCardId, action: HealthAction) => {
