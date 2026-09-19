@@ -19,7 +19,6 @@ import { DEFAULT_ANIMATION_EASING } from "../animation";
 import {
   buildYScalesForLines,
   getPrimaryYScale,
-  normalizeYAxisId,
   wrapSingleYScale,
 } from "../axes/y-axis-scales";
 import {
@@ -31,12 +30,7 @@ import {
   renderKeyedChartLayers,
   resolveChartChildElement,
 } from "../chart-child-passthrough";
-import {
-  ChartProvider,
-  type LineConfig,
-  type Margin,
-  type TooltipData,
-} from "../chart-context";
+import { ChartProvider, type Margin, type TooltipData } from "../chart-context";
 import { isGradientDefComponent, isPatternDefComponent } from "../chart-defs";
 import { shortDateFmt } from "../chart-formatters";
 import {
@@ -48,8 +42,16 @@ import {
 import { BarLoadingSkeleton } from "../loading-sweep";
 import { extractReferenceAreaConfigs } from "../patterns/reference-area-config";
 import { useScheduledTooltip } from "../use-scheduled-tooltip";
-import type { BarProps } from "./bar";
-import { topSquareCenterY } from "./bar-squares-layout";
+import {
+  computeGroupedMax,
+  computeStackedMax,
+  extractBarConfigs,
+} from "./bar-config";
+import {
+  computeHorizontalPositions,
+  computeVerticalPositions,
+  type SquareSnap,
+} from "./bar-positions";
 
 /** Skeleton bars to show when `status="loading"` and `data` is empty. */
 const FALLBACK_LOADING_BARS = 12;
@@ -85,7 +87,7 @@ export interface BarChartProps {
   /** Signature of motion URL state — triggers enter replay when it changes. */
   revealSignature?: string;
   /** When set, tooltip Y positions snap to the top square center (shape variant). */
-  squareSnap?: { squareGap: number; groupGap?: number; fit?: boolean };
+  squareSnap?: SquareSnap;
   /** Whether to stack bars instead of grouping them. Default: false */
   stacked?: boolean;
   /** Gap between stacked bar segments in pixels. Default: 0 */
@@ -98,244 +100,6 @@ export interface BarChartProps {
 }
 
 const DEFAULT_MARGIN: Margin = { bottom: 40, left: 40, right: 40, top: 40 };
-
-// Extract bar configs from children synchronously
-function extractBarConfigs(children: ReactNode): LineConfig[] {
-  const configs: LineConfig[] = [];
-
-  forEachChartChild(children, (child) => {
-    const childType = child.type as {
-      displayName?: string;
-      name?: string;
-      __isBarDepthLayer?: boolean;
-    };
-    // Bar-depth surface layers (BarDepthBack/Front, BarPulse) carry a
-    // `dataKey` to pair with a Bar but are not series themselves — skip them
-    // so they don't inflate the series count and shrink the real bars.
-    if (childType.__isBarDepthLayer) {
-      return;
-    }
-    const componentName =
-      typeof child.type === "function"
-        ? childType.displayName || childType.name || ""
-        : "";
-
-    const props = child.props as BarProps | undefined;
-    const isBarComponent =
-      componentName === "Bar" ||
-      componentName === "BarSquares" ||
-      (props && typeof props.dataKey === "string" && props.dataKey.length > 0);
-
-    if (isBarComponent && props?.dataKey) {
-      const dotColor =
-        props.stroke || props.fill || "var(--chart-line-primary)";
-      configs.push({
-        dataKey: props.dataKey,
-        stroke: dotColor,
-        strokeWidth: 0,
-        yAxisId: props.yAxisId,
-      });
-    }
-  });
-
-  return configs;
-}
-
-function computeStackedMax(
-  data: Record<string, unknown>[],
-  lines: LineConfig[]
-): number {
-  let max = 0;
-  for (const d of data) {
-    let sum = 0;
-    for (const line of lines) {
-      const value = d[line.dataKey];
-      if (typeof value === "number") {
-        sum += value;
-      }
-    }
-    if (sum > max) {
-      max = sum;
-    }
-  }
-  return max;
-}
-
-function computeGroupedMax(
-  data: Record<string, unknown>[],
-  lines: LineConfig[]
-): number {
-  let max = 0;
-  for (const line of lines) {
-    for (const d of data) {
-      const value = d[line.dataKey];
-      if (typeof value === "number" && value > max) {
-        max = value;
-      }
-    }
-  }
-  return max;
-}
-
-interface BarPositions {
-  xPositions: Record<string, number>;
-  yPositions: Record<string, number>;
-}
-
-function computeHorizontalPositions(
-  d: Record<string, unknown>,
-  lines: LineConfig[],
-  yScales: Record<string, ReturnType<typeof scaleLinear<number>>>,
-  valueScale: ReturnType<typeof scaleLinear<number>>,
-  barPos: number,
-  bandWidth: number,
-  stacked: boolean
-): BarPositions {
-  const yPositions: Record<string, number> = {};
-  const xPositions: Record<string, number> = {};
-  const seriesCount = lines.length;
-  const groupGap = seriesCount > 1 ? 4 : 0;
-  const individualBarHeight =
-    seriesCount > 0
-      ? (bandWidth - groupGap * (seriesCount - 1)) / seriesCount
-      : bandWidth;
-
-  if (stacked) {
-    let cumulative = 0;
-    for (const line of lines) {
-      const value = d[line.dataKey];
-      if (typeof value === "number") {
-        cumulative += value;
-        const axisScale = yScales[normalizeYAxisId(line.yAxisId)] ?? valueScale;
-        xPositions[line.dataKey] = axisScale(cumulative) ?? 0;
-        yPositions[line.dataKey] = barPos + bandWidth / 2;
-      }
-    }
-  } else {
-    for (const [idx, line] of lines.entries()) {
-      const value = d[line.dataKey];
-      if (typeof value === "number") {
-        const axisScale = yScales[normalizeYAxisId(line.yAxisId)] ?? valueScale;
-        xPositions[line.dataKey] = axisScale(value) ?? 0;
-        yPositions[line.dataKey] =
-          barPos +
-          idx * (individualBarHeight + groupGap) +
-          individualBarHeight / 2;
-      }
-    }
-  }
-
-  return { xPositions, yPositions };
-}
-
-function computeStackedVerticalPositions(
-  d: Record<string, unknown>,
-  lines: LineConfig[],
-  yScales: Record<string, ReturnType<typeof scaleLinear<number>>>,
-  primaryYScale: ReturnType<typeof scaleLinear<number>>,
-  stackGap: number
-): Record<string, number> {
-  const yPositions: Record<string, number> = {};
-  let cumulative = 0;
-  let seriesIdx = 0;
-  for (const line of lines) {
-    const value = d[line.dataKey];
-    if (typeof value === "number") {
-      cumulative += value;
-      const axisScale =
-        yScales[normalizeYAxisId(line.yAxisId)] ?? primaryYScale;
-      const gapOffset = seriesIdx * stackGap;
-      yPositions[line.dataKey] = (axisScale(cumulative) ?? 0) - gapOffset;
-      seriesIdx += 1;
-    }
-  }
-  return yPositions;
-}
-
-function computeGroupedVerticalPositions(
-  d: Record<string, unknown>,
-  lines: LineConfig[],
-  yScales: Record<string, ReturnType<typeof scaleLinear<number>>>,
-  primaryYScale: ReturnType<typeof scaleLinear<number>>,
-  barPos: number,
-  bandWidth: number,
-  squareSnap:
-    | { squareGap: number; groupGap?: number; fit?: boolean }
-    | undefined,
-  innerHeight: number
-): { xPositions: Record<string, number>; yPositions: Record<string, number> } {
-  const yPositions: Record<string, number> = {};
-  const xPositions: Record<string, number> = {};
-  const seriesCount = lines.length;
-  const groupGap = seriesCount > 1 ? 4 : 0;
-  const individualBarWidth =
-    seriesCount > 0
-      ? (bandWidth - groupGap * (seriesCount - 1)) / seriesCount
-      : bandWidth;
-
-  for (const [idx, line] of lines.entries()) {
-    const value = d[line.dataKey];
-    if (typeof value !== "number") {
-      continue;
-    }
-    const axisScale = yScales[normalizeYAxisId(line.yAxisId)] ?? primaryYScale;
-    const baselineY = axisScale(0) ?? innerHeight;
-    const valueY = axisScale(value) ?? 0;
-    const barLengthPx = baselineY - valueY;
-
-    yPositions[line.dataKey] =
-      squareSnap && value > 0
-        ? topSquareCenterY({
-            barLengthPx,
-            baselineY,
-            fit: squareSnap.fit,
-            gap: squareSnap.squareGap,
-            squareSize: individualBarWidth,
-          })
-        : valueY;
-
-    xPositions[line.dataKey] =
-      barPos + idx * (individualBarWidth + groupGap) + individualBarWidth / 2;
-  }
-  return { xPositions, yPositions };
-}
-
-function computeVerticalPositions(
-  d: Record<string, unknown>,
-  lines: LineConfig[],
-  yScales: Record<string, ReturnType<typeof scaleLinear<number>>>,
-  primaryYScale: ReturnType<typeof scaleLinear<number>>,
-  barPos: number,
-  bandWidth: number,
-  stacked: boolean,
-  stackGap: number,
-  squareSnap:
-    | { squareGap: number; groupGap?: number; fit?: boolean }
-    | undefined,
-  innerHeight: number
-): BarPositions {
-  if (stacked) {
-    const yPositions = computeStackedVerticalPositions(
-      d,
-      lines,
-      yScales,
-      primaryYScale,
-      stackGap
-    );
-    return { xPositions: {}, yPositions };
-  }
-
-  return computeGroupedVerticalPositions(
-    d,
-    lines,
-    yScales,
-    primaryYScale,
-    barPos,
-    bandWidth,
-    squareSnap,
-    innerHeight
-  );
-}
 
 interface ChartInnerProps {
   animationDuration: number;
@@ -351,7 +115,7 @@ interface ChartInnerProps {
   onPhaseChange?: (phase: ChartPhase) => void;
   orientation: BarOrientation;
   revealSignature?: string;
-  squareSnap?: { squareGap: number; groupGap?: number; fit?: boolean };
+  squareSnap?: SquareSnap;
   stacked: boolean;
   stackGap: number;
   status: ChartStatus;
