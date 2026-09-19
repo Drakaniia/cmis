@@ -22,6 +22,7 @@ function claimHistory(at: string): StatusHistoryEntry[] {
 
 function claimedItem(claimedHoursAgo: number, now: number): RequestItem {
   return {
+    boardPosition: 0,
     category: "Analgesic",
     dispensingRecords: [],
     history: claimHistory(

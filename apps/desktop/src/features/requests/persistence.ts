@@ -25,6 +25,7 @@ import type {
   RequestStatus,
   StatusHistoryEntry,
 } from "./types";
+import { REQUEST_COLUMNS } from "./types";
 
 let databasePromise: Promise<Database | null> | null = null;
 
@@ -42,6 +43,10 @@ function getDatabase(): Promise<Database | null> {
 }
 
 interface RequestRow {
+  /** Added by migration 0011; absent on a build that has not run it yet. */
+  archived_at?: string | null;
+  /** Added by migration 0011; absent on a build that has not run it yet. */
+  board_position?: number | null;
   category: string;
   denied_note: string | null;
   denied_reason: string | null;
@@ -172,6 +177,8 @@ function assemble(
     };
     const deniedReason = toDenyReason(row.denied_reason);
     return {
+      archivedAt: row.archived_at ?? null,
+      boardPosition: row.board_position ?? 0,
       category: row.category,
       ...(row.denied_note === null ? {} : { deniedNote: row.denied_note }),
       ...(deniedReason === undefined ? {} : { deniedReason }),
@@ -192,10 +199,32 @@ function assemble(
   });
 }
 
+/** Lane order, so a flat array read from disk groups the way the board draws. */
+const LANE_ORDER = new Map<RequestStatus, number>(
+  REQUEST_COLUMNS.map((column, index) => [column.status, index])
+);
+
+/**
+ * Lane index → manual position (`board_position ASC`) → newest → id. The
+ * position is the durable order a drop writes (§7); the tie-breaks keep a
+ * freshly migrated row and a newly created card deterministic.
+ */
 function orderRequests(items: RequestItem[]): RequestItem[] {
-  const sorted = [...items].sort((a, b) =>
-    b.submittedAt.localeCompare(a.submittedAt)
-  );
+  const sorted = [...items].sort((a, b) => {
+    const lane =
+      (LANE_ORDER.get(a.status) ?? 0) - (LANE_ORDER.get(b.status) ?? 0);
+    if (lane !== 0) {
+      return lane;
+    }
+    if (a.boardPosition !== b.boardPosition) {
+      return a.boardPosition - b.boardPosition;
+    }
+    const submitted = b.submittedAt.localeCompare(a.submittedAt);
+    if (submitted !== 0) {
+      return submitted;
+    }
+    return a.id.localeCompare(b.id);
+  });
   for (const item of sorted) {
     item.history.sort((a, b) => a.at.localeCompare(b.at));
     item.notes.sort((a, b) => a.at.localeCompare(b.at));
@@ -257,6 +286,36 @@ export async function deleteRequest(id: string): Promise<boolean> {
   }
 }
 
+/**
+ * The explicit archive marker (migration 0011, F9): clearing the Claimed lane
+ * stamps `archived_at` so the cards leave the board while their records stay
+ * exactly where they are. Returns false when there is no database, so the caller
+ * can report an honest failure instead of a removal that never happened.
+ */
+export async function archiveRequests(
+  ids: readonly string[],
+  at = new Date().toISOString()
+): Promise<boolean> {
+  const db = await getDatabase();
+  if (!db) {
+    return false;
+  }
+  if (ids.length === 0) {
+    return true;
+  }
+  try {
+    const placeholders = ids.map((_, index) => `$${index + 2}`).join(", ");
+    await db.execute(
+      `UPDATE requests SET archived_at = $1 WHERE id IN (${placeholders})`,
+      [at, ...ids]
+    );
+    return true;
+  } catch (error) {
+    console.error("[persistence] archiveRequests failed", error);
+    return false;
+  }
+}
+
 /** Reads the whole queue, or null when there is no desktop database. */
 export async function loadRequests(): Promise<RequestItem[] | null> {
   const db = await getDatabase();
@@ -277,6 +336,159 @@ export async function loadRequests(): Promise<RequestItem[] | null> {
   }
 }
 
+/**
+ * Every column `requests` has ever had, in bind order.
+ *
+ * The list used to be hand-written in the INSERT and had to be kept in step
+ * with a matching `$n` count — which is exactly the class of bug that silently
+ * lost the whole board when `branch` was listed on a table that does not have it
+ * (AF5/F13). Now the live column set is read once and the statement is built
+ * from what actually exists, so adding a column (0011's `board_position` and
+ * `archived_at`) can never unbalance a bind count again.
+ */
+const REQUEST_COLUMNS_IN_ORDER = [
+  "id",
+  "requestor_name",
+  "requestor_id",
+  "requestor_email",
+  "medicine",
+  "category",
+  "qty",
+  "unit",
+  "reason",
+  "status",
+  "submitted_at",
+  "denied_reason",
+  "denied_note",
+  "source",
+  "item_id",
+  "board_position",
+  "archived_at",
+] as const;
+
+/**
+ * Refreshed on upsert, mirroring the previous `ON CONFLICT` list plus the two
+ * 0011 columns. A request's identity and its submission facts never change, so
+ * they are not in the update set.
+ */
+const MUTABLE_REQUEST_COLUMNS = new Set<string>([
+  "archived_at",
+  "board_position",
+  "denied_note",
+  "denied_reason",
+  "item_id",
+  "qty",
+  "source",
+  "status",
+]);
+
+let columnCache: Set<string> | null = null;
+
+/** A statement that named a column this database does not have. */
+const MISSING_COLUMN_RE = /no such column:\s*(\w+)/;
+
+const MAX_COLUMN_FALLBACKS = 3;
+
+/**
+ * The live column set, read once. A build that has not run a migration yet is
+ * still writable: an unknown column simply is not in the statement.
+ */
+async function requestColumns(db: Database): Promise<Set<string>> {
+  if (columnCache) {
+    return columnCache;
+  }
+  try {
+    const rows = await db.select<{ name: string }[]>(
+      "PRAGMA table_info(requests)"
+    );
+    columnCache = new Set(rows.map((row) => row.name));
+  } catch (error) {
+    console.warn("[persistence] PRAGMA table_info(requests) failed", error);
+    columnCache = new Set(REQUEST_COLUMNS_IN_ORDER);
+  }
+  return columnCache;
+}
+
+function missingColumnOf(error: unknown): string | null {
+  const message = error instanceof Error ? error.message : String(error);
+  return MISSING_COLUMN_RE.exec(message)?.[1] ?? null;
+}
+
+/**
+ * Writes one upsert, dropping any column this database does not have yet and
+ * trying again. Recursive rather than a loop so the fallback is explicit and
+ * bounded: a cache warmed before a migration shipped cannot silently lose the
+ * board (the AF5/F13 class of bug).
+ */
+async function executeRequestUpsert(
+  db: Database,
+  item: RequestItem,
+  columns: Set<string>,
+  attemptsLeft = MAX_COLUMN_FALLBACKS
+): Promise<void> {
+  const { params, sql } = buildRequestUpsert(columns, item);
+  try {
+    await db.execute(sql, params);
+  } catch (error) {
+    const missing = missingColumnOf(error);
+    if (!(missing && columns.has(missing)) || attemptsLeft <= 1) {
+      throw error;
+    }
+    console.warn(
+      `[persistence] requests.${missing} missing — saving without it (run the migration)`
+    );
+    const next = new Set(columns);
+    next.delete(missing);
+    columnCache = next;
+    await executeRequestUpsert(db, item, next, attemptsLeft - 1);
+  }
+}
+
+function requestValues(item: RequestItem): Record<string, unknown> {
+  return {
+    archived_at: item.archivedAt ?? null,
+    board_position: item.boardPosition,
+    category: item.category,
+    denied_note: item.deniedNote ?? null,
+    denied_reason: item.deniedReason ?? null,
+    id: item.id,
+    item_id: item.itemId ?? null,
+    medicine: item.medicine,
+    qty: item.qty,
+    reason: item.reason,
+    requestor_email: item.requestor.email,
+    requestor_id: item.requestor.id,
+    requestor_name: item.requestor.name,
+    source: item.source,
+    status: item.status,
+    submitted_at: item.submittedAt,
+    unit: item.unit,
+  };
+}
+
+/** Builds the upsert from the columns that actually exist on this database. */
+function buildRequestUpsert(
+  columns: Set<string>,
+  item: RequestItem
+): { params: unknown[]; sql: string } {
+  const present = REQUEST_COLUMNS_IN_ORDER.filter((column) =>
+    columns.has(column)
+  );
+  const values = requestValues(item);
+  const params = present.map((column) => values[column]);
+  const placeholders = present.map((_, index) => `$${index + 1}`).join(", ");
+  const updates = present
+    .filter((column) => MUTABLE_REQUEST_COLUMNS.has(column))
+    .map((column) => `${column} = excluded.${column}`)
+    .join(", ");
+  const conflict =
+    updates === "" ? "" : ` ON CONFLICT(id) DO UPDATE SET ${updates}`;
+  return {
+    params,
+    sql: `INSERT INTO requests (${present.join(", ")}) VALUES (${placeholders})${conflict}`,
+  };
+}
+
 /** Writes one request and its children. Safe to call repeatedly. */
 export async function saveRequest(item: RequestItem): Promise<void> {
   const db = await getDatabase();
@@ -284,89 +496,7 @@ export async function saveRequest(item: RequestItem): Promise<void> {
     return;
   }
   try {
-    // 15 columns bind 15 values. `branch` used to be listed here and does not
-    // exist on `requests` (it is `audit_log`'s column), which made every write
-    // throw "no such column" into the catch below — the board looked saved and
-    // lost everything on restart (AF5/F13). Count the columns when adding one:
-    // that bug was invisible for exactly this reason. `item_id` (migration 0009)
-    // is the stable link that survives a rename — history no longer detaches
-    // when the display name changes (AF13).
-    const withItemId = async () =>
-      db.execute(
-        `INSERT INTO requests (
-           id, requestor_name, requestor_id, requestor_email, medicine, category,
-           qty, unit, reason, status, submitted_at, denied_reason, denied_note,
-           source, item_id
-         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
-         ON CONFLICT(id) DO UPDATE SET
-           status = excluded.status,
-           qty = excluded.qty,
-           denied_reason = excluded.denied_reason,
-           denied_note = excluded.denied_note,
-           source = excluded.source,
-           item_id = excluded.item_id`,
-        [
-          item.id,
-          item.requestor.name,
-          item.requestor.id,
-          item.requestor.email,
-          item.medicine,
-          item.category,
-          item.qty,
-          item.unit,
-          item.reason,
-          item.status,
-          item.submittedAt,
-          item.deniedReason ?? null,
-          item.deniedNote ?? null,
-          item.source,
-          item.itemId ?? null,
-        ]
-      );
-
-    try {
-      await withItemId();
-    } catch (error) {
-      // Graceful downgrade: a build that has not yet run migration 0009 has no
-      // `item_id` column — retry without it rather than losing the whole board.
-      const message = error instanceof Error ? error.message : String(error);
-      if (message.includes("item_id") && message.includes("no such column")) {
-        console.warn(
-          "[persistence] requests.item_id missing — saving without link (run migration 0009)"
-        );
-        await db.execute(
-          `INSERT INTO requests (
-             id, requestor_name, requestor_id, requestor_email, medicine, category,
-             qty, unit, reason, status, submitted_at, denied_reason, denied_note,
-             source
-           ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
-           ON CONFLICT(id) DO UPDATE SET
-             status = excluded.status,
-             qty = excluded.qty,
-             denied_reason = excluded.denied_reason,
-             denied_note = excluded.denied_note,
-             source = excluded.source`,
-          [
-            item.id,
-            item.requestor.name,
-            item.requestor.id,
-            item.requestor.email,
-            item.medicine,
-            item.category,
-            item.qty,
-            item.unit,
-            item.reason,
-            item.status,
-            item.submittedAt,
-            item.deniedReason ?? null,
-            item.deniedNote ?? null,
-            item.source,
-          ]
-        );
-      } else {
-        throw error;
-      }
-    }
+    await executeRequestUpsert(db, item, await requestColumns(db));
 
     await db.execute("DELETE FROM request_history WHERE request_id = $1", [
       item.id,

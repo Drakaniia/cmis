@@ -6,6 +6,7 @@ import { useRequestBoard } from "./use-request-board";
 
 function makeItem(overrides: Partial<RequestItem> = {}): RequestItem {
   return {
+    boardPosition: 0,
     category: "Analgesic",
     dispensingRecords: [],
     history: [],
@@ -516,13 +517,19 @@ describe("useRequestBoard", () => {
   });
 
   describe("persistence", () => {
-    it("calls onPersist for each changed item on move", () => {
+    it("calls onPersist for the moved item and the neighbour it displaced", () => {
       const persist = vi.fn();
       const { result } = renderHook(() => useRequestBoard(ITEMS, persist));
       act(() => result.current.moveRequestAt("REQ-001", "approved", 0));
-      expect(persist).toHaveBeenCalledTimes(1);
+      // F8 — a drop persists the whole affected lane, not just the card: the
+      // position it took (0) and the position it pushed down (1) are both
+      // durable, which is what makes a manual order survive a restart.
+      expect(persist).toHaveBeenCalledTimes(2);
       expect(persist).toHaveBeenCalledWith(
         expect.objectContaining({ id: "REQ-001", status: "approved" })
+      );
+      expect(persist).toHaveBeenCalledWith(
+        expect.objectContaining({ boardPosition: 1, id: "REQ-003" })
       );
     });
 

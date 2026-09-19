@@ -33,6 +33,15 @@ export interface DispenseOutcome {
 
 const ACTOR = "You";
 
+/** Last write wins per id, so resequencing never persists the same row twice. */
+function uniqueById(items: RequestItem[]): RequestItem[] {
+  const byId = new Map<string, RequestItem>();
+  for (const item of items) {
+    byId.set(item.id, item);
+  }
+  return [...byId.values()];
+}
+
 function appendHistory(
   item: RequestItem,
   to: RequestStatus,
@@ -99,6 +108,32 @@ function withInserted(
     cursor += 1;
   }
   return result;
+}
+
+/**
+ * F8 — makes the array's lane order real by stamping a 0-based
+ * `boardPosition` per lane, in encounter order. Whatever moved (a drop, a menu
+ * move, a deny, a dispense, a removal) leaves both affected lanes resequenced,
+ * and only the rows whose position actually changed are returned as `changed`,
+ * so a write stays proportional to the reorder rather than to the board.
+ */
+function withLanePositions(items: RequestItem[]): {
+  changed: RequestItem[];
+  next: RequestItem[];
+} {
+  const counters = new Map<RequestStatus, number>();
+  const changed: RequestItem[] = [];
+  const next = items.map((item) => {
+    const position = counters.get(item.status) ?? 0;
+    counters.set(item.status, position + 1);
+    if (item.boardPosition === position) {
+      return item;
+    }
+    const updated = { ...item, boardPosition: position };
+    changed.push(updated);
+    return updated;
+  });
+  return { changed, next };
 }
 
 /**
@@ -186,22 +221,28 @@ export function useRequestBoard(
         history: appendHistory(current, to),
         status: to,
       };
-      setItems((prev) =>
+      // The whole destination lane is resequenced, and the source lane after it
+      // too — a position is only meaningful relative to its neighbours (D13).
+      const { changed, next } = withLanePositions(
         withInserted(
-          prev.filter((item) => item.id !== id),
+          items.filter((item) => item.id !== id),
           moved,
           to,
           index
         )
       );
+      setItems(next);
       setLastMove({ entries: [{ from, id, index }] });
-      persist([moved]);
+      persist(uniqueById([...changed, moved]));
       return { from, index, item: moved, ok: true };
     },
     [items, persist]
   );
 
-  /** Menu/keyboard moves land at the end of the destination column. */
+  /**
+   * Menu/keyboard moves append to the end of the destination column (D14):
+   * a command is not a placement, so it must not shuffle what the user arranged.
+   */
   const moveRequest = useCallback(
     (id: string, to: RequestStatus): MoveOutcome =>
       moveRequestAt(id, to, countInStatus(items, to)),
@@ -223,18 +264,18 @@ export function useRequestBoard(
         history: appendHistory(item, to),
         status: to,
       }));
-      setItems((prev) => {
-        let next = prev.filter((item) => !movingIds.has(item.id));
-        for (const item of moved) {
-          next = withInserted(
-            next,
-            item,
-            to,
-            next.filter((candidate) => candidate.status === to).length
-          );
-        }
-        return next;
-      });
+      let inserted = items.filter((item) => !movingIds.has(item.id));
+      for (const item of moved) {
+        // Append in bulk order, never at the position a neighbour was dropped at.
+        inserted = withInserted(
+          inserted,
+          item,
+          to,
+          inserted.filter((candidate) => candidate.status === to).length
+        );
+      }
+      const { changed, next } = withLanePositions(inserted);
+      setItems(next);
       setLastMove({
         entries: moving.map((item) => ({
           from: item.status,
@@ -242,7 +283,7 @@ export function useRequestBoard(
           index: 0,
         })),
       });
-      persist(moved);
+      persist(uniqueById([...changed, ...moved]));
       return moved.length;
     },
     [items, persist]
@@ -264,9 +305,12 @@ export function useRequestBoard(
         status: "denied" as const,
       }));
       const byId = new Map(updated.map((item) => [item.id, item]));
-      setItems((prev) => prev.map((item) => byId.get(item.id) ?? item));
+      const { changed, next } = withLanePositions(
+        items.map((item) => byId.get(item.id) ?? item)
+      );
+      setItems(next);
       setLastMove(null);
-      persist(updated);
+      persist(uniqueById([...changed, ...updated]));
       return updated.length;
     },
     [items, persist]
@@ -297,10 +341,13 @@ export function useRequestBoard(
         qty: partial ? outcome.remainingQty : current.qty,
         status: partial ? "ready" : "claimed",
       };
-      setItems((prev) => prev.map((item) => (item.id === id ? next : item)));
+      const resequenced = withLanePositions(
+        items.map((item) => (item.id === id ? next : item))
+      );
+      setItems(resequenced.next);
       // A dispense moves real stock, so it is never offered an undo (D12/F12).
       setLastMove(null);
-      persist([next]);
+      persist(uniqueById([...resequenced.changed, next]));
       return true;
     },
     [items, persist]
@@ -338,9 +385,12 @@ export function useRequestBoard(
         return 0;
       }
       const updatedById = new Map(updated.map((item) => [item.id, item]));
-      setItems((prev) => prev.map((item) => updatedById.get(item.id) ?? item));
+      const { changed, next } = withLanePositions(
+        items.map((item) => updatedById.get(item.id) ?? item)
+      );
+      setItems(next);
       setLastMove(null);
-      persist(updated);
+      persist(uniqueById([...changed, ...updated]));
       return updated.length;
     },
     [items, persist]
@@ -351,20 +401,62 @@ export function useRequestBoard(
    * Pending cards are ever offered Cancel (F6), so the caller has already
    * applied that guard — this is the state half of the removal.
    */
-  const removeRequests = useCallback((ids: string[]): number => {
-    const removing = new Set(ids);
-    setItems((prev) => prev.filter((item) => !removing.has(item.id)));
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      for (const id of ids) {
-        next.delete(id);
+  const removeRequests = useCallback(
+    (ids: string[]): number => {
+      const removing = new Set(ids);
+      const { changed, next } = withLanePositions(
+        items.filter((item) => !removing.has(item.id))
+      );
+      setItems(next);
+      persist(changed);
+      setSelectedIds((prev) => {
+        const selected = new Set(prev);
+        for (const id of ids) {
+          selected.delete(id);
+        }
+        return selected;
+      });
+      // A deleted card cannot be undone back into existence.
+      setLastMove(null);
+      return removing.size;
+    },
+    [items, persist]
+  );
+
+  /**
+   * F9 — clearing the Claimed lane.
+   *
+   * It stamps an explicit archive marker on the cards the user can see; the
+   * rows, their history and every dispensing record stay exactly where they are
+   * and continue to show in the Dispensing Log. The caller performs the database
+   * write *first*, so a build with no database reports an honest failure instead
+   * of a removal that never happened (E18).
+   */
+  const clearClaimed = useCallback(
+    (ids: readonly string[]): number => {
+      if (ids.length === 0) {
+        return 0;
       }
-      return next;
-    });
-    // A deleted card cannot be undone back into existence.
-    setLastMove(null);
-    return removing.size;
-  }, []);
+      const at = new Date().toISOString();
+      const targets = new Set(ids);
+      const archived: RequestItem[] = [];
+      const next = items.map((item) => {
+        if (!(targets.has(item.id) && item.status === "claimed")) {
+          return item;
+        }
+        const cleared: RequestItem = { ...item, archivedAt: at };
+        archived.push(cleared);
+        return cleared;
+      });
+      if (archived.length === 0) {
+        return 0;
+      }
+      setItems(next);
+      persist(archived);
+      return archived.length;
+    },
+    [items, persist]
+  );
 
   const addNote = useCallback(
     (id: string, text: string) => {
@@ -408,9 +500,12 @@ export function useRequestBoard(
       }
     }
     const byId = new Map(reverted.map((item) => [item.id, item]));
-    setItems((prev) => prev.map((item) => byId.get(item.id) ?? item));
+    const { changed, next } = withLanePositions(
+      items.map((item) => byId.get(item.id) ?? item)
+    );
+    setItems(next);
     setLastMove(null);
-    persist(reverted);
+    persist(uniqueById([...changed, ...reverted]));
     return true;
   }, [items, lastMove, persist]);
 
@@ -421,6 +516,7 @@ export function useRequestBoard(
 
   return {
     addNote,
+    clearClaimed,
     clearSelection,
     denyRequests,
     items,
