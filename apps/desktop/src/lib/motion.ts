@@ -30,13 +30,20 @@ export const toastSpring = {
   type: "spring" as const,
 } satisfies Record<string, unknown>;
 
-export function flickSpring(hasVelocity: boolean) {
+export function flickSpring(_hasVelocity: boolean) {
   return {
-    bounce: hasVelocity ? 0.2 : 0,
-    duration: 0.3,
+    bounce: 0,
+    duration: 0.35,
     type: "spring" as const,
   };
 }
+
+/** Smooth critically-damped settle for drag success + spring-back — no bounce, no magnet blink. */
+export const smoothSettleSpring = {
+  bounce: 0,
+  duration: 0.38,
+  type: "spring" as const,
+} satisfies Record<string, unknown>;
 
 /** CMIS-UI-05 §4.3 — press/select feedback that follows the pointer down. */
 export const dragSpring = {

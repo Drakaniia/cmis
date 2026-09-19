@@ -201,14 +201,14 @@ describe("flickSpring", () => {
   it("returns a spring with bounce when there is velocity", () => {
     const spring = flickSpring(true);
     expect(spring.type).toBe("spring");
-    expect(spring.bounce).toBe(0.2);
-    expect(spring.duration).toBe(0.3);
+    expect(spring.bounce).toBe(0);
+    expect(spring.duration).toBe(0.35);
   });
 
   it("returns a critically damped spring when there is no velocity", () => {
     const spring = flickSpring(false);
     expect(spring.type).toBe("spring");
     expect(spring.bounce).toBe(0);
-    expect(spring.duration).toBe(0.3);
+    expect(spring.duration).toBe(0.35);
   });
 });
