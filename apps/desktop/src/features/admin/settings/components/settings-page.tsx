@@ -55,10 +55,10 @@ export function SettingsPage() {
   const _meta = SETTINGS_TABS.find((entry) => entry.id === tab);
 
   return (
-    <div className="flex h-[calc(100svh-48px)] flex-col overflow-hidden">
+    <div className="flex h-full flex-col overflow-hidden">
       <SettingsTabBar active={tab} onSelect={selectTab} />
 
-      <div className="min-h-0 flex-1 overflow-auto">
+      <div className="min-h-0 flex-1 overflow-auto pb-6">
         <div className="mx-auto w-full max-w-4xl px-3 py-4 sm:px-4">
           <AnimatePresence mode="wait">
             <motion.div

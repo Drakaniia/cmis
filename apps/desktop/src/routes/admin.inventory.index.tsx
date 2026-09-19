@@ -26,7 +26,7 @@ function AdminInventoryIndexComponent() {
   );
 
   return (
-    <div className="flex h-[calc(100svh-48px)] flex-col overflow-hidden">
+    <div className="flex h-full flex-col overflow-hidden">
       <div className="min-h-0 flex-1 overflow-hidden">
         {/* `?item=` is the inbound half of the alert pages' "Open in Stock
          * Management" jump (spec §13). */}
