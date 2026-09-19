@@ -1,3 +1,4 @@
+import { cn } from "@cmis/ui/lib/utils";
 import { type MotionValue, motion } from "motion/react";
 import type * as React from "react";
 import { createPortal } from "react-dom";
@@ -30,6 +31,11 @@ import { RequestCardContent } from "./request-card";
  * settle of a committed move, D19); the moment a refused or cancelled card is
  * released the phase is `idle` and the overlay stops swallowing clicks, so the
  * card underneath is interactive again while its spring is still running (F1).
+ *
+ * The landing is a fade, not a pop: when a committed move lands, the board has
+ * already rendered the real card in the slot underneath, so the lifted overlay
+ * simply dissolves onto it (`releasing`) — the shadow and translucency melt
+ * away instead of the card appearing to change size or flash (CMIS-UI-05 §4.1).
  */
 export function DragOverlayLayer({
   dragX,
@@ -38,6 +44,7 @@ export function DragOverlayLayer({
   now,
   overlay,
   phase,
+  releasing,
 }: {
   dragX: MotionValue<number>;
   dragY: MotionValue<number>;
@@ -45,13 +52,18 @@ export function DragOverlayLayer({
   now: number;
   overlay: DragOverlayState;
   phase: DragPhase;
+  /** The move has committed: dissolve onto the card already in the slot. */
+  releasing: boolean;
 }) {
   const { originRect } = overlay;
 
   return createPortal(
     <motion.div
       aria-hidden
-      className="fixed z-[70] touch-none select-none"
+      className={cn(
+        "fixed z-[70] touch-none select-none transition-opacity duration-150 ease-out",
+        releasing ? "opacity-0" : "opacity-100"
+      )}
       data-drag-overlay
       style={{
         height: originRect.height,

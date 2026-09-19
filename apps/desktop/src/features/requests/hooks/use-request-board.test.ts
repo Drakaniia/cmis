@@ -141,6 +141,30 @@ describe("useRequestBoard", () => {
       });
       expect(outcome?.ok).toBe(true);
     });
+
+    it("reorders inside a lane — a drop on the card's own status is legal", () => {
+      const { result } = renderHook(() => useRequestBoard(ITEMS));
+      let outcome: ReturnType<typeof result.current.moveRequestAt> | undefined;
+      act(() => {
+        outcome = result.current.moveRequestAt("REQ-002", "pending", 0);
+      });
+      expect(outcome?.ok).toBe(true);
+      const pending = result.current.items.filter(
+        (item) => item.status === "pending"
+      );
+      expect(pending.map((item) => item.id)).toEqual(["REQ-002", "REQ-001"]);
+      expect(pending.map((item) => item.boardPosition)).toEqual([0, 1]);
+    });
+
+    it("does not write a history entry for a reorder", () => {
+      const { result } = renderHook(() => useRequestBoard(ITEMS));
+      act(() => {
+        result.current.moveRequestAt("REQ-002", "pending", 0);
+      });
+      expect(
+        result.current.items.find((item) => item.id === "REQ-002")?.history
+      ).toHaveLength(0);
+    });
   });
 
   describe("moveRequests (bulk)", () => {

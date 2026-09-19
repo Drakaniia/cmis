@@ -51,6 +51,11 @@ export interface Session {
   fromStatus: RequestStatus;
   history: { t: number; x: number; y: number }[];
   item: RequestItem;
+  /**
+   * True while a legal slot is pulling the card: tracking stops and the magnet
+   * owns the position, so the cursor and the slot never fight over it (F1).
+   */
+  magnetized: boolean;
   originRect: Rect;
   pointerId: number;
   pointerX: number;

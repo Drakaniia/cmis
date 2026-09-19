@@ -135,8 +135,8 @@ export function RequestsPage({ to }: { to: "/admin/requests" }) {
     (item: RequestItem, status: RequestStatus, index: number) => {
       // Moving into Claimed is a hand-over: it deducts stock, so it never
       // happens on a bare status flip. The confirmation shows the FEFO plan and
-      // commits it (F7/F10).
-      if (status === "claimed") {
+      // commits it (F7/F10). Reordering *within* Claimed changes no stock.
+      if (status === "claimed" && item.status !== "claimed") {
         setDispenseId(item.id);
         return;
       }
@@ -146,6 +146,11 @@ export function RequestsPage({ to }: { to: "/admin/requests" }) {
           refusalFor(item.status, status)?.message ??
             `${statusMetaOf(status).label} cannot take this card.`
         );
+        return;
+      }
+      if (outcome.from === status) {
+        // A drop inside the card's own lane is a reorder, not a status change:
+        // the board writes the new order, and nothing is announced (F8).
         return;
       }
       const { label } = statusMetaOf(status);
@@ -251,12 +256,20 @@ export function RequestsPage({ to }: { to: "/admin/requests" }) {
 
   const groups = useMemo(
     () =>
-      REQUEST_COLUMNS.map((column) => ({
-        column,
-        items: filteredItems.filter((item) => item.status === column.status),
-        total: visibleItems.filter((item) => item.status === column.status)
-          .length,
-      })),
+      REQUEST_COLUMNS.map((column) => {
+        const items = filteredItems.filter(
+          (item) => item.status === column.status
+        );
+        return {
+          column,
+          // Committed numbers — a live drag preview moves `items`, never these,
+          // so the header chip cannot count a card twice (CMIS-UI-05 §2).
+          count: items.length,
+          items,
+          total: visibleItems.filter((item) => item.status === column.status)
+            .length,
+        };
+      }),
     [filteredItems, visibleItems]
   );
 
@@ -700,6 +713,7 @@ export function RequestsPage({ to }: { to: "/admin/requests" }) {
           onToggleSelect={board.toggleSelect}
           selectedIds={board.selectedIds}
           shake={drag.shake}
+          snapSuspended={drag.overlay !== null}
           totalVisible={visibleItems.length}
         />
       </div>
@@ -719,6 +733,7 @@ export function RequestsPage({ to }: { to: "/admin/requests" }) {
           now={now}
           overlay={drag.overlay}
           phase={drag.phase}
+          releasing={drag.releasing}
         />
       ) : null}
 

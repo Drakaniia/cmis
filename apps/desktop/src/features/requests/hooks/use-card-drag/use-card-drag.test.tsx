@@ -5,7 +5,8 @@ import {
   render,
   screen,
 } from "@testing-library/react";
-import { useCallback, useRef } from "react";
+import { useMotionValueEvent } from "motion/react";
+import { useCallback, useRef, useState } from "react";
 import {
   afterEach,
   beforeAll,
@@ -121,6 +122,12 @@ function Harness({
 }) {
   const boardRef = useRef<HTMLDivElement | null>(null);
   const drag = useCardDrag({ boardRef, onCancel, onCommit, onForbidden });
+  // Test-only readout of the tracked offset, so a test can prove the pointer
+  // stops owning the card once a slot pulls it (motion values do not render).
+  const [trackedX, setTrackedX] = useState("0");
+  useMotionValueEvent(drag.dragX, "change", (value) =>
+    setTrackedX(String(Math.round(value)))
+  );
   const boardNodeRef = useCallback((element: HTMLDivElement | null) => {
     boardRef.current = element;
     if (element) {
@@ -152,6 +159,7 @@ function Harness({
       </button>
       <span data-testid="phase">{drag.phase}</span>
       <span data-testid="overlay">{drag.overlay ? "in-flight" : "clear"}</span>
+      <span data-testid="dragx">{trackedX}</span>
     </div>
   );
 }
@@ -205,6 +213,7 @@ function mount(item: RequestItem, handlers: Partial<Handlers> = {}) {
   );
   return {
     card: screen.getByTestId("card"),
+    dragX: () => screen.getByTestId("dragx").textContent,
     onCancel,
     onCommit,
     onForbidden,
@@ -382,6 +391,43 @@ describe("useCardDrag — cancel path", () => {
     expect(phase()).toBe("idle");
     expect(overlay()).toBe("clear");
     expect(document.body.dataset.dragPhase).toBeUndefined();
+  });
+});
+
+describe("useCardDrag — magnet", () => {
+  it("holds the card on the slot instead of tracking the pointer", () => {
+    const { card, dragX } = mount(makeItem({ status: "pending" }));
+    liftTo(card, APPROVED_LANE);
+    const locked = dragX();
+    // The pull has already placed it — not at the gesture's origin.
+    expect(locked).not.toBe("0");
+
+    fireEvent.pointerMove(card, { clientX: 300, clientY: 340, pointerId: 1 });
+
+    // Approved still takes the card, so the cursor must not drag it off the
+    // slot it is being pulled onto (F1).
+    expect(dragX()).toBe(locked);
+  });
+
+  it("resumes 1:1 tracking where no lane can take the card", () => {
+    const { card, dragX } = mount(makeItem({ status: "pending" }));
+    liftTo(card, APPROVED_LANE);
+    expect(dragX()).not.toBe("0");
+
+    // The board's own padding is not a lane, so the card follows the cursor
+    // again rather than being pinned to the last slot.
+    fireEvent.pointerMove(card, { clientX: 880, clientY: 300, pointerId: 1 });
+    expect(dragX()).not.toBe("0");
+    expect(Number(dragX())).toBeGreaterThan(0);
+  });
+
+  it("drops without release momentum while magnetised", () => {
+    const item = makeItem({ status: "pending" });
+    const { card, onCommit } = mount(item);
+    liftTo(card, APPROVED_LANE);
+    release(APPROVED_LANE);
+    expect(onCommit).toHaveBeenCalledTimes(1);
+    expect(onCommit.mock.calls[0][1]).toBe("approved");
   });
 });
 
