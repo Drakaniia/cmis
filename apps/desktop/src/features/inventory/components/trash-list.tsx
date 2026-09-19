@@ -3,7 +3,8 @@ import { Checkbox } from "@cmis/ui/components/checkbox";
 import { cn } from "@cmis/ui/lib/utils";
 import { ArchiveRestore, Trash2 } from "lucide-react";
 import { useCallback } from "react";
-import { describeTrashEntry, type TrashEntry } from "../creation/trash";
+import { describeTrashEntry } from "../creation/trash/labels";
+import type { TrashEntry } from "../creation/trash/types";
 
 /**
  * Spec §7.6 — the Trash tab.

@@ -1,0 +1,1343 @@
+{
+  "description": "Demo dataset for CMIS screen recording. Every value here is real data written into SQLite by scripts/seed-demo-data.test.ts — no page hardcodes it. Timestamps support relative offsets ('-3h', '+21d') resolved against the run time, so a re-seed always looks freshly populated.",
+  "asOf": null,
+  "dispensingMonths": ["2026-08", "current"],
+  "categories": [
+    "Analgesic",
+    "Antibiotic",
+    "Antiseptic",
+    "Supplement",
+    "Respiratory",
+    "Gastro",
+    "First Aid"
+  ],
+  "staff": [
+    "Dr. Amara Osei",
+    "Nurse Kenji Tanaka",
+    "Pharm. Lena Fischer",
+    "Dr. Priya Raman"
+  ],
+  "items": [
+    {
+      "sku": "SKU-PARA-500",
+      "name": "Paracetamol",
+      "strengthValue": "500",
+      "strengthUnit": "mg",
+      "form": "tablet",
+      "packSize": "100",
+      "category": "Analgesic",
+      "supplier": "PharmaCorp",
+      "threshold": 60,
+      "notes": "First-line antipyretic. Keep two batches so FEFO always has a fallback.",
+      "dispensingPattern": [0, 0, 6, 8, 7, 9, 5],
+      "batches": [
+        {
+          "batch": "PARA-500-A",
+          "expiry": "+21d",
+          "qty": 35,
+          "supplier": "PharmaCorp"
+        },
+        {
+          "batch": "PARA-500-B",
+          "expiry": "+210d",
+          "qty": 400,
+          "supplier": "PharmaCorp"
+        }
+      ]
+    },
+    {
+      "sku": "SKU-IBUP-400",
+      "name": "Ibuprofen",
+      "strengthValue": "400",
+      "strengthUnit": "mg",
+      "form": "tablet",
+      "packSize": "100",
+      "category": "Analgesic",
+      "supplier": "MediCore",
+      "threshold": 50,
+      "dispensingPattern": [0, 0, 4, 5, 6, 5, 3],
+      "batches": [
+        {
+          "batch": "IBUP-400-A",
+          "expiry": "+12d",
+          "qty": 30,
+          "supplier": "MediCore"
+        },
+        {
+          "batch": "IBUP-400-B",
+          "expiry": "+300d",
+          "qty": 320,
+          "supplier": "MediCore"
+        }
+      ]
+    },
+    {
+      "sku": "SKU-AMOX-500",
+      "name": "Amoxicillin",
+      "strengthValue": "500",
+      "strengthUnit": "mg",
+      "form": "capsule",
+      "packSize": "21",
+      "category": "Antibiotic",
+      "supplier": "HealthPlus",
+      "threshold": 40,
+      "dispensingPattern": [0, 0, 3, 4, 3, 5, 2],
+      "batches": [
+        {
+          "batch": "AMOX-500-A",
+          "expiry": "+40d",
+          "qty": 84,
+          "supplier": "HealthPlus"
+        },
+        {
+          "batch": "AMOX-500-B",
+          "expiry": "+400d",
+          "qty": 210,
+          "supplier": "HealthPlus"
+        }
+      ]
+    },
+    {
+      "sku": "SKU-AZIT-250",
+      "name": "Azithromycin",
+      "strengthValue": "250",
+      "strengthUnit": "mg",
+      "form": "tablet",
+      "packSize": "6",
+      "category": "Antibiotic",
+      "supplier": "MedSupply Co",
+      "threshold": 150,
+      "dispensingPattern": [0, 0, 1, 2, 2, 2, 1],
+      "batches": [
+        {
+          "batch": "AZIT-250-A",
+          "expiry": "+18d",
+          "qty": 12,
+          "supplier": "MedSupply Co"
+        },
+        {
+          "batch": "AZIT-250-B",
+          "expiry": "+250d",
+          "qty": 96,
+          "supplier": "MedSupply Co"
+        }
+      ]
+    },
+    {
+      "sku": "SKU-CETI-10",
+      "name": "Cetirizine",
+      "strengthValue": "10",
+      "strengthUnit": "mg",
+      "form": "tablet",
+      "packSize": "30",
+      "category": "Respiratory",
+      "supplier": "VitaLabs",
+      "threshold": 25,
+      "dispensingPattern": [0, 0, 2, 3, 3, 4, 2],
+      "batches": [
+        {
+          "batch": "CETI-10-A",
+          "expiry": "+65d",
+          "qty": 90,
+          "supplier": "VitaLabs"
+        },
+        {
+          "batch": "CETI-10-B",
+          "expiry": "+320d",
+          "qty": 120,
+          "supplier": "VitaLabs"
+        }
+      ]
+    },
+    {
+      "sku": "SKU-SALB-100",
+      "name": "Salbutamol",
+      "strengthValue": "100",
+      "strengthUnit": "mcg",
+      "form": "inhaler",
+      "packSize": "1",
+      "category": "Respiratory",
+      "supplier": "VitaLabs",
+      "threshold": 30,
+      "dispensingPattern": [0, 0, 1, 1, 2, 2, 1],
+      "batches": [
+        {
+          "batch": "SALB-100-A",
+          "expiry": "+85d",
+          "qty": 22,
+          "supplier": "VitaLabs"
+        }
+      ]
+    },
+    {
+      "sku": "SKU-OMEP-20",
+      "name": "Omeprazole",
+      "strengthValue": "20",
+      "strengthUnit": "mg",
+      "form": "capsule",
+      "packSize": "14",
+      "category": "Gastro",
+      "supplier": "GastroMed",
+      "threshold": 100,
+      "dispensingPattern": [0, 0, 2, 3, 2, 3, 1],
+      "batches": [
+        {
+          "batch": "OMEP-20-A",
+          "expiry": "+9d",
+          "qty": 14,
+          "supplier": "GastroMed"
+        },
+        {
+          "batch": "OMEP-20-B",
+          "expiry": "+220d",
+          "qty": 70,
+          "supplier": "GastroMed"
+        }
+      ]
+    },
+    {
+      "sku": "SKU-ORS-205",
+      "name": "ORS",
+      "strengthValue": "20.5",
+      "strengthUnit": "g",
+      "form": "powder",
+      "packSize": "10",
+      "category": "Gastro",
+      "supplier": "ORS Labs",
+      "threshold": 50,
+      "dispensingVariance": 4,
+      "dispensingPattern": [0, 0, 3, 4, 4, 5, 2],
+      "batches": [
+        {
+          "batch": "ORS-205-A",
+          "expiry": "+150d",
+          "qty": 180,
+          "supplier": "ORS Labs"
+        }
+      ]
+    },
+    {
+      "sku": "SKU-POVID-10",
+      "name": "Povidone-Iodine",
+      "strengthValue": "10",
+      "strengthUnit": "%",
+      "form": "solution",
+      "packSize": "1 L",
+      "category": "Antiseptic",
+      "supplier": "FirstAid Co",
+      "threshold": 20,
+      "dispensingPattern": [0, 0, 0, 1, 1, 1, 0],
+      "batches": [
+        {
+          "batch": "POVID-10-A",
+          "expiry": "+330d",
+          "qty": 18,
+          "supplier": "FirstAid Co"
+        }
+      ]
+    },
+    {
+      "sku": "SKU-HYDR-1",
+      "name": "Hydrocortisone",
+      "strengthValue": "1",
+      "strengthUnit": "%",
+      "form": "",
+      "packSize": "",
+      "category": "Antiseptic",
+      "supplier": "DermCare",
+      "threshold": 15,
+      "notes": "Form and pack size were never recorded — shows as \"details incomplete\".",
+      "dispensingPattern": [0, 0, 1, 1, 1, 2, 1],
+      "batches": [
+        {
+          "batch": "HYDR-1-A",
+          "expiry": "+110d",
+          "qty": 24,
+          "supplier": "DermCare"
+        }
+      ]
+    },
+    {
+      "sku": "SKU-SANI-500",
+      "name": "Hand Sanitizer",
+      "strengthValue": "70",
+      "strengthUnit": "%",
+      "form": "gel",
+      "packSize": "500 ml",
+      "category": "Antiseptic",
+      "supplier": "FirstAid Co",
+      "threshold": 30,
+      "dispensingPattern": [0, 0, 2, 3, 3, 4, 2],
+      "batches": [
+        {
+          "batch": "SANI-500-A",
+          "expiry": "+55d",
+          "qty": 90,
+          "supplier": "FirstAid Co"
+        }
+      ]
+    },
+    {
+      "sku": "SKU-MULTI-100",
+      "name": "Multivitamin",
+      "strengthValue": "100",
+      "strengthUnit": "mg",
+      "form": "tablet",
+      "packSize": "60",
+      "category": "Supplement",
+      "supplier": "HealWell",
+      "threshold": 40,
+      "dispensingVariance": -3,
+      "dispensingPattern": [0, 0, 2, 2, 3, 3, 2],
+      "batches": [
+        {
+          "batch": "MULTI-100-A",
+          "expiry": "+365d",
+          "qty": 240,
+          "supplier": "HealWell"
+        }
+      ]
+    },
+    {
+      "sku": "SKU-FERR-200",
+      "name": "Ferrous Sulfate",
+      "strengthValue": "200",
+      "strengthUnit": "mg",
+      "form": "tablet",
+      "packSize": "100",
+      "category": "Supplement",
+      "supplier": "HealWell",
+      "threshold": 35,
+      "dispensingPattern": [0, 0, 2, 3, 2, 3, 1],
+      "batches": [
+        {
+          "batch": "FERR-200-A",
+          "expiry": "+28d",
+          "qty": 22,
+          "supplier": "HealWell"
+        },
+        {
+          "batch": "FERR-200-B",
+          "expiry": "+290d",
+          "qty": 60,
+          "supplier": "HealWell"
+        }
+      ]
+    },
+    {
+      "sku": "SKU-BAND-50",
+      "name": "Adhesive Bandage",
+      "strengthValue": "",
+      "strengthUnit": "",
+      "form": "",
+      "packSize": "50",
+      "category": "First Aid",
+      "supplier": "FirstAid Co",
+      "threshold": 40,
+      "stockOnHand": 120,
+      "dispensingPattern": [0, 0, 1, 1, 2, 2, 1]
+    },
+    {
+      "sku": "SKU-GLOV-100",
+      "name": "Surgical Gloves",
+      "strengthValue": "",
+      "strengthUnit": "",
+      "form": "",
+      "packSize": "100",
+      "category": "First Aid",
+      "supplier": "FirstAid Co",
+      "threshold": 25,
+      "stockOnHand": 0,
+      "dispensingPattern": [0, 0, 1, 1, 1, 2, 1]
+    }
+  ],
+  "requests": [
+    {
+      "id": "REQ-2026-0141",
+      "itemSku": "SKU-PARA-500",
+      "requestor": {
+        "name": "Maya Chen",
+        "id": "STU-2024-0831",
+        "email": "maya.chen@clinic.edu"
+      },
+      "qty": 12,
+      "unit": "tablets",
+      "reason": "Fever after vaccination",
+      "status": "pending",
+      "submittedAt": "-3h",
+      "source": "queue",
+      "history": [
+        { "at": "-3h", "by": "Viewer", "from": null, "to": "pending" }
+      ]
+    },
+    {
+      "id": "REQ-2026-0142",
+      "itemSku": "SKU-CETI-10",
+      "requestor": {
+        "name": "Daniel Okafor",
+        "id": "STU-2023-0412",
+        "email": "daniel.okafor@clinic.edu"
+      },
+      "qty": 20,
+      "unit": "tablets",
+      "reason": "Seasonal allergies",
+      "status": "pending",
+      "submittedAt": "-6h",
+      "history": [
+        { "at": "-6h", "by": "Viewer", "from": null, "to": "pending" }
+      ]
+    },
+    {
+      "id": "REQ-2026-0143",
+      "itemSku": "SKU-ORS-205",
+      "requestor": {
+        "name": "Grace Adeyemi",
+        "id": "STF-2021-0093",
+        "email": "grace.adeyemi@clinic.edu"
+      },
+      "qty": 6,
+      "unit": "sachets",
+      "reason": "Staff clinic restock for the ward",
+      "status": "pending",
+      "submittedAt": "-1d",
+      "notes": [
+        {
+          "at": "-20h",
+          "author": "Nurse Kenji Tanaka",
+          "text": "Confirm the ward request count before preparing."
+        }
+      ],
+      "history": [
+        { "at": "-1d", "by": "Viewer", "from": null, "to": "pending" }
+      ]
+    },
+    {
+      "id": "REQ-2026-0144",
+      "itemSku": "SKU-IBUP-400",
+      "requestor": {
+        "name": "Tomás Herrera",
+        "id": "STU-2024-0207",
+        "email": "tomas.herrera@clinic.edu"
+      },
+      "qty": 16,
+      "unit": "tablets",
+      "reason": "Muscle strain after PE class",
+      "status": "pending",
+      "submittedAt": "-2d",
+      "history": [
+        { "at": "-2d", "by": "Viewer", "from": null, "to": "pending" }
+      ]
+    },
+    {
+      "id": "REQ-2026-0140",
+      "itemSku": "SKU-AMOX-500",
+      "requestor": {
+        "name": "Aisha Bello",
+        "id": "STU-2022-0188",
+        "email": "aisha.bello@clinic.edu"
+      },
+      "qty": 21,
+      "unit": "capsules",
+      "reason": "Prescribed by Dr. Osei — dental infection",
+      "status": "approved",
+      "submittedAt": "-1d6h",
+      "history": [
+        { "at": "-1d6h", "by": "Viewer", "from": null, "to": "pending" },
+        {
+          "at": "-1d",
+          "by": "Pharm. Lena Fischer",
+          "from": "pending",
+          "to": "approved"
+        }
+      ]
+    },
+    {
+      "id": "REQ-2026-0139",
+      "itemSku": "SKU-OMEP-20",
+      "requestor": {
+        "name": "Noah Kim",
+        "id": "STU-2023-0755",
+        "email": "noah.kim@clinic.edu"
+      },
+      "qty": 14,
+      "unit": "capsules",
+      "reason": "Recurring acid reflux",
+      "status": "approved",
+      "submittedAt": "-2d5h",
+      "history": [
+        { "at": "-2d5h", "by": "Viewer", "from": null, "to": "pending" },
+        {
+          "at": "-2d",
+          "by": "Dr. Amara Osei",
+          "from": "pending",
+          "to": "approved"
+        }
+      ]
+    },
+    {
+      "id": "REQ-2026-0137",
+      "itemSku": "SKU-SALB-100",
+      "requestor": {
+        "name": "Olivia Novak",
+        "id": "STU-2024-0613",
+        "email": "olivia.novak@clinic.edu"
+      },
+      "qty": 1,
+      "unit": "inhaler",
+      "reason": "Second rescue inhaler for the dorm",
+      "status": "ready",
+      "submittedAt": "-2d2h",
+      "notes": [
+        {
+          "at": "-8h",
+          "author": "Nurse Kenji Tanaka",
+          "text": "Only one on the shelf — handed that over, restock pending."
+        }
+      ],
+      "history": [
+        { "at": "-2d2h", "by": "Viewer", "from": null, "to": "pending" },
+        {
+          "at": "-2d",
+          "by": "Dr. Amara Osei",
+          "from": "pending",
+          "to": "approved"
+        },
+        {
+          "at": "-1d",
+          "by": "Nurse Kenji Tanaka",
+          "from": "approved",
+          "to": "ready"
+        },
+        {
+          "at": "-8h",
+          "by": "Nurse Kenji Tanaka",
+          "from": "ready",
+          "to": "ready",
+          "note": "Dispensed 1 inhaler — 1 still outstanding"
+        }
+      ],
+      "dispensing": [
+        {
+          "at": "-8h",
+          "batch": "SALB-100-A",
+          "qty": 1,
+          "staff": "Nurse Kenji Tanaka"
+        }
+      ]
+    },
+    {
+      "id": "REQ-2026-0136",
+      "itemSku": "SKU-FERR-200",
+      "requestor": {
+        "name": "Liam O'Connor",
+        "id": "STU-2022-0349",
+        "email": "liam.oconnor@clinic.edu"
+      },
+      "qty": 30,
+      "unit": "tablets",
+      "reason": "Iron deficiency follow-up",
+      "status": "ready",
+      "submittedAt": "-1d6h",
+      "history": [
+        { "at": "-1d6h", "by": "Viewer", "from": null, "to": "pending" },
+        {
+          "at": "-1d",
+          "by": "Dr. Priya Raman",
+          "from": "pending",
+          "to": "approved"
+        },
+        {
+          "at": "-8h",
+          "by": "Pharm. Lena Fischer",
+          "from": "approved",
+          "to": "ready"
+        }
+      ]
+    },
+    {
+      "id": "REQ-2026-0135",
+      "itemSku": "SKU-MULTI-100",
+      "requestor": {
+        "name": "Sofia Petrova",
+        "id": "STU-2023-0912",
+        "email": "sofia.petrova@clinic.edu"
+      },
+      "qty": 30,
+      "unit": "tablets",
+      "reason": "General vitamin supplement",
+      "status": "ready",
+      "submittedAt": "-2d5h",
+      "history": [
+        { "at": "-2d5h", "by": "Viewer", "from": null, "to": "pending" },
+        {
+          "at": "-2d",
+          "by": "Dr. Priya Raman",
+          "from": "pending",
+          "to": "approved"
+        },
+        {
+          "at": "-1d4h",
+          "by": "Nurse Kenji Tanaka",
+          "from": "approved",
+          "to": "ready"
+        }
+      ]
+    },
+    {
+      "id": "REQ-2026-0133",
+      "itemSku": "SKU-PARA-500",
+      "requestor": {
+        "name": "Ethan Brooks",
+        "id": "STU-2024-0455",
+        "email": "ethan.brooks@clinic.edu"
+      },
+      "qty": 10,
+      "unit": "tablets",
+      "reason": "Headache before an exam",
+      "status": "claimed",
+      "submittedAt": "-5h",
+      "history": [
+        { "at": "-5h", "by": "Viewer", "from": null, "to": "pending" },
+        {
+          "at": "-4h",
+          "by": "Dr. Amara Osei",
+          "from": "pending",
+          "to": "approved"
+        },
+        {
+          "at": "-3h",
+          "by": "Nurse Kenji Tanaka",
+          "from": "approved",
+          "to": "ready"
+        },
+        {
+          "at": "-2h",
+          "by": "Nurse Kenji Tanaka",
+          "from": "ready",
+          "to": "claimed"
+        }
+      ],
+      "dispensing": [
+        {
+          "at": "-2h",
+          "batch": "PARA-500-A",
+          "qty": 10,
+          "staff": "Nurse Kenji Tanaka"
+        }
+      ]
+    },
+    {
+      "id": "REQ-2026-0134",
+      "itemSku": "SKU-IBUP-400",
+      "requestor": { "name": "", "id": "", "email": "" },
+      "qty": 6,
+      "unit": "tablets",
+      "reason": "Counter hand-over — quick deduct",
+      "status": "claimed",
+      "submittedAt": "-5h",
+      "source": "quick-deduct",
+      "history": [
+        {
+          "at": "-5h",
+          "by": "Nurse Kenji Tanaka",
+          "from": null,
+          "to": "claimed",
+          "note": "Quick deduct — anonymous counter hand-over"
+        }
+      ],
+      "dispensing": [
+        {
+          "at": "-5h",
+          "batch": "IBUP-400-A",
+          "qty": 6,
+          "staff": "Nurse Kenji Tanaka"
+        }
+      ]
+    },
+    {
+      "id": "REQ-2026-0132",
+      "itemSku": "SKU-AZIT-250",
+      "requestor": {
+        "name": "Sofia Petrova",
+        "id": "STU-2023-0912",
+        "email": "sofia.petrova@clinic.edu"
+      },
+      "qty": 6,
+      "unit": "tablets",
+      "reason": "Sore throat",
+      "status": "denied",
+      "submittedAt": "-3d4h",
+      "deniedReason": "Out of Stock",
+      "deniedNote": "Only 12 units left and both are reserved for the respiratory clinic.",
+      "history": [
+        { "at": "-3d4h", "by": "Viewer", "from": null, "to": "pending" },
+        {
+          "at": "-3d",
+          "by": "Dr. Amara Osei",
+          "from": "pending",
+          "to": "denied",
+          "note": "Out of Stock"
+        }
+      ]
+    },
+    {
+      "id": "REQ-2026-0131",
+      "itemSku": "SKU-POVID-10",
+      "requestor": {
+        "name": "Marcus Webb",
+        "id": "STF-2020-0031",
+        "email": "marcus.webb@clinic.edu"
+      },
+      "qty": 2,
+      "unit": "bottles",
+      "reason": "Restock the first-aid cupboard",
+      "status": "denied",
+      "submittedAt": "-4d3h",
+      "deniedReason": "Duplicate Request",
+      "deniedNote": "The same cupboard was restocked two days ago.",
+      "history": [
+        { "at": "-4d3h", "by": "Viewer", "from": null, "to": "pending" },
+        {
+          "at": "-4d",
+          "by": "Pharm. Lena Fischer",
+          "from": "pending",
+          "to": "denied",
+          "note": "Duplicate Request"
+        }
+      ]
+    },
+    {
+      "id": "REQ-2026-0130",
+      "itemSku": "SKU-AMOX-500",
+      "requestor": {
+        "name": "Hana Suzuki",
+        "id": "STU-2023-0244",
+        "email": "hana.suzuki@clinic.edu"
+      },
+      "qty": 21,
+      "unit": "capsules",
+      "reason": "Chest infection follow-up",
+      "status": "claimed",
+      "submittedAt": "-6d",
+      "history": [
+        { "at": "-6d", "by": "Viewer", "from": null, "to": "pending" },
+        {
+          "at": "-5d20h",
+          "by": "Dr. Amara Osei",
+          "from": "pending",
+          "to": "approved"
+        },
+        {
+          "at": "-5d18h",
+          "by": "Nurse Kenji Tanaka",
+          "from": "approved",
+          "to": "ready"
+        },
+        {
+          "at": "-5d16h",
+          "by": "Nurse Kenji Tanaka",
+          "from": "ready",
+          "to": "claimed"
+        }
+      ],
+      "dispensing": [
+        {
+          "at": "-5d16h",
+          "batch": "AMOX-500-A",
+          "qty": 21,
+          "staff": "Nurse Kenji Tanaka"
+        }
+      ]
+    },
+    {
+      "id": "REQ-2026-0128",
+      "itemSku": "SKU-ORS-205",
+      "requestor": {
+        "name": "Grace Adeyemi",
+        "id": "STF-2021-0093",
+        "email": "grace.adeyemi@clinic.edu"
+      },
+      "qty": 4,
+      "unit": "sachets",
+      "reason": "Ward restock after the weekend",
+      "status": "claimed",
+      "submittedAt": "-7d",
+      "history": [
+        { "at": "-7d", "by": "Viewer", "from": null, "to": "pending" },
+        {
+          "at": "-6d22h",
+          "by": "Dr. Priya Raman",
+          "from": "pending",
+          "to": "approved"
+        },
+        {
+          "at": "-6d20h",
+          "by": "Nurse Kenji Tanaka",
+          "from": "approved",
+          "to": "ready"
+        },
+        {
+          "at": "-6d18h",
+          "by": "Nurse Kenji Tanaka",
+          "from": "ready",
+          "to": "claimed"
+        }
+      ],
+      "dispensing": [
+        {
+          "at": "-6d18h",
+          "batch": "ORS-205-A",
+          "qty": 4,
+          "staff": "Nurse Kenji Tanaka"
+        }
+      ]
+    },
+    {
+      "id": "REQ-2026-0127",
+      "itemSku": "SKU-CETI-10",
+      "requestor": {
+        "name": "Daniel Okafor",
+        "id": "STU-2023-0412",
+        "email": "daniel.okafor@clinic.edu"
+      },
+      "qty": 10,
+      "unit": "tablets",
+      "reason": "Allergy flare during exams",
+      "status": "claimed",
+      "submittedAt": "-8d",
+      "history": [
+        { "at": "-8d", "by": "Viewer", "from": null, "to": "pending" },
+        {
+          "at": "-7d23h",
+          "by": "Dr. Amara Osei",
+          "from": "pending",
+          "to": "approved"
+        },
+        {
+          "at": "-7d21h",
+          "by": "Pharm. Lena Fischer",
+          "from": "approved",
+          "to": "ready"
+        },
+        {
+          "at": "-7d19h",
+          "by": "Nurse Kenji Tanaka",
+          "from": "ready",
+          "to": "claimed"
+        }
+      ],
+      "dispensing": [
+        {
+          "at": "-7d19h",
+          "batch": "CETI-10-A",
+          "qty": 10,
+          "staff": "Nurse Kenji Tanaka"
+        }
+      ]
+    },
+    {
+      "id": "REQ-2026-0126",
+      "itemSku": "SKU-PARA-500",
+      "requestor": {
+        "name": "Maya Chen",
+        "id": "STU-2024-0831",
+        "email": "maya.chen@clinic.edu"
+      },
+      "qty": 8,
+      "unit": "tablets",
+      "reason": "Headache during a practical",
+      "status": "claimed",
+      "submittedAt": "-9d",
+      "history": [
+        { "at": "-9d", "by": "Viewer", "from": null, "to": "pending" },
+        {
+          "at": "-8d22h",
+          "by": "Dr. Amara Osei",
+          "from": "pending",
+          "to": "approved"
+        },
+        {
+          "at": "-8d20h",
+          "by": "Nurse Kenji Tanaka",
+          "from": "approved",
+          "to": "ready"
+        },
+        {
+          "at": "-8d18h",
+          "by": "Nurse Kenji Tanaka",
+          "from": "ready",
+          "to": "claimed"
+        }
+      ],
+      "dispensing": [
+        {
+          "at": "-8d18h",
+          "batch": "PARA-500-A",
+          "qty": 8,
+          "staff": "Nurse Kenji Tanaka"
+        }
+      ]
+    },
+    {
+      "id": "REQ-2026-0125",
+      "itemSku": "SKU-MULTI-100",
+      "requestor": {
+        "name": "Sofia Petrova",
+        "id": "STU-2023-0912",
+        "email": "sofia.petrova@clinic.edu"
+      },
+      "qty": 30,
+      "unit": "tablets",
+      "reason": "Month-long supplement course",
+      "status": "claimed",
+      "submittedAt": "-10d",
+      "history": [
+        { "at": "-10d", "by": "Viewer", "from": null, "to": "pending" },
+        {
+          "at": "-9d22h",
+          "by": "Dr. Priya Raman",
+          "from": "pending",
+          "to": "approved"
+        },
+        {
+          "at": "-9d20h",
+          "by": "Pharm. Lena Fischer",
+          "from": "approved",
+          "to": "ready"
+        },
+        {
+          "at": "-9d18h",
+          "by": "Pharm. Lena Fischer",
+          "from": "ready",
+          "to": "claimed"
+        }
+      ],
+      "dispensing": [
+        {
+          "at": "-9d18h",
+          "batch": "MULTI-100-A",
+          "qty": 30,
+          "staff": "Pharm. Lena Fischer"
+        }
+      ]
+    },
+    {
+      "id": "REQ-2026-0124",
+      "itemSku": "SKU-POVID-10",
+      "requestor": {
+        "name": "Marcus Webb",
+        "id": "STF-2020-0031",
+        "email": "marcus.webb@clinic.edu"
+      },
+      "qty": 1,
+      "unit": "bottles",
+      "reason": "First-aid cupboard restock",
+      "status": "claimed",
+      "submittedAt": "-13d",
+      "history": [
+        { "at": "-13d", "by": "Viewer", "from": null, "to": "pending" },
+        {
+          "at": "-12d23h",
+          "by": "Dr. Amara Osei",
+          "from": "pending",
+          "to": "approved"
+        },
+        {
+          "at": "-12d22h",
+          "by": "Nurse Kenji Tanaka",
+          "from": "approved",
+          "to": "ready"
+        },
+        {
+          "at": "-12d21h",
+          "by": "Nurse Kenji Tanaka",
+          "from": "ready",
+          "to": "claimed"
+        }
+      ],
+      "dispensing": [
+        {
+          "at": "-12d21h",
+          "batch": "POVID-10-A",
+          "qty": 1,
+          "staff": "Nurse Kenji Tanaka"
+        }
+      ]
+    },
+    {
+      "id": "REQ-2026-0145",
+      "itemSku": "SKU-CETI-10",
+      "requestor": {
+        "name": "Priya Nair",
+        "id": "STU-2024-0517",
+        "email": "priya.nair@clinic.edu"
+      },
+      "qty": 6,
+      "unit": "tablets",
+      "reason": "Itchy rash after a lab session",
+      "status": "claimed",
+      "submittedAt": "-2h",
+      "history": [
+        { "at": "-2h", "by": "Viewer", "from": null, "to": "pending" },
+        {
+          "at": "-1h45m",
+          "by": "Dr. Amara Osei",
+          "from": "pending",
+          "to": "approved"
+        },
+        {
+          "at": "-1h30m",
+          "by": "Nurse Kenji Tanaka",
+          "from": "approved",
+          "to": "ready"
+        },
+        {
+          "at": "-1h",
+          "by": "Nurse Kenji Tanaka",
+          "from": "ready",
+          "to": "claimed"
+        }
+      ],
+      "dispensing": [
+        {
+          "at": "-1h",
+          "batch": "CETI-10-A",
+          "qty": 6,
+          "staff": "Nurse Kenji Tanaka"
+        }
+      ]
+    },
+    {
+      "id": "REQ-2026-0146",
+      "itemSku": "SKU-PARA-500",
+      "requestor": {
+        "name": "Ethan Brooks",
+        "id": "STU-2024-0455",
+        "email": "ethan.brooks@clinic.edu"
+      },
+      "qty": 10,
+      "unit": "tablets",
+      "reason": "Headache after morning rounds",
+      "status": "claimed",
+      "submittedAt": "-5h",
+      "history": [
+        { "at": "-5h", "by": "Viewer", "from": null, "to": "pending" },
+        {
+          "at": "-4h40m",
+          "by": "Dr. Amara Osei",
+          "from": "pending",
+          "to": "approved"
+        },
+        {
+          "at": "-4h20m",
+          "by": "Nurse Kenji Tanaka",
+          "from": "approved",
+          "to": "ready"
+        },
+        {
+          "at": "-4h",
+          "by": "Nurse Kenji Tanaka",
+          "from": "ready",
+          "to": "claimed"
+        }
+      ],
+      "dispensing": [
+        {
+          "at": "-4h",
+          "batch": "PARA-500-A",
+          "qty": 10,
+          "staff": "Nurse Kenji Tanaka"
+        }
+      ]
+    },
+    {
+      "id": "REQ-2026-0147",
+      "itemSku": "SKU-ORS-205",
+      "requestor": {
+        "name": "Grace Adeyemi",
+        "id": "STF-2021-0093",
+        "email": "grace.adeyemi@clinic.edu"
+      },
+      "qty": 2,
+      "unit": "sachets",
+      "reason": "Ward — rehydration after a stomach bug",
+      "status": "claimed",
+      "submittedAt": "-10h",
+      "history": [
+        { "at": "-10h", "by": "Viewer", "from": null, "to": "pending" },
+        {
+          "at": "-9h40m",
+          "by": "Dr. Priya Raman",
+          "from": "pending",
+          "to": "approved"
+        },
+        {
+          "at": "-9h20m",
+          "by": "Nurse Kenji Tanaka",
+          "from": "approved",
+          "to": "ready"
+        },
+        {
+          "at": "-9h",
+          "by": "Nurse Kenji Tanaka",
+          "from": "ready",
+          "to": "claimed"
+        }
+      ],
+      "dispensing": [
+        {
+          "at": "-9h",
+          "batch": "ORS-205-A",
+          "qty": 2,
+          "staff": "Nurse Kenji Tanaka"
+        }
+      ]
+    },
+    {
+      "id": "REQ-2026-0148",
+      "itemSku": "SKU-AMOX-500",
+      "requestor": {
+        "name": "Aisha Bello",
+        "id": "STU-2022-0188",
+        "email": "aisha.bello@clinic.edu"
+      },
+      "qty": 21,
+      "unit": "capsules",
+      "reason": "Dental infection — course continuation",
+      "status": "claimed",
+      "submittedAt": "-15h",
+      "history": [
+        { "at": "-15h", "by": "Viewer", "from": null, "to": "pending" },
+        {
+          "at": "-14h40m",
+          "by": "Dr. Amara Osei",
+          "from": "pending",
+          "to": "approved"
+        },
+        {
+          "at": "-14h20m",
+          "by": "Pharm. Lena Fischer",
+          "from": "approved",
+          "to": "ready"
+        },
+        {
+          "at": "-14h",
+          "by": "Nurse Kenji Tanaka",
+          "from": "ready",
+          "to": "claimed"
+        }
+      ],
+      "dispensing": [
+        {
+          "at": "-14h",
+          "batch": "AMOX-500-A",
+          "qty": 21,
+          "staff": "Nurse Kenji Tanaka"
+        }
+      ]
+    }
+  ],
+  "audit": [
+    {
+      "at": "-5d",
+      "action": "stock-in",
+      "actor": "Pharm. Lena Fischer",
+      "detail": "Received 400 units of Paracetamol 500 mg tablet 100 (batch PARA-500-B)",
+      "targetKind": "item",
+      "targetSku": "SKU-PARA-500",
+      "before": { "qty": 35 },
+      "after": { "qty": 435, "received": 400 }
+    },
+    {
+      "at": "-7d",
+      "action": "stock-in",
+      "actor": "Pharm. Lena Fischer",
+      "detail": "Received 210 units of Amoxicillin 500 mg capsule 21 (batch AMOX-500-B)",
+      "targetKind": "item",
+      "targetSku": "SKU-AMOX-500",
+      "before": { "qty": 84 },
+      "after": { "qty": 294, "received": 210 }
+    },
+    {
+      "at": "-1d",
+      "action": "stock-in",
+      "actor": "Pharm. Lena Fischer",
+      "detail": "Received 200 units of Ibuprofen 400 mg tablet 100 (batch IBUP-400-B)",
+      "targetKind": "item",
+      "targetSku": "SKU-IBUP-400",
+      "before": { "qty": 150 },
+      "after": { "qty": 350, "received": 200 }
+    },
+    {
+      "at": "-3d",
+      "action": "stock-in",
+      "actor": "Nurse Kenji Tanaka",
+      "detail": "Received 90 units of Cetirizine 10 mg tablet 30 (batch CETI-10-B)",
+      "targetKind": "item",
+      "targetSku": "SKU-CETI-10",
+      "before": { "qty": 120 },
+      "after": { "qty": 210, "received": 90 }
+    },
+    {
+      "at": "-6d",
+      "action": "stock-in",
+      "actor": "Pharm. Lena Fischer",
+      "detail": "Received 180 sachets of ORS 20.5 g powder 10 (batch ORS-205-A)",
+      "targetKind": "item",
+      "targetSku": "SKU-ORS-205",
+      "before": { "qty": 0 },
+      "after": { "qty": 180, "received": 180 }
+    },
+    {
+      "at": "-10d",
+      "action": "stock-in",
+      "actor": "Dr. Amara Osei",
+      "detail": "Received 120 units of Multivitamin 100 mg tablet 60 (batch MULTI-100-A)",
+      "targetKind": "item",
+      "targetSku": "SKU-MULTI-100",
+      "before": { "qty": 120 },
+      "after": { "qty": 240, "received": 120 }
+    },
+    {
+      "at": "-2d",
+      "action": "stock-out",
+      "actor": "Nurse Kenji Tanaka",
+      "detail": "Disposed 6 expired units of Omeprazole 20 mg capsule 14",
+      "targetKind": "item",
+      "targetSku": "SKU-OMEP-20",
+      "before": { "qty": 90 },
+      "after": { "qty": 84 }
+    },
+    {
+      "at": "-3h",
+      "action": "request",
+      "actor": "Maya Chen",
+      "detail": "Request REQ-2026-0141 created — Paracetamol 500 mg tablet 100 · 12 tablets",
+      "targetKind": "request",
+      "targetRequest": "REQ-2026-0141"
+    },
+    {
+      "at": "-2d",
+      "action": "request",
+      "actor": "Tomás Herrera",
+      "detail": "Request REQ-2026-0144 created — Ibuprofen 400 mg tablet 100 · 16 tablets",
+      "targetKind": "request",
+      "targetRequest": "REQ-2026-0144"
+    },
+    {
+      "at": "-2h",
+      "action": "dispense",
+      "actor": "Nurse Kenji Tanaka",
+      "detail": "Dispensed 10 tablets of Paracetamol 500 mg tablet 100 to Ethan Brooks",
+      "targetKind": "request",
+      "targetRequest": "REQ-2026-0133",
+      "requestRef": "REQ-2026-0133"
+    },
+    {
+      "at": "-5h",
+      "action": "dispense",
+      "actor": "Nurse Kenji Tanaka",
+      "detail": "Quick deduct — 6 tablets of Ibuprofen 400 mg tablet 100",
+      "targetKind": "request",
+      "targetRequest": "REQ-2026-0134",
+      "requestRef": "REQ-2026-0134"
+    },
+    {
+      "at": "-9d",
+      "action": "settings",
+      "actor": "Pharm. Lena Fischer",
+      "detail": "Category added: Antiseptic",
+      "targetKind": "settings",
+      "after": { "name": "Antiseptic" }
+    },
+    {
+      "at": "-1d",
+      "action": "sync",
+      "actor": "Local user",
+      "detail": "Pushed 12 records to branch local",
+      "targetKind": "settings",
+      "after": { "pushed": 12 }
+    },
+    {
+      "at": "-6d",
+      "action": "correction",
+      "actor": "Dr. Amara Osei",
+      "detail": "Corrected batch expiry for AZIT-250-A from 2026-09-01 to 2027-01-15",
+      "targetKind": "item",
+      "targetSku": "SKU-AZIT-250",
+      "reason": "Label misread during the stock count",
+      "before": { "expiry": "2026-09-01" },
+      "after": { "expiry": "2027-01-15" }
+    },
+    {
+      "at": "-12d",
+      "action": "user",
+      "actor": "Pharm. Lena Fischer",
+      "detail": "Operator name set to Pharm. Lena Fischer",
+      "targetKind": "settings",
+      "after": { "operatorName": "Pharm. Lena Fischer" }
+    },
+    {
+      "at": "-4d",
+      "action": "stock-out",
+      "actor": "Dr. Amara Osei",
+      "detail": "Transferred 60 units of Multivitamin 100 mg tablet 60 to the East Wing clinic",
+      "targetKind": "item",
+      "targetSku": "SKU-MULTI-100",
+      "before": { "qty": 300 },
+      "after": { "qty": 240 }
+    },
+    {
+      "at": "-9d",
+      "action": "stock-out",
+      "actor": "Pharm. Lena Fischer",
+      "detail": "Transferred 40 sachets of ORS 20.5 g powder 10 to the community outreach kit",
+      "targetKind": "item",
+      "targetSku": "SKU-ORS-205",
+      "before": { "qty": 220 },
+      "after": { "qty": 180 }
+    },
+    {
+      "at": "-1h",
+      "action": "dispense",
+      "actor": "Nurse Kenji Tanaka",
+      "detail": "Dispensed 6 tablets of Cetirizine 10 mg tablet 30 to Priya Nair",
+      "targetKind": "request",
+      "targetRequest": "REQ-2026-0145",
+      "requestRef": "REQ-2026-0145"
+    },
+    {
+      "at": "-4h",
+      "action": "dispense",
+      "actor": "Nurse Kenji Tanaka",
+      "detail": "Dispensed 10 tablets of Paracetamol 500 mg tablet 100 to Ethan Brooks",
+      "targetKind": "request",
+      "targetRequest": "REQ-2026-0146",
+      "requestRef": "REQ-2026-0146"
+    }
+  ],
+  "trash": [
+    {
+      "kind": "batch",
+      "itemSku": "SKU-OMEP-20",
+      "batch": "OMEP-20-C",
+      "expiry": "+2d",
+      "qty": 40,
+      "supplier": "GastroMed",
+      "reason": "Expired — disposed during the monthly count",
+      "deletedAt": "-6d",
+      "deletedBy": "Pharm. Lena Fischer"
+    },
+    {
+      "kind": "batch",
+      "itemSku": "SKU-IBUP-400",
+      "batch": "IBUP-400-C",
+      "expiry": "+180d",
+      "qty": 18,
+      "supplier": "MediCore",
+      "reason": "Damaged packaging on delivery",
+      "deletedAt": "-11d",
+      "deletedBy": "Dr. Amara Osei"
+    }
+  ]
+}

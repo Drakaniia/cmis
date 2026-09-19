@@ -58,7 +58,10 @@ export function CancelRequestModal({
             onClick={handleClose}
             transition={{ duration: 0.18 }}
           />
-          <div className="fixed inset-0 z-[60] flex items-center justify-center p-3 sm:p-6">
+          <div
+            className="fixed inset-0 z-[60] flex items-center justify-center p-3 sm:p-6"
+            onClick={handleClose}
+          >
             <motion.div
               animate="animate"
               aria-labelledby="cancel-request-heading"
@@ -66,6 +69,7 @@ export function CancelRequestModal({
               className="surface-frosted flex w-full max-w-[420px] flex-col overflow-hidden rounded-xl border border-border/50 shadow-xl"
               exit="exit"
               initial={reduceMotion ? "animate" : "initial"}
+              onClick={(event) => event.stopPropagation()}
               role="dialog"
               style={{
                 transformOrigin: "center center",

@@ -6,6 +6,7 @@ import { useRequestBoard } from "./use-request-board";
 
 function makeItem(overrides: Partial<RequestItem> = {}): RequestItem {
   return {
+    boardPosition: 0,
     category: "Analgesic",
     dispensingRecords: [],
     history: [],
@@ -139,6 +140,30 @@ describe("useRequestBoard", () => {
         outcome = result.current.moveRequestAt("REQ-003", "pending", 0);
       });
       expect(outcome?.ok).toBe(true);
+    });
+
+    it("reorders inside a lane — a drop on the card's own status is legal", () => {
+      const { result } = renderHook(() => useRequestBoard(ITEMS));
+      let outcome: ReturnType<typeof result.current.moveRequestAt> | undefined;
+      act(() => {
+        outcome = result.current.moveRequestAt("REQ-002", "pending", 0);
+      });
+      expect(outcome?.ok).toBe(true);
+      const pending = result.current.items.filter(
+        (item) => item.status === "pending"
+      );
+      expect(pending.map((item) => item.id)).toEqual(["REQ-002", "REQ-001"]);
+      expect(pending.map((item) => item.boardPosition)).toEqual([0, 1]);
+    });
+
+    it("does not write a history entry for a reorder", () => {
+      const { result } = renderHook(() => useRequestBoard(ITEMS));
+      act(() => {
+        result.current.moveRequestAt("REQ-002", "pending", 0);
+      });
+      expect(
+        result.current.items.find((item) => item.id === "REQ-002")?.history
+      ).toHaveLength(0);
     });
   });
 
@@ -516,13 +541,19 @@ describe("useRequestBoard", () => {
   });
 
   describe("persistence", () => {
-    it("calls onPersist for each changed item on move", () => {
+    it("calls onPersist for the moved item and the neighbour it displaced", () => {
       const persist = vi.fn();
       const { result } = renderHook(() => useRequestBoard(ITEMS, persist));
       act(() => result.current.moveRequestAt("REQ-001", "approved", 0));
-      expect(persist).toHaveBeenCalledTimes(1);
+      // F8 — a drop persists the whole affected lane, not just the card: the
+      // position it took (0) and the position it pushed down (1) are both
+      // durable, which is what makes a manual order survive a restart.
+      expect(persist).toHaveBeenCalledTimes(2);
       expect(persist).toHaveBeenCalledWith(
         expect.objectContaining({ id: "REQ-001", status: "approved" })
+      );
+      expect(persist).toHaveBeenCalledWith(
+        expect.objectContaining({ boardPosition: 1, id: "REQ-003" })
       );
     });
 

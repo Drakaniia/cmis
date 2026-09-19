@@ -118,6 +118,41 @@ export function RequestsSection() {
         </DocsStep>
       </DocsSteps>
 
+      <DocsSubHeading>When a move is refused</DocsSubHeading>
+      <DocsP>
+        A card can always be picked up, but not every column can take it. While
+        you drag, columns that cannot accept the card fade and the cursor turns
+        into a “can’t drop” arrow; hold the card over one and its header says so
+        in words. Letting go returns the card to where it came from and explains
+        the rule, along with the legal way to get where you were going.
+      </DocsP>
+      <DocsSteps>
+        <DocsStep title="Claimed is the end of the flow.">
+          A handed-over request has already moved stock and been recorded. It
+          cannot be moved back — use{" "}
+          <DocsRoute to="/admin/dispensing">Dispensing Log</DocsRoute> to review
+          the hand-over. The refusal offers that record directly.
+        </DocsStep>
+        <DocsStep title="A denied request goes back to Pending first.">
+          Re-open puts it back in the flow; from there it can be approved again.
+        </DocsStep>
+        <DocsStep title="Hand-over happens from Ready to Claim.">
+          Approving and preparing do not move stock. Move the card to Ready to
+          Claim, then dispense it.
+        </DocsStep>
+      </DocsSteps>
+      <DocsCallout title="Dragging across a wide board">
+        Hold a card near the left or right edge and the board scrolls for you;
+        near the top or bottom of a column and that column scrolls. The Denied
+        rail opens on its own while you carry a card over it, so a card can be
+        denied without expanding anything first.
+      </DocsCallout>
+      <DocsCallout title="Cards stay where you put them" tone="tip">
+        Dropping a card between two others sets its place for good — the order
+        is saved and survives a restart. Menu, keyboard and batch moves always
+        add the card to the end of the destination column instead.
+      </DocsCallout>
+
       <DocsCallout title="Handing over is what moves the stock" tone="tip">
         Approving and preparing reserve nothing. The quantity leaves the shelf
         at Dispense, taken from the earliest-expiring batch first, and the
@@ -130,6 +165,12 @@ export function RequestsSection() {
         Tick several cards in the same column to use the batch bar — Approve
         all, Prepare all, Dispense all or Deny all. A mixed selection only
         offers the moves that are valid for every card.
+      </DocsCallout>
+      <DocsCallout title="Clearing the Claimed column">
+        The Claimed column has a <em>Clear</em> action beside its count. It asks
+        for confirmation, then takes those cards off the board — nothing is
+        deleted. Every hand-over, its batch and its quantity stay in the{" "}
+        <DocsRoute to="/admin/dispensing">Dispensing Log</DocsRoute>.
       </DocsCallout>
       <DocsCallout title="Claimed cards disappear after a day">
         Twenty-four hours after hand-over a claimed card leaves the board to

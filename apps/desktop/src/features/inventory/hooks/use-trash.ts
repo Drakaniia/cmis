@@ -2,20 +2,18 @@ import type { QueryClient } from "@tanstack/react-query";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getDb } from "@/lib/db";
 import { fetchItemImpact, type ItemImpact } from "../creation/impact";
-import {
-  type BatchDeleteSummary,
-  type BatchRef,
-  type DeleteSummary,
-  listTrash,
-  type PurgeSummary,
-  purgeTrash,
-  type RestoreResult,
-  restoreBatch,
-  restoreItem,
-  softDeleteBatch,
-  softDeleteItem,
-  type TrashEntry,
-} from "../creation/trash";
+import { restoreBatch, softDeleteBatch } from "../creation/trash/batch-ops";
+import { restoreItem, softDeleteItem } from "../creation/trash/item-ops";
+import { purgeTrash } from "../creation/trash/purge";
+import { listTrash } from "../creation/trash/records";
+import type {
+  BatchDeleteSummary,
+  BatchRef,
+  DeleteSummary,
+  PurgeSummary,
+  RestoreResult,
+  TrashEntry,
+} from "../creation/trash/types";
 
 export const TRASH_QUERY_KEY = "trash";
 

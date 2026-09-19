@@ -20,7 +20,7 @@ import {
   type SheetColumnKey,
   type SheetMapping,
 } from "../../creation/paste";
-import type { SheetDefaults, SheetGroup } from "../../creation/sheet";
+import type { SheetDefaults, SheetGroup } from "../../creation/sheet-types";
 import { CELL_CLASS, HINT_CLASS } from "./field-styles";
 import { formatCount, plural } from "./summary-text";
 

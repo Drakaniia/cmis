@@ -282,7 +282,23 @@
 }
 
 .page-canvas {
+  box-sizing: border-box;
+  padding-bottom: max(16px, env(safe-area-inset-bottom, 0px));
+  /* Ensure the last viewport row is never flush against the window edge (Tauri
+     minimized / short viewport). Scrollable parents reserve safe-area + breathing
+     room so the bottom cards remain reachable. */
+  scroll-padding-bottom: 32px;
   background: color-mix(in oklch, var(--background) 92%, var(--muted));
+}
+
+/* Every scroll container inside the app shell must keep the bottom 24px
+   reachable when the Tauri window is at its minimum height. Adding
+   scroll-padding + a real padding guarantees the last card/footnote is not
+   clipped and the scroll thumb can reach the end. */
+.page-canvas .overflow-auto,
+.page-canvas .overflow-y-auto,
+.page-canvas [class*="overflow-auto"] {
+  scroll-padding-bottom: 32px;
 }
 
 .field-opaque {
@@ -303,6 +319,22 @@
 }
 .press-feedback:active:not(:disabled) {
   transform: scale(0.97);
+}
+
+/* ─── CMIS-UI-05 §F3 — the drag cursor is owned by the phase ──────
+ * The drag engine sets `data-drag-phase` on <body> for the life of a gesture
+ * and removes it in the same commit that ends the gesture, so a "stuck
+ * grabbing" cursor cannot outlive a dropped card. `not-allowed` covers a lane
+ * that will refuse the card *and* the space between lanes.
+ */
+body[data-drag-phase="grabbing"],
+body[data-drag-phase="grabbing"] * {
+  cursor: grabbing !important;
+}
+
+body[data-drag-phase="not-allowed"],
+body[data-drag-phase="not-allowed"] * {
+  cursor: not-allowed !important;
 }
 
 /* ─── Apple Design §1 — Global button press feedback ───────────

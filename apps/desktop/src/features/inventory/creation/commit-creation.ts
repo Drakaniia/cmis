@@ -246,6 +246,10 @@ export async function commitCreation(
           batches: rows.length,
           category: String(itemRow.category),
           qty: units,
+          // The units that arrived, which is what the Reports "Stock Movement"
+          // chart sums per day. `qty` is the resulting on-hand total on an
+          // addition, so it cannot serve as the inbound amount.
+          received: units,
           sku: String(itemRow.sku),
         },
         detail: `Created ${String(itemRow.display_name) || String(itemRow.name)} (${String(itemRow.sku)}) — ${rows.length} ${rows.length === 1 ? "batch" : "batches"}, ${units} units`,
@@ -281,7 +285,7 @@ export async function commitCreation(
 
       await recordAudit(db, {
         action: "stock-in",
-        after: { batches: rows.length, qty: newQty, status },
+        after: { batches: rows.length, qty: newQty, received: units, status },
         before: { qty: item.qty },
         detail: `Added ${rows.length} ${rows.length === 1 ? "batch" : "batches"} to ${item.name} — ${units} units`,
         targetId: addition.itemId,

@@ -153,6 +153,27 @@ export function useStockInMutation() {
           item.id,
         ]
       );
+      // A stock-in used to leave no trail at all: the batch and the quantity
+      // changed with nothing to say a delivery happened, so the audit log could
+      // not answer "what came in this week" and Reports had no inbound series.
+      // `received` is the amount that arrived — `qty` is the resulting total.
+      // Best effort, so a broken log never loses the delivered stock.
+      await recordAudit(
+        db,
+        {
+          action: "stock-in",
+          after: {
+            qty: newQty,
+            received: payload.qty,
+            status: newStatus,
+          },
+          before: { qty: item.qty },
+          detail: `${payload.name}: received ${payload.qty} ${payload.qty === 1 ? "unit" : "units"}${payload.batch ? ` (batch ${payload.batch})` : ""} — ${newQty} on hand`,
+          targetId: item.id,
+          targetKind: "item",
+        },
+        { bestEffort: true }
+      );
       return { id: item.id, qty: newQty };
     },
     onSuccess: () => {

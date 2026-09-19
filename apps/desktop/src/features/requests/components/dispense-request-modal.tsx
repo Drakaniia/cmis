@@ -84,7 +84,10 @@ export function DispenseRequestModal({
             onClick={handleClose}
             transition={{ duration: 0.18 }}
           />
-          <div className="fixed inset-0 z-[60] flex items-center justify-center p-3 sm:p-6">
+          <div
+            className="fixed inset-0 z-[60] flex items-center justify-center p-3 sm:p-6"
+            onClick={handleClose}
+          >
             <motion.div
               animate="animate"
               aria-label={`Dispense ${request.medicine}`}
@@ -92,6 +95,7 @@ export function DispenseRequestModal({
               className="surface-frosted flex max-h-[86vh] w-full max-w-[480px] flex-col overflow-hidden rounded-xl border border-border/50 shadow-xl"
               exit="exit"
               initial={reduceMotion ? "animate" : "initial"}
+              onClick={(event) => event.stopPropagation()}
               role="dialog"
               style={{
                 transformOrigin: "center center",

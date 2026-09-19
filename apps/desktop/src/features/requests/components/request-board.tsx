@@ -1,16 +1,13 @@
 import { type HTMLAttributes, type RefObject, useMemo } from "react";
 
 import type { Density } from "@/hooks/use-density";
+import type { DragPhase } from "../hooks/use-card-drag/types";
 import type { RequestAction } from "../transitions";
-import type { RequestColumnMeta, RequestItem, RequestStatus } from "../types";
+import type { RequestItem, RequestStatus } from "../types";
+import type { RequestColumnGroup } from "./board-preview";
+import { previewGroupsFor } from "./board-preview";
 import { RequestColumn } from "./request-column";
 import { RequestsEmptyState } from "./requests-empty-state";
-
-export interface RequestColumnGroup {
-  column: RequestColumnMeta;
-  items: RequestItem[];
-  total: number;
-}
 
 /**
  * CMIS-UI-05 §2 — horizontal board. Native horizontal scroll with
@@ -20,20 +17,26 @@ export interface RequestColumnGroup {
  * Drag state arrives as flat props rather than a context so each column can
  * opt out of re-rendering: only the column under the pointer and the origin
  * column change their highlight when the target moves.
+ *
+ * While a card is in flight the board renders the *preview* order, not the
+ * committed one: the card is already in its destination slot, so the drop has
+ * nowhere left to jump to (CMIS-UI-05 §4.1).
  */
 export function RequestBoard({
   boardRef,
   cardHandlers,
   deniedCollapsed,
   density,
-  dragActive,
+  dragPhase,
   draggedCardId,
   dropIndex,
   dropValid,
   filteredCount,
   groups,
+  illegalStatuses,
   now,
   onAction,
+  onClearClaimed,
   onClearFilters,
   onDropTargetStatus,
   onKeyboardMove,
@@ -43,20 +46,27 @@ export function RequestBoard({
   onToggleSelect,
   selectedIds,
   shake,
+  snapSuspended,
   totalVisible,
 }: {
   boardRef: RefObject<HTMLDivElement | null>;
   cardHandlers?: (item: RequestItem) => HTMLAttributes<HTMLElement>;
   deniedCollapsed: boolean;
   density: Density;
-  dragActive: boolean;
+  /** Board styling follows the phase, never "an overlay object exists" (D18). */
+  dragPhase: DragPhase;
+  /** The card currently in flight — ghosted where the preview has placed it. */
   draggedCardId: string | null;
   dropIndex: number | null;
   dropValid: boolean;
   filteredCount: number;
   groups: RequestColumnGroup[];
+  /** Lanes that cannot accept the card in flight (F3.2). */
+  illegalStatuses: ReadonlySet<RequestStatus>;
   now: number;
   onAction: (item: RequestItem, action: RequestAction) => void;
+  /** F9 — the Claimed lane's clear action. */
+  onClearClaimed: () => void;
   onClearFilters: () => void;
   /** Status of the column currently under the pointer, if any. */
   onDropTargetStatus: RequestStatus | null;
@@ -71,16 +81,34 @@ export function RequestBoard({
   selectedIds: ReadonlySet<string>;
   /** Status whose header should shake after a forbidden drop. */
   shake: RequestStatus | null;
+  /**
+   * True for as long as anything is in the air — including the settle of a
+   * committed move. Re-arming `snap-mandatory` mid-settle makes the browser
+   * re-snap the board under the landing card, which moves every lane and turns
+   * a clean landing into a correction jump (Apple §3).
+   */
+  snapSuspended: boolean;
   totalVisible: number;
 }) {
+  const dragging = dragPhase === "dragging";
+  const previewGroups = useMemo(
+    () =>
+      previewGroupsFor(
+        groups,
+        draggedCardId,
+        dropValid ? onDropTargetStatus : null,
+        dropIndex
+      ),
+    [groups, draggedCardId, dropValid, onDropTargetStatus, dropIndex]
+  );
   // A drag suspends scroll-snap; otherwise the board yanks the column back
   // under the card's home lane mid-gesture (Apple §3: don't fight the user).
   const className = useMemo(
     () =>
       `h-full overflow-x-auto overflow-y-hidden px-3 pb-3 ${
-        dragActive ? "snap-none" : "snap-x snap-mandatory"
+        snapSuspended ? "snap-none" : "snap-x snap-mandatory"
       }`,
-    [dragActive]
+    [snapSuspended]
   );
 
   if (totalVisible === 0) {
@@ -115,24 +143,25 @@ export function RequestBoard({
       ref={boardRef}
     >
       <div className="flex h-full min-h-0 gap-2">
-        {groups.map((group) => (
+        {previewGroups.map((group) => (
           <RequestColumn
             anySelected={selectedIds.size > 0}
             cardHandlers={cardHandlers}
             collapsed={group.column.isOffFlow && deniedCollapsed}
             column={group.column}
+            count={group.count}
             density={density}
-            dragActive={dragActive}
             draggedCardId={draggedCardId}
-            dropIndex={
-              onDropTargetStatus === group.column.status ? dropIndex : null
-            }
             dropValid={dropValid}
+            illegal={dragging && illegalStatuses.has(group.column.status)}
             isTarget={onDropTargetStatus === group.column.status}
             items={group.items}
             key={group.column.status}
             now={now}
             onAction={onAction}
+            onClearClaimed={
+              group.column.status === "claimed" ? onClearClaimed : undefined
+            }
             onKeyboardMove={onKeyboardMove}
             onOpen={onOpen}
             onRegisterColumn={onRegisterColumn}

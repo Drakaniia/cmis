@@ -10,7 +10,7 @@ export const Route = createFileRoute("/admin/requests")({
 
 function AdminRequestsComponent() {
   return (
-    <div className="flex h-[calc(100svh-48px)] flex-col overflow-hidden">
+    <div className="flex h-full flex-col overflow-hidden">
       <div className="min-h-0 flex-1 overflow-hidden">
         <RequestsPage to="/admin/requests" />
       </div>

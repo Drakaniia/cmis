@@ -1,6 +1,6 @@
 import { Checkbox } from "@cmis/ui/components/checkbox";
 import { cn } from "@cmis/ui/lib/utils";
-import { motion } from "motion/react";
+import { motion, useReducedMotion } from "motion/react";
 import {
   type HTMLAttributes,
   type KeyboardEvent,
@@ -12,7 +12,7 @@ import {
 } from "react";
 
 import type { Density } from "@/hooks/use-density";
-import { dragSpring } from "@/lib/motion";
+import { boardReflowSpring, dragSpring } from "@/lib/motion";
 import { relativeTimeLabel } from "../format";
 import type { RequestAction } from "../transitions";
 import type { RequestItem } from "../types";
@@ -129,6 +129,7 @@ export function RequestCard({
   selected: boolean;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const reduceMotion = useReducedMotion();
   const meta = statusMetaOf(item.status);
   const time = relativeTimeLabel(item.submittedAt, now);
   const who = requestorLabel(item);
@@ -218,10 +219,10 @@ export function RequestCard({
   );
 
   return (
-    <li
+    <motion.li
       aria-roledescription="draggable request card"
       className={cn(
-        "kanban-card group/card relative list-none rounded-xl border bg-card shadow-sm transition-colors",
+        "kanban-card group/card relative shrink-0 list-none rounded-xl border bg-card shadow-sm transition-colors",
         dragging
           ? "pointer-events-none border-ring/60 border-dashed bg-muted/20 opacity-40"
           : "border-border/60",
@@ -229,6 +230,17 @@ export function RequestCard({
       )}
       data-request-id={item.id}
       data-status={item.status}
+      /*
+       * The card in flight is already rendered in its destination slot, so when
+       * the drop commits, the neighbouring cards are where the gesture put them
+       * — no re-layout, no blink (CMIS-UI-05 §4.1).
+       *
+       * The ghost itself never layout-animates: its rect is measured to aim the
+       * settle, and a transform in flight would aim the card at a position the
+       * slot has already left.
+       */
+      layout={!(reduceMotion || dragging)}
+      transition={reduceMotion ? { duration: 0 } : boardReflowSpring}
     >
       {dragging ? (
         <span className="sr-only" role="status">
@@ -281,6 +293,6 @@ export function RequestCard({
           status={item.status}
         />
       </span>
-    </li>
+    </motion.li>
   );
 }

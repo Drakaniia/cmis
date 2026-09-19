@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { hiddenFromBoard } from "../drag-rules";
 import { endOfDayTimestamp, startOfDay, startOfDayTimestamp } from "../format";
-import { isArchivedClaimed } from "../transitions";
 import type { RequestFilters, RequestItem } from "../types";
 import { REQUEST_DATE_PRESETS } from "../types";
 
@@ -113,9 +113,13 @@ export function useRequestFilters(
     return () => window.clearTimeout(timer);
   }, [filters.requestor, filters.search]);
 
-  /** Claimed cards leave the board after 24h (§1) — before filters apply. */
+  /**
+   * The one place a card leaves the board: an explicit archive marker first,
+   * then the derived 24h rule (F9.7). Both mechanisms hide; only the explicit
+   * one writes, so the count badge and the lane can never disagree.
+   */
   const visibleItems = useMemo(
-    () => items.filter((item) => !isArchivedClaimed(item, now)),
+    () => items.filter((item) => !hiddenFromBoard(item, now)),
     [items, now]
   );
 

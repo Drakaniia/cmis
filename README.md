@@ -59,6 +59,21 @@ pnpm build
 pnpm desktop:build
 ```
 
+## Seeding demo data
+
+Demos and screen recordings need every page populated. This clears the app's
+SQLite database — inventory, batches, requests, dispensing, the audit log and
+Trash — and repopulates it from [`scripts/seed-demo-data.json`](scripts/seed-demo-data.json):
+
+```bash
+pnpm seed:demo
+```
+
+Timestamps in the dataset are relative (`-3h`, `+21d`), so a re-seed always looks
+like data that was just used rather than a frozen sample. A timestamped copy of
+the database file is written alongside it before anything is cleared. Set
+`CMIS_DB` to seed a different database file instead of the installed app's.
+
 ## Project Structure
 
 ```

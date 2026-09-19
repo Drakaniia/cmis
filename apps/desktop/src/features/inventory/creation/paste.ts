@@ -1,11 +1,10 @@
 import { newBatchDraftRow, newProductDraft, type ProductDraft } from "./draft";
+import { applyDefaultFields, sheetGroupFromProduct } from "./sheet-defaults";
 import {
-  applyDefaultFields,
   SHEET_DEFAULT_FIELDS,
   type SheetDefaults,
   type SheetGroup,
-  sheetGroupFromProduct,
-} from "./sheet";
+} from "./sheet-types";
 
 /**
  * The delivery sheet's columns and its paste parser (spec §7.4).

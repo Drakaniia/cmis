@@ -4,7 +4,7 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useSettings } from "@/features/admin/settings/hooks/use-settings";
-import { StockInWizard } from "./stock-in-wizard";
+import { StockInWizard } from "./stock-in-wizard/stock-in-wizard";
 
 // The category dropdown owns the shared category list and its own popover; the
 // wizard's tests only need a list to choose from (the picker's behaviour has its

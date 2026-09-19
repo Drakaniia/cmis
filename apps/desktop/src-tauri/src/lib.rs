@@ -77,6 +77,12 @@ fn db_migrations() -> Vec<Migration> {
             sql: include_str!("../migrations/0010_dispensing_events_unique.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 11,
+            description: "request_queue_board_state",
+            sql: include_str!("../migrations/0011_request_queue_board_state.sql"),
+            kind: MigrationKind::Up,
+        },
     ]
 }
 

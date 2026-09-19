@@ -5,6 +5,7 @@ import { toast } from "sonner";
 
 import { relativeTime } from "../../format";
 import { useHealth } from "../hooks/use-health";
+import { useSystemHealth } from "../hooks/use-system-health";
 import type { HealthAction, HealthCardId } from "../types";
 import { HealthCard } from "./health-card";
 
@@ -17,7 +18,11 @@ import { HealthCard } from "./health-card";
  */
 export function HealthPage() {
   const navigate = useNavigate();
-  const { cards, online, pendingSyncs, runAction } = useHealth();
+  const { data: health } = useSystemHealth();
+  const { cards, online, pendingSyncs, runAction } = useHealth(
+    health?.cards,
+    health?.pendingSyncs
+  );
 
   const handleAction = useCallback(
     (id: HealthCardId, action: HealthAction) => {
@@ -48,8 +53,8 @@ export function HealthPage() {
   );
 
   return (
-    <div className="flex h-[calc(100svh-48px)] flex-col overflow-hidden">
-      <div className="min-h-0 flex-1 overflow-auto">
+    <div className="flex h-full flex-col overflow-hidden">
+      <div className="min-h-0 flex-1 overflow-auto pb-6">
         <div className="mx-auto grid w-full max-w-5xl gap-4 px-3 py-4 sm:px-4 min-[900px]:grid-cols-2">
           {cards.map((card) => {
             const isSync = card.id === "sync";
