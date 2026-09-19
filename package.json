@@ -42,10 +42,12 @@
     "format:prettier": "prettier --write .",
     "hooks:setup": "vp config",
     "lint": "vp lint",
+    "seed:demo": "pnpm --filter desktop exec vitest run --config ../../scripts/vitest.seed.config.ts",
     "staged": "vp staged",
     "tauri": "pnpm --filter desktop tauri",
     "test": "vp run -r test",
-    "test:frontend": "pnpm --filter desktop test"
+    "test:frontend": "pnpm --filter desktop test",
+    "version:bump": "node scripts/bump-version.mjs"
   },
   "overrides": {
     "vite": "npm:@voidzero-dev/vite-plus-core@0.3.0"
