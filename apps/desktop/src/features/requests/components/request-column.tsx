@@ -1,7 +1,6 @@
 import { cn } from "@cmis/ui/lib/utils";
 import { motion, useReducedMotion } from "motion/react";
 import {
-  Fragment,
   type HTMLAttributes,
   useCallback,
   useEffect,
@@ -21,17 +20,6 @@ function overflowsBottom(element: HTMLElement | null): boolean {
       (element?.scrollTop ?? 0) -
       (element?.clientHeight ?? 0) >
     4
-  );
-}
-
-function DropIndicator() {
-  return (
-    <li aria-hidden className="list-none">
-      <div
-        className="h-0.5 shrink-0 rounded-full bg-[var(--ring)]"
-        style={{ borderTop: "2px dashed var(--ring)" }}
-      />
-    </li>
   );
 }
 
@@ -121,17 +109,18 @@ function ColumnHeader({
  * CMIS-UI-05 §2 / §9 / §4.1 — one column: header with filtered count, an
  * independently scrolling card list with a bottom fade mask (Apple §12: scroll
  * edge effects, not hard dividers), a dashed placeholder when empty, and the
- * drag affordances — valid-target highlight, insertion line, and the damped
- * header shake when a forbidden drop is attempted.
+ * drag affordances — valid-target highlight, the ghost of the card in flight
+ * sitting in its destination slot, and the damped header shake when a forbidden
+ * drop is attempted.
  */
 export function RequestColumn({
   anySelected,
   cardHandlers,
   collapsed,
   column,
+  count,
   density,
   draggedCardId,
-  dropIndex,
   dropValid,
   illegal,
   items,
@@ -152,9 +141,10 @@ export function RequestColumn({
   cardHandlers?: (item: RequestItem) => HTMLAttributes<HTMLElement>;
   collapsed: boolean;
   column: RequestColumnMeta;
+  /** Committed filtered count — stable across a live drag preview. */
+  count: number;
   density: Density;
   draggedCardId?: string | null;
-  dropIndex?: number | null;
   dropValid?: boolean;
   /** This lane cannot accept the card in flight (F3.2). */
   illegal?: boolean;
@@ -246,9 +236,7 @@ export function RequestColumn({
     );
   }
 
-  const countLabel =
-    items.length === total ? `${total}` : `${items.length} of ${total}`;
-  const showIndicator = Boolean(highlight) && dropIndex !== null;
+  const countLabel = count === total ? `${total}` : `${count} of ${total}`;
 
   return (
     <section
@@ -278,14 +266,19 @@ export function RequestColumn({
       />
 
       <div className="relative min-h-0 flex-1">
+        {/*
+         * `flex flex-col gap-2` (rather than `space-y-2`) is what lets the
+         * cards FLIP: a layout-animated element measures its own box, and gap
+         * spacing is geometric where margins are not (CMIS-UI-05 §4.1).
+         */}
         <ul
-          className="h-full list-none space-y-2 overflow-y-auto p-1.5"
+          className="flex h-full list-none flex-col gap-2 overflow-y-auto p-1.5"
           data-lane-scroll={column.status}
           onScroll={handleScroll}
           ref={bodyRef}
         >
           {items.length === 0 ? (
-            <li className="list-none">
+            <li className="shrink-0 list-none">
               <p className="rounded-lg border border-border/70 border-dashed px-2 py-6 text-center text-caption text-muted-foreground">
                 {total === 0
                   ? `No ${column.label.toLowerCase()} requests`
@@ -294,28 +287,22 @@ export function RequestColumn({
             </li>
           ) : null}
 
-          {items.map((item, index) => (
-            <Fragment key={item.id}>
-              {showIndicator && dropIndex === index ? <DropIndicator /> : null}
-              <RequestCard
-                anySelected={anySelected}
-                density={density}
-                dragging={draggedCardId === item.id}
-                dragHandlers={cardHandlers?.(item)}
-                item={item}
-                now={now}
-                onAction={onAction}
-                onKeyboardMove={onKeyboardMove}
-                onOpen={onOpen}
-                onToggleSelect={onToggleSelect}
-                selected={selectedIds.has(item.id)}
-              />
-            </Fragment>
+          {items.map((item) => (
+            <RequestCard
+              anySelected={anySelected}
+              density={density}
+              dragging={draggedCardId === item.id}
+              dragHandlers={cardHandlers?.(item)}
+              item={item}
+              key={item.id}
+              now={now}
+              onAction={onAction}
+              onKeyboardMove={onKeyboardMove}
+              onOpen={onOpen}
+              onToggleSelect={onToggleSelect}
+              selected={selectedIds.has(item.id)}
+            />
           ))}
-
-          {showIndicator && (dropIndex ?? 0) >= items.length ? (
-            <DropIndicator />
-          ) : null}
         </ul>
 
         {showFade ? (

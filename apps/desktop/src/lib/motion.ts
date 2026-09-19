@@ -45,7 +45,32 @@ export const smoothSettleSpring = {
   type: "spring" as const,
 } satisfies Record<string, unknown>;
 
-/** CMIS-UI-05 §4.3 — press/select feedback that follows the pointer down. */
+/**
+ * CMIS-UI-05 §4.1 — the board's cards glide as they make room for the card in
+ * flight. Shorter than a settle so the space is open before the drop lands.
+ */
+export const boardReflowSpring = {
+  bounce: 0,
+  duration: 0.22,
+  type: "spring" as const,
+} satisfies Record<string, unknown>;
+
+/**
+ * CMIS-UI-05 §4.1 — the pull onto a lane's slot. Deliberately soft and slower
+ * than a settle: the card is *drawn* onto the seat the lane has opened for it,
+ * and the travel has to be visible so it reads as the board claiming the card
+ * rather than the card teleporting out from under the pointer (Apple §4 —
+ * behaviour over animation, but the motion still has to say something).
+ */
+export const magnetSpring = {
+  bounce: 0,
+  duration: 0.35,
+  type: "spring" as const,
+} satisfies Record<string, unknown>;
+
+/**
+ * CMIS-UI-05 §4.3 — press/select feedback that follows the pointer down.
+ */
 export const dragSpring = {
   bounce: 0,
   duration: 0.25,

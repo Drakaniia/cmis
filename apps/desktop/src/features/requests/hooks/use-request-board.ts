@@ -212,13 +212,20 @@ export function useRequestBoard(
   const moveRequestAt = useCallback(
     (id: string, to: RequestStatus, index: number): MoveOutcome => {
       const current = items.find((item) => item.id === id);
-      if (!(current && canMove(current.status, to))) {
+      // A drop inside the lane the card already sits in is a reorder, and a
+      // reorder is always legal (drag-rules §F2) — `canMove` governs lane
+      // *changes* only. Without this the previewed order is thrown away on
+      // release and the card snaps back, which reads as both a mis-landing and
+      // a blink.
+      const reorder = current?.status === to;
+      if (!(current && (reorder || canMove(current.status, to)))) {
         return { ok: false, reason: "forbidden" };
       }
       const from = current.status;
       const moved: RequestItem = {
         ...current,
-        history: appendHistory(current, to),
+        // Reordering is not a status change, so it earns no history entry.
+        ...(reorder ? {} : { history: appendHistory(current, to) }),
         status: to,
       };
       // The whole destination lane is resequenced, and the source lane after it
@@ -232,7 +239,9 @@ export function useRequestBoard(
         )
       );
       setItems(next);
-      setLastMove({ entries: [{ from, id, index }] });
+      if (!reorder) {
+        setLastMove({ entries: [{ from, id, index }] });
+      }
       persist(uniqueById([...changed, moved]));
       return { from, index, item: moved, ok: true };
     },

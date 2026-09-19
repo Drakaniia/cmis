@@ -16,6 +16,7 @@ import {
 import {
   dragHysteresisPx,
   dropIndexFor,
+  magnetSpring,
   smoothSettleSpring,
   snapVelocityPxPerSec,
   velocityFromHistory,
@@ -49,6 +50,23 @@ import type {
  * cancelled out from under the user (§12).
  */
 const WATCHDOG_MS = 20_000;
+
+/**
+ * How long a landed card takes to dissolve into the board (E10 mirrors the
+ * overlay's `duration-150`, with a frame of slack so the element is not removed
+ * mid-transition).
+ */
+const RELEASE_FADE_MS = 160;
+
+/**
+ * The card's own box — the `<li data-request-id>`, not the `<button>` that
+ * actually owns the gesture (it sits inside the card's 1px border). Measuring
+ * the card is what makes the overlay land flush on the slot the board renders.
+ */
+function cardRectOf(element: HTMLElement): Rect {
+  const card = element.closest<HTMLElement>("[data-request-id]");
+  return toRect((card ?? element).getBoundingClientRect());
+}
 
 /**
  * CMIS-UI-05 §4.1 — the Kanban drag engine.
@@ -96,6 +114,8 @@ export function useCardDrag({
   const suppressClickRef = useRef(false);
   const overlayRef = useRef<DragOverlay | null>(null);
   const watchdogRef = useRef<number | null>(null);
+  const releaseTimerRef = useRef<number | null>(null);
+  const releasingRef = useRef(false);
   /**
    * A committed move whose settle is still animating. Every teardown path
    * flushes it, so a click-away, a watchdog timeout or an Escape can end the
@@ -105,6 +125,7 @@ export function useCardDrag({
 
   const [overlay, setOverlay] = useState<DragOverlay | null>(null);
   const [phase, setPhase] = useState<DragPhase>("idle");
+  const [releasing, setReleasing] = useState(false);
   const [shake, setShake] = useState<RequestStatus | null>(null);
 
   const onCancelRef = useRef(onCancel);
@@ -202,14 +223,30 @@ export function useCardDrag({
       pointerX: number,
       pointerY: number
     ): DropTarget | null => {
-      const columns = measureColumns();
-      const hit = columns.find(
+      const columns = measureColumns().filter(
         (column) =>
-          pointerX >= column.rect.left &&
-          pointerX <= column.rect.right &&
-          pointerY >= column.rect.top &&
-          pointerY <= column.rect.bottom
+          pointerY >= column.rect.top && pointerY <= column.rect.bottom
       );
+      if (columns.length === 0) {
+        return null;
+      }
+      // The 8px gutter between two lanes is board space, not a dead zone. A
+      // strict hit test drops to `null` the instant the pointer crosses one, so
+      // the preview snaps home and back again — the flicker. Each lane's hit
+      // area therefore extends to the midpoint of the gutter it shares with its
+      // neighbour; the board's own outer padding belongs to nobody, so a
+      // deliberate release there still means *never mind* (F1).
+      const hit = columns.find((column, index) => {
+        const previous = columns[index - 1];
+        const next = columns[index + 1];
+        const left = previous
+          ? (previous.rect.right + column.rect.left) / 2
+          : column.rect.left;
+        const right = next
+          ? (column.rect.right + next.rect.left) / 2
+          : column.rect.right;
+        return pointerX >= left && pointerX <= right;
+      });
       if (!hit) {
         return null;
       }
@@ -225,14 +262,40 @@ export function useCardDrag({
     [measureColumns, siblingsOf]
   );
 
-  /** Where the card would sit visually once it lands. */
-  const slotRectFor = useCallback(
-    (status: RequestStatus, index: number, session: Session): Rect | null => {
+  /**
+   * Where the card has *already* been promised to land.
+   *
+   * The board renders the in-flight card in its destination slot for the whole
+   * gesture, so measuring that node is the only geometry that matches what the
+   * user is looking at. Anything else re-introduces the correction jump the
+   * preview exists to remove (CMIS-UI-05 §4.1).
+   */
+  const previewRectFor = useCallback(
+    (status: RequestStatus, session: Session): Rect | null => {
       const column = columnRefs.current.get(status);
-      const siblings = siblingsOf(status, session.cardId);
       if (!column) {
         return null;
       }
+      const ghost = column.querySelector<HTMLElement>(
+        `[data-request-id="${session.cardId}"]`
+      );
+      return ghost ? toRect(ghost.getBoundingClientRect()) : null;
+    },
+    []
+  );
+
+  /**
+   * Where a slot that has not rendered yet will sit — a keyboard move, or a
+   * release that resolved to a lane the preview had not reached. Derived from
+   * the lane's live cards, in the order the board commits them.
+   */
+  const slotRectAt = useCallback(
+    (status: RequestStatus, index: number, session: Session): Rect | null => {
+      const column = columnRefs.current.get(status);
+      if (!column) {
+        return null;
+      }
+      const siblings = siblingsOf(status, session.cardId);
       if (siblings.length === 0) {
         const body = column.getBoundingClientRect();
         return {
@@ -244,6 +307,9 @@ export function useCardDrag({
       }
       const clamped = Math.min(Math.max(index, 0), siblings.length);
       const anchor = siblings[clamped] ?? siblings.at(-1);
+      if (!anchor) {
+        return null;
+      }
       return {
         height: anchor.height,
         left: anchor.left,
@@ -260,13 +326,47 @@ export function useCardDrag({
   /**
    * The one exit (F1). Idempotent: reaching it twice is a no-op, and reaching
    * it at all means the board is unstyled and interactive again.
+   *
+   * It deliberately leaves the motion values alone. On a committed drop the
+   * overlay is sitting exactly on the slot the board has already rendered, so
+   * rewinding `x`/`y` to the gesture's origin would flash the card back to where
+   * the drag began for the frame before React unmounts it — that flash is the
+   * blink. The next gesture re-anchors the values itself (startDrag).
    */
   const clearOverlay = useCallback(() => {
-    x.set(0);
-    y.set(0);
+    if (releaseTimerRef.current !== null) {
+      window.clearTimeout(releaseTimerRef.current);
+      releaseTimerRef.current = null;
+    }
+    releasingRef.current = false;
+    setReleasing(false);
     setOverlay(null);
     setPhase("idle");
-  }, [x, y]);
+  }, []);
+
+  /**
+   * The landing (CMIS-UI-05 §4.1). The move is committed *first*, so the real
+   * card is already solid in the slot; the lifted overlay then dissolves onto
+   * it. Committing and clearing in one tick would trade two identical-looking
+   * boxes in a single frame — this gives the drop its beat, and because the
+   * card underneath never moves, there is nothing to correct afterwards.
+   */
+  const releaseOverlay = useCallback(() => {
+    setPhase("idle");
+    if (reducedRef.current) {
+      // Reduced motion gets no dissolve — the card is simply there (§14).
+      clearOverlay();
+      return;
+    }
+    releasingRef.current = true;
+    setReleasing(true);
+    releaseTimerRef.current = window.setTimeout(() => {
+      releaseTimerRef.current = null;
+      releasingRef.current = false;
+      setReleasing(false);
+      setOverlay(null);
+    }, RELEASE_FADE_MS);
+  }, [clearOverlay]);
 
   /**
    * Apple §5/§6 — settle with the gesture's velocity. Reduced motion swaps the
@@ -316,6 +416,68 @@ export function useCardDrag({
     [stopSettle, x, y]
   );
 
+  /**
+   * The magnet (F1/§4.1) — a short pull onto the slot the board has already
+   * opened. The pointer stops owning the position while this is in flight.
+   */
+  const magnetTo = useCallback(
+    (targetX: number, targetY: number) => {
+      stopSettle();
+      if (reducedRef.current) {
+        x.set(targetX);
+        y.set(targetY);
+        return;
+      }
+      const controls = [
+        animate(x, targetX, magnetSpring),
+        animate(y, targetY, magnetSpring),
+      ];
+      settleRef.current = controls;
+      Promise.all(
+        controls.map((control) => control.finished.catch(() => undefined))
+      )
+        .then(() => {
+          if (settleRef.current === controls) {
+            settleRef.current = null;
+          }
+        })
+        .catch(() => undefined);
+    },
+    [stopSettle, x, y]
+  );
+
+  /** The card's un-magnetised position: where it sits under the pointer. */
+  const followPosition = useCallback(
+    (session: Session): { x: number; y: number } => {
+      const dx = session.pointerX - session.startPoint.x;
+      const dy = session.pointerY - session.startPoint.y;
+      let nextX = session.baseX + dx;
+      let nextY = session.baseY + dy;
+      const board = boardRef.current?.getBoundingClientRect();
+      if (board && !reducedRef.current) {
+        const { originRect } = session;
+        nextX = correctedOffset(
+          nextX,
+          originRect.left,
+          originRect.width,
+          board.left,
+          board.right,
+          board.width
+        );
+        nextY = correctedOffset(
+          nextY,
+          originRect.top,
+          originRect.height,
+          board.top,
+          board.bottom,
+          board.height
+        );
+      }
+      return { x: nextX, y: nextY };
+    },
+    [boardRef]
+  );
+
   const clearSession = useCallback(() => {
     const session = sessionRef.current;
     sessionRef.current = null;
@@ -352,6 +514,13 @@ export function useCardDrag({
    */
   const cancelDrag = useCallback(
     (reason: DragCancelReason = "cancel") => {
+      // biome-ignore lint/suspicious/noUnnecessaryConditions: ref is assigned by releaseOverlay
+      if (releasingRef.current) {
+        // The move is already committed and the overlay is mid-dissolve; there
+        // is nothing left to spring home, so the next interruption just ends it.
+        clearOverlay();
+        return;
+      }
       const hadSession = sessionRef.current !== null;
       const hadCommit = pendingCommitRef.current !== null;
       clearSession();
@@ -403,13 +572,12 @@ export function useCardDrag({
         flushCommit();
         clearOverlay();
       }
+      const cardRect = cardRectOf(element);
       const baseX = continues ? x.get() : 0;
       const baseY = continues ? y.get() : 0;
       const originRect = continues
-        ? (current?.originRect ??
-          lingering?.originRect ??
-          toRect(element.getBoundingClientRect()))
-        : toRect(element.getBoundingClientRect());
+        ? (current?.originRect ?? lingering?.originRect ?? cardRect)
+        : cardRect;
 
       stopSettle();
       suppressClickRef.current = false;
@@ -422,6 +590,7 @@ export function useCardDrag({
         fromStatus: item.status,
         history: [],
         item,
+        magnetized: false,
         originRect,
         pointerId: event.pointerId,
         pointerX: event.clientX,
@@ -453,18 +622,23 @@ export function useCardDrag({
     [armWatchdog, clearOverlay, flushCommit, stopSettle, x, y]
   );
 
+  /**
+   * Tracking runs at the window, not on the card: the preview moves the card
+   * between lanes mid-gesture, which unmounts the node that owns the pointer
+   * capture. A window listener keeps the gesture alive across that move (F1).
+   */
   const handlePointerMove = useCallback(
-    (event: PointerEvent<HTMLElement>) => {
+    (sample: PointerSample) => {
       const session = sessionRef.current;
-      if (session === null || event.pointerId !== session.pointerId) {
+      if (session === null || sample.pointerId !== session.pointerId) {
         return;
       }
       armWatchdog();
-      session.pointerX = event.clientX;
-      session.pointerY = event.clientY;
+      session.pointerX = sample.clientX;
+      session.pointerY = sample.clientY;
 
-      const dx = event.clientX - session.startPoint.x;
-      const dy = event.clientY - session.startPoint.y;
+      const dx = sample.clientX - session.startPoint.x;
+      const dy = sample.clientY - session.startPoint.y;
 
       if (!session.started) {
         // Hysteresis: a small wobble stays a tap (Apple §10).
@@ -481,46 +655,35 @@ export function useCardDrag({
           target: null,
         });
       }
-      const board = boardRef.current?.getBoundingClientRect();
-      let nextX = session.baseX + dx;
-      let nextY = session.baseY + dy;
 
-      if (board && !reducedRef.current) {
-        const { originRect } = session;
-        nextX = correctedOffset(
-          nextX,
-          originRect.left,
-          originRect.width,
-          board.left,
-          board.right,
-          board.width
-        );
-        nextY = correctedOffset(
-          nextY,
-          originRect.top,
-          originRect.height,
-          board.top,
-          board.bottom,
-          board.height
-        );
-      }
-
-      // 1:1 tracking — the pointer writes the motion value directly.
-      x.set(nextX);
-      y.set(nextY);
-
-      session.history.push({ t: performance.now(), x: nextX, y: nextY });
-      if (session.history.length > HISTORY_LIMIT) {
-        session.history.shift();
-      }
-
-      const target = targetFor(session, event.clientX, event.clientY);
+      const target = targetFor(session, sample.clientX, sample.clientY);
       if (!sameTarget(session.target, target)) {
         session.target = target;
         setOverlay((prev) => (prev ? { ...prev, target } : prev));
       }
+
+      // A legal slot owns the card, so this move does not move it: the magnet
+      // effect eases it onto the slot once the preview has committed the ghost.
+      // Easing here would aim at the *previous* seat — the new one is not in the
+      // DOM yet — which is what makes a magnet feel one step behind.
+      if (target?.valid) {
+        session.magnetized = true;
+        return;
+      }
+
+      // Nothing to join: the card tracks the pointer 1:1 again, and any pull
+      // still in flight is abandoned so the two never fight (Apple §3).
+      session.magnetized = false;
+      stopSettle();
+      const follow = followPosition(session);
+      x.set(follow.x);
+      y.set(follow.y);
+      session.history.push({ t: performance.now(), x: follow.x, y: follow.y });
+      if (session.history.length > HISTORY_LIMIT) {
+        session.history.shift();
+      }
     },
-    [armWatchdog, boardRef, targetFor, x, y]
+    [armWatchdog, followPosition, stopSettle, targetFor, x, y]
   );
 
   const finishDrag = useCallback(
@@ -536,7 +699,12 @@ export function useCardDrag({
         return;
       }
 
-      const velocity = velocityFromHistory(session.history);
+      // A magnetised card is already sitting on its seat, so it carries no
+      // release momentum — settling it with the pointer's velocity would only
+      // bounce it off the slot it never left.
+      const velocity = session.magnetized
+        ? { x: 0, y: 0 }
+        : velocityFromHistory(session.history);
       const speed = Math.hypot(velocity.x, velocity.y);
       const hasVelocity = speed >= snapVelocityPxPerSec;
 
@@ -552,7 +720,7 @@ export function useCardDrag({
         springBack(velocity);
         return;
       }
-      const { status } = onLane;
+      const { index, status } = onLane;
 
       if (laneEligibility(session.fromStatus, status) === "illegal") {
         setShake(status);
@@ -570,11 +738,17 @@ export function useCardDrag({
         return;
       }
 
-      const index =
-        session.target?.status === status
-          ? session.target.index
-          : siblingsOf(status, session.cardId).length;
-      const slot = slotRectFor(status, index, session);
+      // The release can resolve to a different lane than the last pointermove
+      // previewed (a fast flick, or a pointerup with no final move). Point the
+      // preview at the destination before measuring so the settle and the
+      // commit agree (F1). Measuring the *rendered* ghost is preferred, but the
+      // geometric fallback is exact here: the new lane has no ghost yet.
+      if (!sameTarget(session.target, onLane)) {
+        session.target = onLane;
+        setOverlay((prev) => (prev ? { ...prev, target: onLane } : prev));
+      }
+      const slot =
+        previewRectFor(status, session) ?? slotRectAt(status, index, session);
 
       if (!slot) {
         springBack(velocity);
@@ -589,16 +763,16 @@ export function useCardDrag({
       setPhase("settling");
       settleTo(targetX, targetY, velocity, hasVelocity, () => {
         flushCommit();
-        clearOverlay();
+        releaseOverlay();
       });
     },
     [
-      clearOverlay,
       clearSession,
       flushCommit,
+      previewRectFor,
+      releaseOverlay,
       settleTo,
-      siblingsOf,
-      slotRectFor,
+      slotRectAt,
       springBack,
       targetFor,
     ]
@@ -620,6 +794,7 @@ export function useCardDrag({
         fromStatus: item.status,
         history: [],
         item,
+        magnetized: false,
         originRect,
         pointerId: -1,
         pointerX: 0,
@@ -628,7 +803,7 @@ export function useCardDrag({
         startPoint: { x: 0, y: 0 },
         target: { index, status, valid: true },
       };
-      const slot = slotRectFor(status, index, session);
+      const slot = slotRectAt(status, index, session);
       x.set(0);
       y.set(0);
       setOverlay({
@@ -652,11 +827,20 @@ export function useCardDrag({
         false,
         () => {
           flushCommit();
-          clearOverlay();
+          releaseOverlay();
         }
       );
     },
-    [boardRef, clearOverlay, flushCommit, settleTo, slotRectFor, x, y]
+    [
+      boardRef,
+      clearOverlay,
+      flushCommit,
+      releaseOverlay,
+      settleTo,
+      slotRectAt,
+      x,
+      y,
+    ]
   );
 
   // ─── Fail-safes (§F5). Every one of them ends at `clearOverlay` ────────────
@@ -705,6 +889,15 @@ export function useCardDrag({
       window.removeEventListener("pointercancel", onPointerCancel);
     };
   }, [cancelDrag, finishDrag]);
+
+  // 2b. Tracking, likewise at the window. Listening unconditionally keeps the
+  //     hand-off between a card and the overlay seamless: neither node owns the
+  //     gesture, so neither can lose it when the preview re-parents the card.
+  useEffect(() => {
+    const onMove = (event: Event) => handlePointerMove(toPointerSample(event));
+    window.addEventListener("pointermove", onMove);
+    return () => window.removeEventListener("pointermove", onMove);
+  }, [handlePointerMove]);
 
   // 3. Focus and visibility loss — alt-tabbing or locking the screen must not
   //    leave a card in the air (E9).
@@ -760,10 +953,14 @@ export function useCardDrag({
 
   /**
    * One auto-scroll frame: pan the board and the hovered lane toward the edges,
-   * travel the baseline by the same delta (AF15 — the card stays under a still
-   * pointer and "home" is still where the card came from), then re-resolve the
-   * target so the chip, the cursor and the drop index follow the new geometry
-   * (F6.3).
+   * then re-resolve the target so the chip, the cursor and the preview follow
+   * the new geometry (F6.3).
+   *
+   * The card is deliberately *not* moved. The pointer has not moved, so the card
+   * stays under it while the content slides beneath (AF15) — the card's geometry
+   * is only ever the pointer's. Rewriting the anchor here as well made the
+   * landing depend on whether a render had happened since the last scroll tick,
+   * which is exactly the drift that lands the card beside its slot.
    */
   const autoScrollFrame = useCallback(
     (dt: number) => {
@@ -771,17 +968,7 @@ export function useCardDrag({
       if (!session?.started) {
         return;
       }
-      const boardDelta = scrollToEdge(
-        boardRef.current,
-        session.pointerX,
-        dt,
-        "x"
-      );
-      if (boardDelta !== 0) {
-        session.originRect.left -= boardDelta;
-        session.baseX += boardDelta;
-        x.set(x.get() + boardDelta);
-      }
+      scrollToEdge(boardRef.current, session.pointerX, dt, "x");
 
       const laneStatus = session.target?.status;
       const lane = laneStatus
@@ -789,21 +976,26 @@ export function useCardDrag({
             .get(laneStatus)
             ?.querySelector<HTMLElement>("[data-lane-scroll]")
         : null;
-      const laneDelta = scrollToEdge(lane, session.pointerY, dt, "y");
-      // Only the origin lane moves the card's home position.
-      if (laneDelta !== 0 && laneStatus === session.fromStatus) {
-        session.originRect.top -= laneDelta;
-        session.baseY += laneDelta;
-        y.set(y.get() + laneDelta);
-      }
+      scrollToEdge(lane, session.pointerY, dt, "y");
 
       const target = targetFor(session, session.pointerX, session.pointerY);
       if (!sameTarget(session.target, target)) {
         session.target = target;
         setOverlay((prev) => (prev ? { ...prev, target } : prev));
       }
+
+      // A magnetised card rides the slot: as the lane (or the board) scrolls the
+      // seat moves, and the card has to move with it. Skipped while a pull is
+      // still in flight, because that pull already owns the position.
+      if (session.magnetized && target?.valid && settleRef.current === null) {
+        const slot = previewRectFor(target.status, session);
+        if (slot) {
+          x.set(slot.left - session.originRect.left);
+          y.set(slot.top - session.originRect.top);
+        }
+      }
     },
-    [boardRef, targetFor, x, y]
+    [boardRef, previewRectFor, targetFor, x, y]
   );
 
   // 7. Auto-scroll (§F6) — a single rAF loop, alive only while dragging and torn
@@ -824,7 +1016,45 @@ export function useCardDrag({
     return () => cancelAnimationFrame(frame);
   }, [autoScrollFrame, phase]);
 
+  // 8. The magnet (§4.1) — a legal slot pulls the card onto it. It runs after
+  //    React has committed the preview, which is the only moment the ghost sits
+  //    in the DOM at its new seat, so the pull always aims at the seat the user
+  //    can actually see. Tracking is paused for the same reason (pointermove).
+  useEffect(() => {
+    if (phase !== "dragging") {
+      return;
+    }
+    const session = sessionRef.current;
+    if (!(session?.started && session.magnetized)) {
+      return;
+    }
+    const target = overlay?.target;
+    if (!target?.valid) {
+      return;
+    }
+    const slot =
+      previewRectFor(target.status, session) ??
+      slotRectAt(target.status, target.index, session);
+    if (!slot) {
+      return;
+    }
+    magnetTo(
+      slot.left - session.originRect.left,
+      slot.top - session.originRect.top
+    );
+  }, [magnetTo, overlay?.target, phase, previewRectFor, slotRectAt]);
+
   useEffect(() => stopSettle, [stopSettle]);
+
+  // The dissolve timer is owned by the hook, so it goes with it.
+  useEffect(
+    () => () => {
+      if (releaseTimerRef.current !== null) {
+        window.clearTimeout(releaseTimerRef.current);
+      }
+    },
+    []
+  );
 
   // Watchdog (4) — force-clears a gesture whose pointerup never arrived (E10).
   useEffect(() => clearWatchdog, [clearWatchdog]);
@@ -839,24 +1069,12 @@ export function useCardDrag({
 
   const cardHandlers = useCallback(
     (item: RequestItem) => ({
-      onLostPointerCapture: () => {
-        if (sessionRef.current?.cardId === item.id) {
-          cancelDrag("pointer-lost");
-        }
-      },
-      onPointerCancel: (event: PointerEvent<HTMLElement>) => {
-        if (sessionRef.current?.cardId === item.id) {
-          event.preventDefault();
-          cancelDrag("pointer-lost");
-        }
-      },
       onPointerDown: (event: PointerEvent<HTMLElement>) => {
         startDrag(event, item, false);
       },
-      onPointerMove: handlePointerMove,
       onPointerUp: (event: PointerEvent<HTMLElement>) => finishDrag(event),
     }),
-    [cancelDrag, finishDrag, handlePointerMove, startDrag]
+    [finishDrag, startDrag]
   );
 
   const overlayHandlers = useCallback(
@@ -865,10 +1083,9 @@ export function useCardDrag({
         event.preventDefault();
         startDrag(event, item, true);
       },
-      onPointerMove: handlePointerMove,
       onPointerUp: (event: PointerEvent<HTMLElement>) => finishDrag(event),
     }),
-    [finishDrag, handlePointerMove, startDrag]
+    [finishDrag, startDrag]
   );
 
   return {
@@ -884,6 +1101,8 @@ export function useCardDrag({
     overlayHandlers,
     phase,
     registerColumn,
+    /** The committed card is dissolving onto the board (CMIS-UI-05 §4.1). */
+    releasing,
     shake,
   } as const;
 }
