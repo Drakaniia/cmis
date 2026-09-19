@@ -210,6 +210,8 @@ export function useQuickDeduct() {
       }
 
       const card: RequestItem = {
+        // Newest in the Claimed lane — position 0 is the top (migration 0011).
+        boardPosition: 0,
         category: item.category,
         dispensingRecords: [result.record],
         history: [

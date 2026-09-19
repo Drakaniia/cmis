@@ -165,6 +165,9 @@ export function buildRequestItems(
       to: input.startReady ? "ready" : "pending",
     };
     created.push({
+      // A new card is the newest in its lane, and `0` is the top (migration
+      // 0011): position first, then the `submitted_at DESC` tie-break.
+      boardPosition: 0,
       category: item.category,
       dispensingRecords: [],
       history: [entry],

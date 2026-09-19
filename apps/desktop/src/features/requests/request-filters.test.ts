@@ -18,6 +18,7 @@ const NOW = new Date("2026-09-12T14:00:00").getTime();
 
 function item(overrides: Partial<RequestItem> = {}): RequestItem {
   return {
+    boardPosition: 0,
     category: "Analgesic",
     dispensingRecords: [],
     history: [],

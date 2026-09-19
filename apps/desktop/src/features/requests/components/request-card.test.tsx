@@ -6,6 +6,7 @@ import { RequestCard, RequestCardContent } from "./request-card";
 
 function makeItem(overrides: Partial<RequestItem> = {}): RequestItem {
   return {
+    boardPosition: 0,
     category: "Analgesic",
     dispensingRecords: [],
     history: [],
