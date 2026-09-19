@@ -3,15 +3,17 @@
 import { motion, useReducedMotion } from "motion/react";
 import { useCallback } from "react";
 import { toast } from "sonner";
+import { monthKey } from "@/lib/month";
 import { downloadReportsCsv } from "../export-reports";
 import {
   useExpiryBuckets,
+  useFulfillment,
+  useLowStockTrend,
   useStockMovement,
   useTopDispensed,
   useUsageByCategory,
 } from "../hooks/use-reports";
 import { useReportsFilters } from "../hooks/use-reports-filters";
-import type { FulfillmentPoint, LowStockPoint } from "../types";
 import { DispensedVsRequestedWidget } from "./dispensed-vs-requested-widget";
 import { ExpiryTimelineWidget } from "./expiry-timeline-widget";
 import { LowStockTrendWidget } from "./low-stock-trend-widget";
@@ -33,30 +35,32 @@ import { UsageDonutWidget } from "./usage-donut-widget";
  * use compositor-only motion. Response on pointerdown via
  * press-feedback; every widget reads from the same filter truth.
  */
-// Low-stock and fulfillment history have no writer yet — both stay empty until
-// the batch/history tables are populated, so the widgets render their empty
-// state. Module scope keeps them referentially stable, which is why they are
-// not hook dependencies below.
-const EMPTY_LOW_STOCK: LowStockPoint[] = [];
-const EMPTY_FULFILLMENT: FulfillmentPoint[] = [];
-
 export function ReportsPage() {
   const { filters, setCategory, setPreset } = useReportsFilters();
   const reduceMotion = useReducedMotion();
 
-  // Live queries — default month 2026-08, reports toggle by month in future ticket
-  const month = "2026-08";
+  // Live queries — the same month the data is written in, so a running install
+  // charts the current window rather than a hardcoded one.
+  const month = monthKey();
   const { data: movementData } = useStockMovement(month, filters.category);
   const { data: topData } = useTopDispensed(month, filters.category);
   const { data: expiryData } = useExpiryBuckets(filters.category);
   const { data: usageData } = useUsageByCategory(month);
+  const { data: lowStockData } = useLowStockTrend(month, filters.category);
+  const { data: fulfillmentData } = useFulfillment(month);
 
   const movement = movementData ?? [];
   const expiry = expiryData ?? [];
   const usage = usageData ?? [];
   const top = topData ?? [];
+  const lowStock = lowStockData ?? [];
+  const fulfillment = fulfillmentData ?? [];
 
-  const hasData = movement.length > 0 || top.length > 0 || expiry.length > 0;
+  const hasData =
+    movement.length > 0 ||
+    top.length > 0 ||
+    expiry.length > 0 ||
+    lowStock.length > 0;
   const isEmptyDb =
     movement.length === 0 && top.length === 0 && usage.length === 0;
 
@@ -66,8 +70,8 @@ export function ReportsPage() {
       {
         category: filters.category,
         expiry,
-        fulfillment: EMPTY_FULFILLMENT,
-        lowStock: EMPTY_LOW_STOCK,
+        fulfillment,
+        lowStock,
         movement,
         preset: filters.preset,
         top,
@@ -78,7 +82,16 @@ export function ReportsPage() {
     toast.success("Reports CSV exported", {
       description: `cmis-reports-${filters.preset}-${stamp}.csv`,
     });
-  }, [expiry, filters.category, filters.preset, movement, top, usage]);
+  }, [
+    expiry,
+    filters.category,
+    filters.preset,
+    fulfillment,
+    lowStock,
+    movement,
+    top,
+    usage,
+  ]);
 
   const handleExportPdf = useCallback(() => {
     // PDF generation is presentation-grade (cover + chart images).
@@ -93,7 +106,7 @@ export function ReportsPage() {
   }, []);
 
   return (
-    <div className="flex h-[calc(100svh-48px)] flex-col overflow-hidden">
+    <div className="flex h-full flex-col overflow-hidden">
       <ReportsFilterBar
         category={filters.category}
         hasData={hasData}
@@ -105,7 +118,7 @@ export function ReportsPage() {
       />
 
       {/* Grid — density-aware breakpoints per spec §6: 2 cols ≥900 Compact, ≥1200 Comfortable */}
-      <div className="min-h-0 flex-1 overflow-auto p-3 sm:p-4">
+      <div className="min-h-0 flex-1 overflow-auto p-3 pb-6 sm:p-4 sm:pb-8">
         {isEmptyDb ? (
           <div className="mx-auto max-w-md py-16 text-center">
             <h3 className="font-semibold text-lg">
@@ -135,10 +148,10 @@ export function ReportsPage() {
               }
             >
               <StockMovementWidget data={movement} />
-              <LowStockTrendWidget data={EMPTY_LOW_STOCK} />
+              <LowStockTrendWidget data={lowStock} />
               <ExpiryTimelineWidget buckets={expiry} />
               <UsageDonutWidget data={usage} />
-              <DispensedVsRequestedWidget data={EMPTY_FULFILLMENT} />
+              <DispensedVsRequestedWidget data={fulfillment} />
               <TopDispensedTable rows={top} />
             </motion.div>
 
