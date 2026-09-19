@@ -12,11 +12,13 @@ export interface HealthActionResult {
  * a single card in place rather than navigating away.
  */
 export function useHealth(
-  initialCards: HealthCardData[] = [],
-  initialSyncs: PendingSync[] = []
+  initialCards?: HealthCardData[],
+  initialSyncs?: PendingSync[]
 ) {
-  const [cards, setCards] = useState<HealthCardData[]>(initialCards);
-  const [pendingSyncs, setPendingSyncs] = useState<PendingSync[]>(initialSyncs);
+  const [cards, setCards] = useState<HealthCardData[]>(initialCards ?? []);
+  const [pendingSyncs, setPendingSyncs] = useState<PendingSync[]>(
+    initialSyncs ?? []
+  );
   const [online, setOnline] = useState(
     typeof navigator === "undefined" ? true : navigator.onLine
   );
@@ -31,6 +33,21 @@ export function useHealth(
       window.removeEventListener("offline", onOffline);
     };
   }, []);
+
+  // The measured set arrives after mount (the page's query resolves later), so
+  // it is adopted onto an empty grid. A card the operator has already acted on
+  // keeps its patched state rather than snapping back to the stored numbers.
+  useEffect(() => {
+    if (initialCards && initialCards.length > 0) {
+      setCards((prev) => (prev.length === 0 ? initialCards : prev));
+    }
+  }, [initialCards]);
+
+  useEffect(() => {
+    if (initialSyncs && initialSyncs.length > 0) {
+      setPendingSyncs((prev) => (prev.length === 0 ? initialSyncs : prev));
+    }
+  }, [initialSyncs]);
 
   const patchCard = useCallback(
     (id: HealthCardId, patch: Partial<HealthCardData>) => {
@@ -66,14 +83,15 @@ export function useHealth(
         };
       }
       if (actionId === "clear-cache") {
+        // `metric` is deliberately left alone: it is the measured database size,
+        // and overwriting it with a made-up figure would undo the real readout.
         patchCard("storage", {
-          caption: "Cache cleared — 0.5 GB reclaimed",
-          metric: "1.6 GB / 8 GB",
+          caption: "Cache cleared just now",
           status: "ok",
           statusLabel: "Storage healthy",
         });
         return {
-          description: "0.5 GB of cached renders and thumbnails removed",
+          description: "Cached renders and thumbnails removed",
           message: "Cache cleared",
         };
       }
