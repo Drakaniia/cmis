@@ -492,7 +492,10 @@ export function RequestDetailModal({
             onClick={handleClose}
             transition={{ duration: 0.18 }}
           />
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6">
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6"
+            onClick={handleClose}
+          >
             <motion.div
               animate="animate"
               aria-label={`Request details for ${requestorLabel(item)}`}
@@ -500,6 +503,7 @@ export function RequestDetailModal({
               className="surface-frosted relative flex max-h-[86vh] w-full max-w-[520px] flex-col overflow-hidden rounded-xl border border-border/50 shadow-xl"
               exit="exit"
               initial={reduceMotion ? "animate" : "initial"}
+              onClick={(event) => event.stopPropagation()}
               role="dialog"
               style={{
                 transformOrigin,

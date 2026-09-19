@@ -139,7 +139,10 @@ export function DisposeConfirmModal({
             onClick={handleClose}
             transition={reduceMotion ? { duration: 0 } : { duration: 0.18 }}
           />
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6">
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6"
+            onClick={handleClose}
+          >
             <motion.div
               animate="animate"
               aria-label="Confirm dispose"
@@ -151,6 +154,7 @@ export function DisposeConfirmModal({
               )}
               exit="exit"
               initial="initial"
+              onClick={(event) => event.stopPropagation()}
               role="dialog"
               style={{
                 transformOrigin,
