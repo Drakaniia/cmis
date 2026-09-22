@@ -45,6 +45,7 @@
     "@tanstack/react-router": "^1.170.18",
     "@tanstack/react-virtual": "^3.14.11",
     "@tauri-apps/api": "^2.11.1",
+    "@tauri-apps/plugin-dialog": "^2.7.3",
     "@tauri-apps/plugin-opener": "^2.5.5",
     "@tauri-apps/plugin-process": "^2.3.1",
     "@tauri-apps/plugin-sql": "^2.4.0",

@@ -83,7 +83,7 @@ describe("ItemEditPanel", () => {
     // can add or rename one without leaving the edit.
     expect(screen.getByLabelText(/^Category/)).toHaveTextContent("Analgesic");
     expect(screen.getByLabelText(/Quantity/)).toHaveValue(40);
-    expect(screen.getByLabelText(/Low-stock threshold/)).toHaveValue(50);
+    expect(screen.getByLabelText(/Low-stock alert level/)).toHaveValue(50);
     expect(screen.getByLabelText(/Supplier/)).toHaveValue("PharmaCorp");
   });
 

@@ -174,7 +174,7 @@ export function InventoryDetailSheet({
               >
                 <div aria-hidden className="h-1 w-9 rounded-full bg-border" />
               </div>
-              <div className="min-h-0 flex-1 overflow-hidden bg-card">
+              <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-card">
                 <InventoryDetailContent
                   autoFocus
                   item={item}

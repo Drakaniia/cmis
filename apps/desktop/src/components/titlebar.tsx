@@ -183,7 +183,7 @@ export function TitleBar({
   return (
     // biome-ignore lint/a11y/noStaticElementInteractions: Tauri drag region requires mouse handlers on header
     <header
-      className="titlebar flex h-8 shrink-0 select-none items-center justify-between border-border/70 border-b pr-0 pl-2"
+      className="titlebar flex h-8 shrink-0 select-none items-center justify-between border-border/70 border-b pr-0 pl-2 print:hidden"
       data-tauri-drag-region
       onDoubleClick={handleDoubleClick}
       onMouseDown={handleDragMouseDown}

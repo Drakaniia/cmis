@@ -275,7 +275,7 @@ export function StockDetailModal({
               {/* The shared detail surface owns its own scrolling and its own
                * action bar, so it takes the remaining height rather than being
                * wrapped in a second scroll container. */}
-              <div className="min-h-0 flex-1 overflow-hidden">
+              <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
                 {view === "edit" && item ? (
                   <ItemEditPanel
                     item={item}
@@ -289,7 +289,7 @@ export function StockDetailModal({
                 ) : view === "history" && item ? (
                   /* §11 — the real history, replacing the reused panel's empty
                    * "last 10" section while this view is open. */
-                  <div className="h-full overflow-auto">
+                  <div className="min-h-0 flex-1 overflow-auto">
                     <ItemHistoryPanel item={item} />
                   </div>
                 ) : (

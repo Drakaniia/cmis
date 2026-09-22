@@ -1,4 +1,5 @@
 import { getDb } from "@/lib/db";
+import { isPackIncomplete, packSizeText } from "../domain/pack-size";
 import {
   composeDisplayName,
   isDetailsIncomplete,
@@ -24,6 +25,14 @@ export interface NewItemWithBatch extends StrengthParts {
   category: string;
   expiry: string;
   name: string;
+  /**
+   * The structured pack pair (pack-size F2/F3). Optional so a caller that does
+   * not collect one leaves the item pack-less rather than writing a zero-unit
+   * pair; `""` means "not recorded".
+   */
+  packQty?: number | "";
+  packUnit?: string;
+  /** Base units (D12) — a wizard-typed `5 box` arrives here as 50. */
   qty: number;
   /** Supplier is optional in the wizard; an absent one stores as ''. */
   supplier: string | null;
@@ -54,9 +63,17 @@ export async function insertNewItemWithBatch(
   const sku = buildSkuForNewItem(payload.name, payload.qty);
   const now = new Date().toISOString();
   const supplier = payload.supplier ?? "";
+  // The pack text is derived from the pair when there is one, so a new item born
+  // from the wizard's `10/box` stores `10/box` and the label follows (D24).
+  const packQty =
+    payload.packQty === undefined || payload.packQty === ""
+      ? 0
+      : payload.packQty;
+  const packUnit = (payload.packUnit ?? "").trim();
+  const derivedPackText = packSizeText({ packQty, packUnit });
   const parts: StrengthParts = {
     form: payload.form,
-    packSize: payload.packSize,
+    packSize: derivedPackText === "" ? payload.packSize : derivedPackText,
     strengthUnit: payload.strengthUnit,
     strengthValue: payload.strengthValue,
   };
@@ -65,7 +82,7 @@ export async function insertNewItemWithBatch(
   // `dosage` is not written: it is the backfill's input, kept only until the
   // deferred drop migration lands (spec §6.2 option B).
   await db.execute(
-    "INSERT INTO inventory_items (id, sku, name, strength_value, strength_unit, form, pack_size, display_name, dosage_missing, stock_on_hand, total_dispensed, stock_remaining, daily_sum, total_mismatch, qty, status, needs_batch, category, supplier, threshold, is_no_stock, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    "INSERT INTO inventory_items (id, sku, name, strength_value, strength_unit, form, pack_size, pack_qty, pack_unit, display_name, dosage_missing, stock_on_hand, total_dispensed, stock_remaining, daily_sum, total_mismatch, qty, status, needs_batch, category, supplier, threshold, is_no_stock, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     [
       id,
       sku,
@@ -74,8 +91,15 @@ export async function insertNewItemWithBatch(
       parts.strengthUnit,
       parts.form,
       parts.packSize,
+      packQty,
+      packUnit,
       displayName,
-      isDetailsIncomplete(parts) ? 1 : 0,
+      // Repurposed as "details incomplete" (PK14), plus the pack pair for a
+      // pack-forming item (V7) — the same rule the other write paths use.
+      isDetailsIncomplete(parts) ||
+      isPackIncomplete({ form: parts.form, packQty, packUnit })
+        ? 1
+        : 0,
       payload.qty,
       0,
       null,

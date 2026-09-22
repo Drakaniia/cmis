@@ -1,5 +1,7 @@
 import { deriveStatus } from "../import/inventory-status";
 import type { InventoryItem, InventoryStatus } from "../types";
+import { PACK_UNITS } from "./vocabulary";
+import { isPackIncomplete, packSizeText } from "./pack-size";
 import { composeDisplayName, isDetailsIncomplete } from "./strength";
 
 /**
@@ -23,7 +25,10 @@ export interface ItemEditDraft {
   category: string;
   form: string;
   name: string;
+  /** `""` when untyped — the pack multiple the pair stores (pack-size F2). */
+  packQty: number | "";
   packSize: string;
+  packUnit: string;
   qty: number;
   sku: string;
   strengthUnit: string;
@@ -34,7 +39,9 @@ export interface ItemEditDraft {
 
 export interface ItemDraftErrors {
   name?: string;
+  packQty?: string;
   packSize?: string;
+  packUnit?: string;
   qty?: string;
   sku?: string;
   threshold?: string;
@@ -47,7 +54,9 @@ export interface ItemUpdateValues {
   dosage_missing: number;
   form: string;
   name: string;
+  pack_qty: number;
   pack_size: string;
+  pack_unit: string;
   qty: number;
   sku: string;
   status: InventoryStatus;
@@ -57,16 +66,33 @@ export interface ItemUpdateValues {
   threshold: number;
 }
 
+/** Dose forms measured in bulk, where a pack multiple is discouraged (V5, N4). */
+const BULK_FORMS = new Set([
+  "cream",
+  "drops",
+  "gel",
+  "lotion",
+  "ointment",
+  "solution",
+  "spray",
+  "susp",
+  "suspension",
+  "syrup",
+]);
+
 function isWholeNumber(value: number): boolean {
   return Number.isFinite(value) && Number.isInteger(value);
 }
 
 export function draftFromItem(item: InventoryItem): ItemEditDraft {
+  const packQty = item.packQty ?? 0;
   return {
     category: item.category,
     form: item.form,
     name: item.name,
+    packQty: packQty > 0 ? packQty : "",
     packSize: item.packSize,
+    packUnit: item.packUnit ?? "",
     qty: item.qty,
     sku: item.sku,
     strengthUnit: item.strengthUnit,
@@ -74,6 +100,61 @@ export function draftFromItem(item: InventoryItem): ItemEditDraft {
     supplier: item.supplier,
     threshold: item.threshold,
   };
+}
+
+const PACK_UNIT_TOKENS = new Set<string>(PACK_UNITS);
+
+/**
+ * The pack rules V1–V6, shared by the new-product form and the edit panel.
+ * Returns errors keyed by field, plus warnings the caller lists on review.
+ */
+export function validatePackFields(draft: {
+  form: string;
+  packQty: number | "";
+  packUnit: string;
+}): { errors: ItemDraftErrors; warnings: string[] } {
+  const errors: ItemDraftErrors = {};
+  const warnings: string[] = [];
+  const rawQty = draft.packQty;
+  const unit = draft.packUnit.trim();
+  const qtyTyped = rawQty !== "";
+  const form = draft.form.trim().toLowerCase();
+
+  // V6 — the container must come from the shared vocabulary.
+  if (unit !== "" && !PACK_UNIT_TOKENS.has(unit.toLowerCase())) {
+    errors.packUnit = `“${unit}” is not a pack unit — choose one from the list.`;
+  }
+
+  if (qtyTyped) {
+    if (!(Number.isInteger(rawQty) && rawQty >= 1)) {
+      // V1 — a non-integer, zero or negative multiple is not a pack.
+      errors.packQty = "Pack quantity must be a whole number, 1 or more.";
+    } else if (rawQty === 1) {
+      // V3 — allowed, warned.
+      warnings.push("A pack of 1 is the same as the base unit.");
+    }
+    if (rawQty !== 1 && unit === "") {
+      // V2 — a bare multiple is meaningless.
+      errors.packUnit = "Choose the pack unit (box, strip, …).";
+    }
+  } else if (unit !== "") {
+    // V1 — a unit with no quantity.
+    errors.packQty = "Enter how many base units one pack holds.";
+  }
+
+  // V4 — `form = box` is itself the base unit; a pack on top double-counts (D15).
+  if (form === "box" && (qtyTyped || unit !== "")) {
+    errors.packUnit = "An item whose form is “box” cannot also record a pack.";
+  }
+
+  // V5 — a bulk measure has no meaningful pack multiple; warn only (N4).
+  if (BULK_FORMS.has(form) && (qtyTyped || unit !== "")) {
+    warnings.push(
+      "This is a bulk form — a pack multiple is unusual and no conversion is applied."
+    );
+  }
+
+  return { errors, warnings };
 }
 
 /**
@@ -117,6 +198,8 @@ export function validateItemDraft(
     errors.packSize = `Pack size must be ${PACK_SIZE_MAX} characters or fewer.`;
   }
 
+  Object.assign(errors, validatePackFields(draft).errors);
+
   return errors;
 }
 
@@ -132,9 +215,17 @@ export function buildItemUpdate(
   _item: InventoryItem,
   draft: ItemEditDraft
 ): ItemUpdateValues {
+  // The text is derived from the pair when there is one, so a save that names a
+  // pack writes `10/box` and the label follows (D24).
+  const packItem = {
+    form: draft.form.trim(),
+    packQty: draft.packQty,
+    packUnit: draft.packUnit,
+  };
+  const derivedText = packSizeText(packItem);
   const parts = {
     form: draft.form.trim(),
-    packSize: draft.packSize.trim(),
+    packSize: derivedText !== "" ? derivedText : draft.packSize.trim(),
     strengthUnit: draft.strengthUnit.trim(),
     strengthValue: draft.strengthValue.trim(),
   };
@@ -142,11 +233,15 @@ export function buildItemUpdate(
   return {
     category: draft.category.trim(),
     display_name: composeDisplayName({ ...parts, name: draft.name.trim() }),
-    // Repurposed as "details incomplete" (§10.2).
-    dosage_missing: isDetailsIncomplete(parts) ? 1 : 0,
+    // Repurposed as "details incomplete" (§10.2), plus the pack pair for a
+    // pack-forming item (V7).
+    dosage_missing:
+      isDetailsIncomplete(parts) || isPackIncomplete(packItem) ? 1 : 0,
     form: parts.form,
     name: draft.name.trim(),
+    pack_qty: draft.packQty === "" ? 0 : draft.packQty,
     pack_size: parts.packSize,
+    pack_unit: draft.packUnit.trim(),
     qty: draft.qty,
     sku: draft.sku.trim(),
     status: deriveStatus(draft.qty, draft.threshold),

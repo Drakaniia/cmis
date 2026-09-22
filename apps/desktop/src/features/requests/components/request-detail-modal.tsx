@@ -35,6 +35,7 @@ import {
   dispensedTotal,
   isPartiallyDispensed,
   QUICK_DEDUCT_LABEL,
+  requestQuantityLabel,
   requestorLabel,
   statusMetaOf,
 } from "../types";
@@ -277,7 +278,7 @@ function RequestSection({ item }: { item: RequestItem }) {
         <span className="text-muted-foreground">— {item.category}</span>
       </p>
       <p className="text-caption text-muted-foreground">
-        Qty: {item.qty} {item.unit} · Request {item.id}
+        Qty: {requestQuantityLabel(item)} · Request {item.id}
       </p>
       <p className="text-caption text-foreground">
         Reason: <span className="text-muted-foreground">{reason || "—"}</span>
@@ -577,8 +578,9 @@ export function RequestDetailModal({
 
                 {isPartiallyDispensed(item) ? (
                   <p className="text-[var(--warning)] text-caption">
-                    Partly dispensed — {dispensedTotal(item)} {item.unit} handed
-                    over so far, {item.qty} {item.unit} still waiting.
+                    Partly dispensed — {dispensedTotal(item)}{" "}
+                    {item.baseUnit ?? item.unit} handed over so far,{" "}
+                    {requestQuantityLabel(item)} still waiting.
                   </p>
                 ) : null}
 

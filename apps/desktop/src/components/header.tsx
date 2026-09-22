@@ -29,7 +29,10 @@ function resolveTitle(pathname: string): string {
     return "Dispensing Log";
   }
   if (normalized.startsWith("/admin/reports")) {
-    return "Reports & Analytics";
+    return "Stock Report";
+  }
+  if (normalized.startsWith("/admin/analytics")) {
+    return "Analytics";
   }
   if (normalized.startsWith("/admin/audit")) {
     return "Audit Logs";
@@ -66,7 +69,7 @@ export default function Header() {
   const title = resolveTitle(pathname);
 
   return (
-    <header className="surface-frosted flex shrink-0 items-center justify-between gap-3 border-border/50 border-b px-3 py-2 sm:px-4">
+    <header className="surface-frosted flex shrink-0 items-center justify-between gap-3 border-border/50 border-b px-3 py-2 sm:px-4 print:hidden">
       {/* Left — dynamic page title */}
       <div className="min-w-0">
         <h1 className="truncate font-bold text-foreground text-heading tracking-tight">

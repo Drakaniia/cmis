@@ -33,11 +33,13 @@ function applyZoom(next: number) {
   } catch {
     // ignore
   }
-  document.documentElement.style.zoom = String(clamped);
-  if (document.documentElement.style.zoom === "") {
-    document.documentElement.style.setProperty("--cmis-zoom", String(clamped));
-    document.documentElement.style.fontSize = `${clamped * 100}%`;
-  }
+  // Responsive zoom — see menubar.tsx applyZoom: root font-size keeps the
+  // fixed-viewport shell (h-svh + overflow-hidden) filling the window with
+  // no bottom/right whitespace; CSS `zoom` on <html> does not. Always clear
+  // a stale `zoom` value written by older builds.
+  document.documentElement.style.removeProperty("zoom");
+  document.documentElement.style.setProperty("--cmis-zoom", String(clamped));
+  document.documentElement.style.fontSize = `${Math.round(clamped * 100)}%`;
 }
 
 function execClipboardCommand(id: string) {
@@ -289,8 +291,7 @@ export function useMenuActions(opts: {
 }
 
 export function initZoomFromStorage() {
-  const z = getZoom();
-  if (z !== 1) {
-    applyZoom(z);
-  }
+  // Always apply (even at 1) so a `zoom` value persisted inline by an older
+  // build is cleared and the root font-size is normalized to 100%.
+  applyZoom(getZoom());
 }

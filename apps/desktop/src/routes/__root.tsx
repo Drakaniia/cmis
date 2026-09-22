@@ -17,9 +17,17 @@ import { DocsHeader } from "@/features/help/components/docs/docs-header";
 import { HelpDialogsProvider } from "@/features/help/help-dialogs-context";
 import { useFirstRunHint } from "@/features/help/use-first-run-hint";
 import {
+  ensurePackSizeBackfill,
+  type PackSizeBackfillReport,
+} from "@/features/inventory/data/pack-size-backfill";
+import {
   ensureStrengthBackfill,
   type StrengthBackfillReport,
 } from "@/features/inventory/data/strength-backfill";
+import {
+  ensureThresholdBackfill,
+  type ThresholdBackfillReport,
+} from "@/features/inventory/data/threshold-backfill";
 import { QuickDeductDialogProvider } from "@/features/inventory/quick-deduct-dialog-context";
 import { NewRequestDialogProvider } from "@/features/requests/new-request-dialog-context";
 import { UpdaterProvider } from "@/features/updater/use-updater";
@@ -27,6 +35,11 @@ import { UpdaterProvider } from "@/features/updater/use-updater";
 import "../index.css";
 
 export interface RouterAppContext {
+  /**
+   * The run-once pack-pair backfill's outcome, or `null` when there is no
+   * database behind this window. See `PackBackfillNotice`.
+   */
+  packBackfill?: PackSizeBackfillReport | null;
   queryClient: QueryClient;
   /**
    * The run-once strength split's outcome, or `null` when there is no database
@@ -36,6 +49,11 @@ export interface RouterAppContext {
    * `beforeLoad` rather than passed in when the router is created.
    */
   strengthBackfill?: StrengthBackfillReport | null;
+  /**
+   * The run-once threshold derivation's outcome, or `null` when there is no
+   * database behind this window. See `ThresholdBackfillNotice`.
+   */
+  thresholdBackfill?: ThresholdBackfillReport | null;
 }
 
 /**
@@ -46,7 +64,9 @@ export interface RouterAppContext {
  */
 export const Route = createRootRouteWithContext<RouterAppContext>()({
   beforeLoad: async () => ({
+    packBackfill: await ensurePackSizeBackfill(),
     strengthBackfill: await ensureStrengthBackfill(),
+    thresholdBackfill: await ensureThresholdBackfill(),
   }),
   component: RootComponent,
   head: () => ({
@@ -104,6 +124,80 @@ function StrengthBackfillNotice() {
       );
     }
   }, [strengthBackfill]);
+
+  return null;
+}
+
+/**
+ * Reports what the pack backfill did, once (pack-size spec F9/F10).
+ *
+ * It is a **separate** notice from the strength one so the two reports cannot be
+ * confused: this one's wording is about pack size, and its review lists are the
+ * `numbered` (a number with no container — `100’s`) and `unreadable` (prose)
+ * rows that a pack-worded request or stock-in would otherwise silently get wrong.
+ */
+function PackBackfillNotice() {
+  const { packBackfill } = Route.useRouteContext();
+
+  useEffect(() => {
+    if (!packBackfill) {
+      return;
+    }
+    const flagged =
+      packBackfill.numbered.length + packBackfill.unreadable.length;
+    if (packBackfill.paired === 0 && flagged === 0) {
+      return;
+    }
+    toast.message(
+      `Pack sizes updated — ${packBackfill.paired} items structured`,
+      {
+        description: `${flagged} items need a review (${packBackfill.numbered.length} without a container, ${packBackfill.unreadable.length} unreadable)`,
+        id: "pack-backfill",
+      }
+    );
+    if (flagged > 0) {
+      const names = [...packBackfill.numbered, ...packBackfill.unreadable]
+        .slice(0, 3)
+        .map((row) => row.name)
+        .join(", ");
+      toast.warning(`${flagged} items have an unclear pack size`, {
+        description: `${names}${flagged > 3 ? "…" : ""} — review them from Stock Management`,
+        id: "pack-backfill-review",
+      });
+    }
+  }, [packBackfill]);
+
+  return null;
+}
+
+/**
+ * Reports what the threshold backfill did, once.
+ *
+ * A third, separate notice, so the strength, pack and threshold reports cannot
+ * be confused with one another. The number worth reading is not how many rows
+ * moved but how many the month showed no dispensing for: those end up with a
+ * threshold of 0, which means they will never raise a low-stock alert until
+ * someone sets one.
+ */
+function ThresholdBackfillNotice() {
+  const { thresholdBackfill } = Route.useRouteContext();
+
+  useEffect(() => {
+    if (!thresholdBackfill || thresholdBackfill.updated === 0) {
+      return;
+    }
+    const kept =
+      thresholdBackfill.kept > 0
+        ? ` · ${thresholdBackfill.kept} kept a threshold you set`
+        : "";
+    toast.message(
+      `Reorder points updated — ${thresholdBackfill.updated} items`,
+      {
+        description: `${thresholdBackfill.noUsage} had no dispensing recorded, so their threshold is 0${kept}`,
+        id: "threshold-backfill",
+      }
+    );
+  }, [thresholdBackfill]);
 
   return null;
 }
@@ -188,6 +282,8 @@ function RootComponent() {
               </NewRequestDialogProvider>
             </QuickDeductDialogProvider>
             <StrengthBackfillNotice />
+            <PackBackfillNotice />
+            <ThresholdBackfillNotice />
             <Toaster position="bottom-right" richColors />
           </HelpDialogsProvider>
         </UpdaterProvider>

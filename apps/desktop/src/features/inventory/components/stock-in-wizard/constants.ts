@@ -22,7 +22,9 @@ export const EMPTY_DETAILS: StepDetailsState = {
   category: "",
   form: "",
   name: "",
+  packQty: "",
   packSize: "",
+  packUnit: "",
   strengthUnit: "",
   strengthValue: "",
 };

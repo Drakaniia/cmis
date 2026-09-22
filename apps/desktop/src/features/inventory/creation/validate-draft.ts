@@ -1,3 +1,4 @@
+import { validatePackFields } from "../domain/item-update";
 import {
   type BatchDraft,
   batchQty,
@@ -223,6 +224,16 @@ export function validateNewProduct(
   }
   if (draft.packSize.trim() === "") {
     warnings.push({ field: "packSize", message: "Pack size is blank." });
+  }
+  // The pack pair rules V1–V6 (V3/V5 are warnings, the rest block).
+  const packValidation = validatePackFields(draft);
+  for (const [field, message] of Object.entries(packValidation.errors)) {
+    if (message) {
+      errors.push({ field, message });
+    }
+  }
+  for (const message of packValidation.warnings) {
+    warnings.push({ field: "packQty", message });
   }
   if (draft.supplier.trim() === "") {
     warnings.push({ field: "supplier", message: "Supplier is blank." });

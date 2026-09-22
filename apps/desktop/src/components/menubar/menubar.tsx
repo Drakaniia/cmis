@@ -25,6 +25,7 @@ import {
   useState,
 } from "react";
 
+import { requestStockReportExport } from "@/features/admin/reports/export-request";
 import { useHelpDialogs } from "@/features/help/help-dialogs-context";
 import { useQuickDeductDialog } from "@/features/inventory/quick-deduct-dialog-context";
 import { useNewRequestDialog } from "@/features/requests/new-request-dialog-context";
@@ -93,10 +94,23 @@ function applyZoom(next: number) {
   } catch {
     // ignore
   }
-  document.documentElement.style.zoom = String(clamped);
+  // Responsive zoom: scale the root font-size (Tailwind v4 is rem-based, so
+  // the whole UI grows/shrinks) instead of CSS `zoom` on <html>. `zoom`
+  // scales the html box against the fixed-viewport shell (h-svh +
+  // overflow-hidden + 100vw/100vh caps), leaving unpainted whitespace along
+  // the bottom/right at Ctrl++. Font-size keeps the flex shell filling the
+  // window — only inner content scrolls via .page-canvas.
+  document.documentElement.style.removeProperty("zoom");
+  document.documentElement.style.setProperty("--cmis-zoom", String(clamped));
+  document.documentElement.style.fontSize = `${Math.round(clamped * 100)}%`;
 }
 
 function execClipboard(id: string) {
+  const active = document.activeElement as HTMLElement | null;
+  const isEditable =
+    active instanceof HTMLInputElement ||
+    active instanceof HTMLTextAreaElement ||
+    (active?.isContentEditable ?? false);
   try {
     switch (id) {
       case "undo":
@@ -106,16 +120,70 @@ function execClipboard(id: string) {
         document.execCommand("redo");
         break;
       case "cut":
-        document.execCommand("cut");
+        if (isEditable) {
+          document.execCommand("cut");
+        } else {
+          const sel = window.getSelection()?.toString();
+          if (sel) {
+            navigator.clipboard.writeText(sel).catch(() => undefined);
+            document.execCommand("cut");
+          }
+        }
         break;
-      case "copy":
+      case "copy": {
+        const sel = window.getSelection()?.toString();
+        if (sel) {
+          navigator.clipboard.writeText(sel).catch(() => undefined);
+        }
         document.execCommand("copy");
         break;
-      case "paste":
-        document.execCommand("paste");
+      }
+      case "paste": {
+        if (isEditable && navigator.clipboard?.readText) {
+          navigator.clipboard
+            .readText()
+            .then((text) => {
+              if (!text) {
+                return;
+              }
+              if (
+                active instanceof HTMLInputElement ||
+                active instanceof HTMLTextAreaElement
+              ) {
+                const start = active.selectionStart ?? active.value.length;
+                const end = active.selectionEnd ?? active.value.length;
+                const before = active.value.slice(0, start);
+                const after = active.value.slice(end);
+                active.value = before + text + after;
+                const pos = start + text.length;
+                active.setSelectionRange(pos, pos);
+                active.dispatchEvent(new Event("input", { bubbles: true }));
+                active.dispatchEvent(new Event("change", { bubbles: true }));
+              } else if (active?.isContentEditable) {
+                document.execCommand("insertText", false, text);
+              }
+            })
+            .catch(() => {
+              document.execCommand("paste");
+            });
+        } else {
+          document.execCommand("paste");
+        }
         break;
+      }
       case "select-all":
-        document.execCommand("selectAll");
+        if (isEditable) {
+          if (
+            active instanceof HTMLInputElement ||
+            active instanceof HTMLTextAreaElement
+          ) {
+            active.select();
+          } else {
+            document.execCommand("selectAll");
+          }
+        } else {
+          document.execCommand("selectAll");
+        }
         break;
       default:
         break;
@@ -261,6 +329,13 @@ const COMMANDS: Record<
   "check-updates": (ctx) => ctx.updater?.checkNow().catch(() => undefined),
   copy: () => execClipboard("copy"),
   cut: () => execClipboard("cut"),
+  // File → Export Stock Report: record the request, then make sure the report
+  // page is the one on screen. The page consumes the request on mount (a fresh
+  // navigation) or immediately if it is already open (spec E21).
+  "export-stock-report": (ctx) => {
+    requestStockReportExport();
+    ctx.navigate({ to: "/admin/reports" }).catch(() => undefined);
+  },
   paste: () => execClipboard("paste"),
   redo: () => execClipboard("redo"),
   "select-all": () => execClipboard("select-all"),
@@ -289,6 +364,29 @@ const MODALS: Record<string, (ctx: MenuDispatchContext) => void> = {
  * must not open the quick-deduct form over a half-typed word (F1/E12).
  */
 const TYPE_SENSITIVE_KEYS = new Set(["ctrl+n", "ctrl+d", "meta+n", "meta+d"]);
+
+/**
+ * Clipboard/edit accelerators that must deliver the browser's native
+ * behaviour when the focus is inside a text field (input/textarea/
+ * contenteditable) — otherwise Ctrl+V is swallowed by the menubar's
+ * global `keydown` handler and the confirm input's paste appears broken.
+ */
+const EDIT_CLIPBOARD_KEYS = new Set([
+  "ctrl+z",
+  "meta+z",
+  "ctrl+shift+z",
+  "meta+shift+z",
+  "ctrl+y",
+  "meta+y",
+  "ctrl+x",
+  "meta+x",
+  "ctrl+c",
+  "meta+c",
+  "ctrl+v",
+  "meta+v",
+  "ctrl+a",
+  "meta+a",
+]);
 
 /**
  * Window commands. The Tauri window API is imported lazily so the menubar keeps
@@ -495,6 +593,9 @@ export function DesktopMenubar({
       if (ctrl || event.key === "F11") {
         const combo = buildCombo(event);
         if (TYPE_SENSITIVE_KEYS.has(combo) && acceptsTypedText(event.target)) {
+          return;
+        }
+        if (EDIT_CLIPBOARD_KEYS.has(combo) && acceptsTypedText(event.target)) {
           return;
         }
         runAccelerator(combo, event, dispatchById, setOpenMenuId);

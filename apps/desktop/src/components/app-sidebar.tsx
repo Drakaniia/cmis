@@ -13,6 +13,7 @@ import {
   BarChart3,
   ClipboardCheck,
   ClipboardList,
+  FileText,
   LayoutDashboard,
   Package,
   PanelLeftClose,
@@ -101,7 +102,8 @@ const ADMIN_NAV: NavSection[] = [
   },
   {
     items: [
-      { icon: BarChart3, label: "Reports & Analytics", to: "/admin/reports" },
+      { icon: FileText, label: "Stock Report", to: "/admin/reports" },
+      { icon: BarChart3, label: "Analytics", to: "/admin/analytics" },
     ],
     title: "Reports",
   },
@@ -328,7 +330,7 @@ export function AppSidebar({
         width: collapsed ? RAIL_WIDTH_COLLAPSED : RAIL_WIDTH_EXPANDED,
       }}
       aria-label="Sidebar"
-      className="material-sidebar relative z-10 flex h-full shrink-0 flex-col overflow-hidden border-border/60 border-r"
+      className="material-sidebar relative z-10 flex h-full shrink-0 flex-col overflow-hidden border-border/60 border-r print:hidden"
       transition={reduceMotion ? { duration: 0 } : chromeSpring}
     >
       {/* Brand — maroon mark so the identity reads before any nav label. */}

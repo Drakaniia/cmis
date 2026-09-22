@@ -24,11 +24,43 @@ export interface StockInDraft {
   itemId: string | null;
   name: string;
   notes: string;
+  /**
+   * The structured pack pair (pack-size F2, F3). `""` means "not recorded",
+   * which pairs with a blank `packUnit`; `packSize` stays the rendered text and
+   * is derived from the pair on write (D24).
+   */
+  packQty: number | "";
   packSize: string;
+  packUnit: string;
+  /**
+   * **Always base units** (D12, F4): the quantity step may be typed in packs,
+   * but the conversion happens before the draft is built, so the batch row, the
+   * item total and `needs_batch` keep their single-number base-unit meaning.
+   */
   qty: number;
   strengthUnit: string;
   strengthValue: string;
   supplier: string | null;
+}
+
+/** Which unit the quantity step is being typed in (F4). */
+export type QuantityUnit = "base" | "pack";
+
+/**
+ * Everything the quantity cell needs to offer and explain its unit toggle, as
+ * one value — so the wizard owns the conversion and the step only renders it.
+ */
+export interface QuantityUnitControl {
+  /** The item's base unit, from its dose form (`sachet`, `tab`, …). */
+  baseUnit: string;
+  /** `"50 sachet"` while a pack conversion is in play, otherwise `null`. */
+  conversionLabel: string | null;
+  onSelect: (unit: QuantityUnit) => void;
+  packUnit: string;
+  /** True when the item has a usable pack pair, so the pack option is offered. */
+  packUnitAvailable: boolean;
+  /** The unit actually in force — `base` whenever no usable pack exists. */
+  selected: QuantityUnit;
 }
 
 export interface StockInWizardProps {
@@ -45,7 +77,9 @@ export interface StepDetailsState {
   category: InventoryCategory;
   form: string;
   name: string;
+  packQty: number | "";
   packSize: string;
+  packUnit: string;
   strengthUnit: string;
   strengthValue: string;
 }

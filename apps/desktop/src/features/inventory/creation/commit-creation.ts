@@ -1,4 +1,6 @@
 import { recordAudit } from "@/features/admin/audit/write-audit";
+import { isPackIncomplete } from "../domain/pack-size";
+import { isDetailsIncomplete } from "../domain/strength";
 import { deriveStatus } from "../import/inventory-status";
 import type { DbLike } from "./db-like";
 import {
@@ -6,6 +8,8 @@ import {
   batchQty,
   type CreationDraft,
   displayNameOf,
+  packPartsOf,
+  packSizeTextOf,
   type ProductDraft,
   thresholdOf,
 } from "./draft";
@@ -96,20 +100,31 @@ export function buildItemRow(
   const rows = writableRows(draft);
   const qty = rows.reduce((sum, row) => sum + batchQty(row), 0);
   const threshold = thresholdOf(draft);
+  // The text is derived from the pair when there is one, so the label, the
+  // identity key and the export column all read `10/box` without hand typing
+  // (D24, acceptance criterion 1).
+  const packSize = packSizeTextOf(draft);
   return {
     category: draft.category.trim(),
     created_at: opts.now,
     daily_sum: 0,
-    display_name: displayNameOf(draft),
-    // `` without a `dosage` column: the four strength fields are the record.
-    dosage_missing: 0,
+    display_name: displayNameOf({ ...draft, packSize }),
+    // The four strength fields are the record, plus the pack pair for a
+    // pack-forming item (V7). `` without a `dosage` column.
+    dosage_missing:
+      isDetailsIncomplete(draft) ||
+      isPackIncomplete({ ...packPartsOf(draft), form: draft.form.trim() })
+        ? 1
+        : 0,
     form: draft.form.trim(),
     id: opts.id,
     is_no_stock: qty === 0 ? 1 : 0,
     name: draft.name.trim(),
     needs_batch: rows.length === 0 ? 1 : 0,
     notes: supplierOrNull(draft.notes),
-    pack_size: draft.packSize.trim(),
+    pack_qty: draft.packQty === "" ? 0 : draft.packQty,
+    pack_size: packSize,
+    pack_unit: draft.packUnit.trim(),
     qty,
     sku: opts.sku,
     status: deriveStatus(qty, threshold),

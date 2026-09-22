@@ -6,13 +6,18 @@ import {
   DEFAULT_THRESHOLD,
   displayNameOf,
   type ProductDraft,
+  packSizeTextOf,
 } from "../../creation/draft";
 import {
   type IdentityMatch,
   type ProductContext,
   validateNewProduct,
 } from "../../creation/validate-draft";
-import { MEDICINE_FORMS, STRENGTH_UNITS } from "../../domain/vocabulary";
+import {
+  MEDICINE_FORMS,
+  PACK_UNITS,
+  STRENGTH_UNITS,
+} from "../../domain/vocabulary";
 import { deriveSku } from "../../import/sku";
 import { CategoryPicker } from "../category-picker";
 import { BatchRowsEditor } from "./batch-rows-editor";
@@ -60,6 +65,13 @@ const STRENGTH_UNIT_OPTIONS = STRENGTH_UNITS.map((unit) => ({
 const FORM_OPTIONS = MEDICINE_FORMS.map((form) => ({
   label: form,
   value: form,
+}));
+
+/** The shared pack vocabulary (pack-size D17) — the same list the request form
+ *  offers, so `box` cannot mean two things on two screens. */
+const PACK_UNIT_OPTIONS = PACK_UNITS.map((unit) => ({
+  label: unit,
+  value: unit,
 }));
 
 function errorFor(
@@ -111,6 +123,10 @@ export function NewProductForm({
     [draft.batches]
   );
 
+  // `10/box` once the pair is usable (D24); blank while it is not, which is what
+  // the hint under the Pack size field reads.
+  const derivedPackText = packSizeTextOf(draft);
+
   const patch = useCallback(
     (updates: Partial<ProductDraft>) => {
       onChange({ ...draft, ...updates });
@@ -154,6 +170,14 @@ export function NewProductForm({
   );
   const setPackSize = useCallback(
     (value: string) => patch({ packSize: value }),
+    [patch]
+  );
+  const setPackQty = useCallback(
+    (value: number | "") => patch({ packQty: value }),
+    [patch]
+  );
+  const setPackUnit = useCallback(
+    (value: string) => patch({ packUnit: value }),
     [patch]
   );
   const setThreshold = useCallback(
@@ -299,6 +323,11 @@ export function NewProductForm({
             value={draft.form}
           />
           <TextField
+            hint={
+              derivedPackText === ""
+                ? "Or record the pack pair below and this reads as 10/box."
+                : `Reads as ${derivedPackText}, derived from the pair.`
+            }
             label="Pack size"
             name="new-product-pack-size"
             onChange={setPackSize}
@@ -307,11 +336,37 @@ export function NewProductForm({
           />
         </div>
 
+        {/* F3/D4 — the structured pack multiple. Once this pair is usable the
+            label, the identity key and the export column all read the derived
+            `10/box` (D24), so nothing has to be hand-typed twice. */}
+        <div className="grid gap-3 sm:grid-cols-4">
+          <StepperField
+            ariaLabel="Pack quantity"
+            error={errorFor(validation, "packQty")}
+            hint="How many base units one pack holds."
+            label="Pack quantity"
+            min={1}
+            name="new-product-pack-qty"
+            onChange={setPackQty}
+            placeholder="10"
+            value={draft.packQty}
+          />
+          <SelectField
+            error={errorFor(validation, "packUnit")}
+            label="Pack unit"
+            name="new-product-pack-unit"
+            onChange={setPackUnit}
+            options={PACK_UNIT_OPTIONS}
+            placeholder="—"
+            value={draft.packUnit}
+          />
+        </div>
+
         <div className="grid gap-3 sm:grid-cols-2">
           <StepperField
-            ariaLabel="Low-stock threshold"
-            hint="Flags the product as Low once stock drops below this."
-            label="Low-stock threshold"
+            ariaLabel="Low-stock alert level"
+            hint="App-only alert level — not a column in the import file. Flags the product as Low once stock drops below it."
+            label="Low-stock alert level"
             min={0}
             name="new-product-threshold"
             onChange={setThreshold}

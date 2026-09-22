@@ -51,3 +51,56 @@ body,
 .page-canvas {
   -webkit-overflow-scrolling: touch;
 }
+
+/* ── Print: the Stock Report as a document (stock-level-report-spec F9) ────
+   Window chrome is hidden with `print:hidden` on the components themselves;
+   this block does the structural work CSS classes cannot: the fixed-viewport
+   shell has to flow, the report's scroll caps have to lift, and the report
+   table's headers have to repeat on every page. */
+@media print {
+  html,
+  body,
+  #app {
+    width: auto;
+    max-width: none;
+    height: auto;
+    max-height: none;
+    overflow: visible;
+  }
+
+  .page-canvas {
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  /* Repeat the column header row on every page of the report. */
+  thead {
+    display: table-header-group;
+  }
+
+  /* Keep a category header with its first rows, and its subtotal with its rows. */
+  [data-report-group] > div:first-child,
+  [data-report-group] > div:last-child {
+    break-inside: avoid;
+  }
+
+  /* Toasts and any decorative overlay never print. */
+  [data-sonner-toaster] {
+    display: none !important;
+  }
+
+  /* Readable on paper: flatten materials, force dark-on-white. */
+  *,
+  *::before,
+  *::after {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    box-shadow: none !important;
+  }
+
+  body {
+    background: #fff !important;
+    color: #111827 !important;
+  }
+}
+

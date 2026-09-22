@@ -1,3 +1,4 @@
+import { DEFAULT_THRESHOLD } from "../creation/draft";
 import {
   backupSuffix,
   pruneBackups,
@@ -10,6 +11,7 @@ import {
   legacyIdentityKey,
 } from "../domain/identity";
 import { isDetailsIncomplete, strengthLabel } from "../domain/strength";
+import { deriveThreshold } from "../domain/threshold";
 import { guessCategory } from "./category-mapper";
 import { parseInventoryCsv } from "./csv-parser";
 import { deriveStatus } from "./inventory-status";
@@ -63,7 +65,7 @@ function nowIso(): string {
  * Kept in one list so the SELECT and the row type cannot drift apart.
  */
 const EXISTING_COLUMNS =
-  "id, name, dosage, sku, category, display_name, strength_value, strength_unit, form, pack_size";
+  "id, name, dosage, sku, category, display_name, strength_value, strength_unit, form, pack_size, threshold";
 
 interface ExistingItemRow {
   category: string | null;
@@ -77,6 +79,8 @@ interface ExistingItemRow {
   sku: string;
   strength_unit: string | null;
   strength_value: string | null;
+  /** Needed to tell an untouched default from a threshold the operator set. */
+  threshold: number;
 }
 
 function placeholders(count: number): string {
@@ -103,6 +107,7 @@ const MUTATED_COLUMNS = [
   "stock_on_hand",
   "stock_remaining",
   "supplier",
+  "threshold",
   "total_dispensed",
   "total_mismatch",
   "updated_at",
@@ -299,10 +304,15 @@ async function runInventoryImport(
   );
   const keyToRow = new Map<
     string,
-    { id: string; sku: string; category: string | null }
+    { id: string; sku: string; category: string | null; threshold: number }
   >();
   for (const r of existingRows) {
-    const match = { category: r.category, id: r.id, sku: r.sku };
+    const match = {
+      category: r.category,
+      id: r.id,
+      sku: r.sku,
+      threshold: r.threshold,
+    };
     const storedDosage = text(r.dosage);
     const keys = [
       ...identityKeysOf({
@@ -367,7 +377,10 @@ async function runInventoryImport(
 interface ImportContext {
   db: DbLike;
   existingSkus: Set<string>;
-  keyToRow: Map<string, { category: string | null; id: string; sku: string }>;
+  keyToRow: Map<
+    string,
+    { category: string | null; id: string; sku: string; threshold: number }
+  >;
   month: string;
   mutationLog: ImportMutationLog;
 }
@@ -406,7 +419,6 @@ async function applyRow(
   const ck = identityKey(parts);
   const { displayName } = row;
   const qty = row.stockOnHand ?? 0;
-  const status = deriveStatus(qty, 20);
   const detailsIncomplete = isDetailsIncomplete(parts) ? 1 : 0;
   const isNoStock = qty === 0 ? 1 : 0;
   const totalDispensed = row.totalDispensed ?? 0;
@@ -429,6 +441,22 @@ async function applyRow(
 
   const existing = keys.map((key) => keyToRow.get(key)).find(Boolean);
 
+  // The threshold the workbook implies: average daily dispensing × (supplier
+  // lead time + safety days). A row still sitting on the schema's flat default
+  // counts as "never decided", so an import may replace it; any other value was
+  // set deliberately (the item form, or Settings → Alert Thresholds) and is
+  // kept. `status` derives from the threshold that actually applies, so the two
+  // cannot disagree (pack-size D13 — base units throughout).
+  const derivedThreshold = deriveThreshold({
+    daily: row.daily,
+    supplier: effectiveSupplier,
+  });
+  const threshold =
+    existing && existing.threshold !== DEFAULT_THRESHOLD
+      ? existing.threshold
+      : derivedThreshold;
+  const status = deriveStatus(qty, threshold);
+
   if (existing) {
     // Preserve existing category if effective is null, else use effective
     const categoryToSet = effectiveCategory ?? existing.category ?? null;
@@ -437,7 +465,8 @@ async function applyRow(
       `UPDATE inventory_items SET
             dosage_missing = ?, stock_on_hand = ?, total_dispensed = ?, stock_remaining = ?,
             daily_sum = ?, total_mismatch = ?, qty = ?, status = ?, needs_batch = ?,
-            category = COALESCE(?, category), supplier = COALESCE(?, supplier), threshold = threshold,
+            pack_qty = ?, pack_unit = ?,
+            category = COALESCE(?, category), supplier = COALESCE(?, supplier), threshold = ?,
             is_no_stock = ?, display_name = ?, updated_at = ?
            WHERE id = ?`,
       [
@@ -450,8 +479,11 @@ async function applyRow(
         qty,
         status,
         needsBatch,
+        row.packQty ?? 0,
+        row.packUnit.trim(),
         categoryToSet,
         effectiveSupplier,
+        threshold,
         isNoStock,
         displayName,
         nowIso(),
@@ -478,8 +510,8 @@ async function applyRow(
 
   await db.execute(
     `INSERT INTO inventory_items
-            (id, sku, name, strength_value, strength_unit, form, pack_size, display_name, dosage_missing, stock_on_hand, total_dispensed, stock_remaining, daily_sum, total_mismatch, qty, status, needs_batch, category, supplier, threshold, is_no_stock, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            (id, sku, name, strength_value, strength_unit, form, pack_size, pack_qty, pack_unit, display_name, dosage_missing, stock_on_hand, total_dispensed, stock_remaining, daily_sum, total_mismatch, qty, status, needs_batch, category, supplier, threshold, is_no_stock, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       id,
       sku,
@@ -488,6 +520,8 @@ async function applyRow(
       row.strengthUnit.trim(),
       row.form.trim(),
       row.packSize.trim(),
+      row.packQty ?? 0,
+      row.packUnit.trim(),
       displayName,
       detailsIncomplete,
       row.stockOnHand,
@@ -500,14 +534,14 @@ async function applyRow(
       needsBatch,
       effectiveCategory,
       effectiveSupplier,
-      20,
+      threshold,
       isNoStock,
       nowIso(),
       nowIso(),
     ]
   );
   mutationLog.insertedIds.push(id);
-  const match = { category: effectiveCategory, id, sku };
+  const match = { category: effectiveCategory, id, sku, threshold };
   for (const key of keys) {
     keyToRow.set(key, match);
   }

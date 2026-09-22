@@ -69,13 +69,46 @@ describe("insertNewItemWithBatch", () => {
     });
 
     const [item] = db.tables.inventory_items;
+    // `tablet` is a pack-forming form, so a blank pair reads as "details
+    // incomplete" (V7/D20) — the rule `commit-creation` and the edit panel
+    // already apply, which this write path used not to (pack-size F3).
     expect(item).toMatchObject({
       display_name: "Paracetamol 500 mg tablet 10",
-      dosage_missing: 0,
+      dosage_missing: 1,
       form: "tablet",
+      pack_qty: 0,
       pack_size: "10",
+      pack_unit: "",
       strength_unit: "mg",
       strength_value: "500",
+    });
+  });
+
+  it("stores the pack pair and derives the pack-size text from it (F3, D24)", async () => {
+    await insertNewItemWithBatch({
+      batch: "LOT-10",
+      category: "Analgesic",
+      expiry: "2027-01-31",
+      form: "sachet",
+      name: "Acetylcysteine",
+      packQty: 10,
+      packSize: "(10/box)",
+      packUnit: "box",
+      qty: 50,
+      strengthUnit: "mg",
+      strengthValue: "600",
+      supplier: null,
+    });
+
+    const [item] = db.tables.inventory_items;
+    expect(item).toMatchObject({
+      // The text the caller typed is replaced by the pair's own rendering, so
+      // the label, the identity key and the export column all agree.
+      display_name: "Acetylcysteine 600 mg sachet 10/box",
+      dosage_missing: 0,
+      pack_qty: 10,
+      pack_size: "10/box",
+      pack_unit: "box",
     });
   });
 

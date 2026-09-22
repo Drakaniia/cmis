@@ -4,6 +4,7 @@ import { DatabaseSync, type SQLInputValue } from "node:sqlite";
 import { describe, expect, it } from "vitest";
 import { MIGRATIONS_DIR, REPO_ROOT } from "@/test/project-paths";
 import { rejectionFrom } from "@/test/rejection";
+import { THRESHOLD_GRID_DAYS, thresholdForUsage } from "../domain/threshold";
 import { importInventoryCsv } from "./import";
 import { inventoryXlsxToCsv, parseInventoryXlsx } from "./xlsx-parser";
 
@@ -21,6 +22,10 @@ const WORKBOOK = join(
   REPO_ROOT,
   "AUGUST 2026 inventory - august r - TEMPLATE FORMAT.xlsx"
 );
+
+// Clinic data file — imported at runtime, never tracked or required at build.
+// When absent (CI, fresh clone) the workbook tests skip; import is exercised via unit fixtures.
+const HAS_WORKBOOK = existsSync(WORKBOOK);
 
 const MONTH = "2026-08";
 
@@ -84,7 +89,7 @@ function failOn(
   };
 }
 
-describe("AUGUST 2026 inventory workbook", () => {
+describe.skipIf(!HAS_WORKBOOK)("AUGUST 2026 inventory workbook", () => {
   it("has the converted workbook on disk", () => {
     expect(existsSync(WORKBOOK), `missing ${WORKBOOK}`).toBe(true);
   });
@@ -207,6 +212,43 @@ describe("AUGUST 2026 inventory workbook", () => {
 
     db.close();
   });
+
+  it("derives each reorder point from the row's own usage, not a flat default", async () => {
+    const db = createSqliteDb();
+    db.migrate();
+
+    const csv = inventoryXlsxToCsv(workbookBytes());
+    await importInventoryCsv(csv, db as never, { month: MONTH });
+
+    const rows = db.query<{
+      daily_sum: number;
+      name: string;
+      supplier: string | null;
+      threshold: number;
+    }>("SELECT name, daily_sum, supplier, threshold FROM inventory_items");
+
+    // The workbook has no threshold column, so the value has to come from the
+    // usage it does carry — and every row must agree with the one derivation.
+    for (const row of rows) {
+      expect({ name: row.name, threshold: row.threshold }).toEqual({
+        name: row.name,
+        threshold: thresholdForUsage(
+          row.daily_sum,
+          THRESHOLD_GRID_DAYS,
+          row.supplier
+        ),
+      });
+    }
+
+    // Not a wall of identical 20s: the values vary with the shelf's own movement.
+    const thresholds = rows.map((row) => row.threshold);
+    expect(new Set(thresholds).size).toBeGreaterThan(1);
+    expect(thresholds.filter((value) => value === 20).length).toBeLessThan(
+      thresholds.length
+    );
+
+    db.close();
+  });
 });
 
 /**
@@ -217,7 +259,7 @@ describe("AUGUST 2026 inventory workbook", () => {
  * tests pin the replacement: a write that fails restores the snapshot taken at
  * the start of the import, and the caller still sees the real cause.
  */
-describe("an import that fails part-way", () => {
+describe.skipIf(!HAS_WORKBOOK)("an import that fails part-way", () => {
   it("leaves a previously empty database empty", async () => {
     const db = createSqliteDb();
     db.migrate();

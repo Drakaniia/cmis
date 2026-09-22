@@ -134,27 +134,41 @@ describe("buildItemUpdate", () => {
     expect(buildItemUpdate(item(), { ...base, qty: 80 }).status).toBe("in");
   });
 
-  it("flags details incomplete when any of the four strength fields is blank", () => {
+  it("flags details incomplete when a strength part is blank", () => {
     const complete = {
       ...draftFromItem(item()),
       form: "tablet",
-      packSize: "10",
+      packQty: 10,
+      packSize: "10/box",
+      packUnit: "box",
       strengthUnit: "mg",
       strengthValue: "500",
     };
 
     expect(buildItemUpdate(item(), complete).dosage_missing).toBe(0);
-    for (const field of [
-      "form",
-      "packSize",
-      "strengthUnit",
-      "strengthValue",
-    ] as const) {
+    for (const field of ["form", "strengthUnit", "strengthValue"] as const) {
       expect(
         buildItemUpdate(item(), { ...complete, [field]: "" }).dosage_missing,
         `${field} blank should count as incomplete`
       ).toBe(1);
     }
+  });
+
+  it("flags a pack-forming item with no usable pack, but not a bulk one (V7)", () => {
+    const noPack = {
+      ...draftFromItem(item()),
+      form: "tablet",
+      packQty: "" as const,
+      packSize: "10",
+      packUnit: "",
+      strengthUnit: "mg",
+      strengthValue: "500",
+    };
+    // A blank pack on a dose form that comes in multiples is a data gap.
+    expect(buildItemUpdate(item(), noPack).dosage_missing).toBe(1);
+    // A bulk form with no pack is a normal item.
+    const bulk = { ...noPack, form: "syrup", packSize: "120 ml" };
+    expect(buildItemUpdate(item(), bulk).dosage_missing).toBe(0);
   });
 
   it("derives the display name the request matching reads", () => {

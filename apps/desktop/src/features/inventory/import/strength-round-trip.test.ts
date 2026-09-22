@@ -3,11 +3,12 @@ import { DatabaseSync, type SQLInputValue } from "node:sqlite";
 import { describe, expect, it } from "vitest";
 import { MIGRATIONS_DIR } from "@/test/project-paths";
 import type { DbLike } from "../creation/db-like";
+import { backfillPackSizeFields } from "../data/pack-size-backfill";
 import { backfillStrengthFields } from "../data/strength-backfill";
 import { INVENTORY_TEMPLATE_HEADERS } from "./csv-parser";
 import { buildInventoryWorkbook, type InventoryExportRow } from "./export-xlsx";
 import { importInventoryCsv } from "./import";
-import { parseInventoryXlsx } from "./xlsx-parser";
+import { inventoryXlsxToCsv, parseInventoryXlsx } from "./xlsx-parser";
 
 /**
  * The regression the strength spec singles out (§7.1, §11 items 2 and 4).
@@ -184,6 +185,64 @@ describe("strength round trip", () => {
         strengthValue: row.strength_value,
       });
     }
+  });
+
+  it("round-trips the appended pack columns at 43 columns, inserting nothing", async () => {
+    const { db, raw } = openLegacyDatabase();
+    await backfillStrengthFields(db, { force: true });
+    // The pack pair is filled by its own backfill, so the exported file carries
+    // real columns 41–42 rather than blanks (pack-size F10/§7.4).
+    await backfillPackSizeFields(db, { force: true });
+
+    const rows = raw
+      .prepare(
+        `SELECT name, strength_value, strength_unit, form, pack_size, pack_qty, pack_unit
+           FROM inventory_items ORDER BY name`
+      )
+      .all() as unknown as Record<string, string | number | null>[];
+    const exportRows: InventoryExportRow[] = rows.map((row) => ({
+      category: "Analgesic",
+      daily: new Array(31).fill(0),
+      form: String(row.form ?? ""),
+      name: String(row.name),
+      packQty: typeof row.pack_qty === "number" ? row.pack_qty : null,
+      packSize: String(row.pack_size ?? ""),
+      packUnit: String(row.pack_unit ?? ""),
+      stockOnHand: 10,
+      stockRemaining: 10,
+      strengthUnit: String(row.strength_unit ?? ""),
+      strengthValue: String(row.strength_value ?? ""),
+      supplier: "Acme Pharma",
+      totalDispensed: 0,
+    }));
+
+    const { write } = await import("xlsx");
+    const bytes = write(buildInventoryWorkbook(exportRows), {
+      bookType: "xlsx",
+      type: "array",
+    }) as Uint8Array;
+
+    // A 43-column file: the two appended columns survive the write and parse.
+    const parsed = parseInventoryXlsx(bytes);
+    const paracetamol = parsed.rows.find((row) => row.name === "Paracetamol");
+    expect(paracetamol).toMatchObject({ packQty: 100, packUnit: "box" });
+
+    // And re-importing it against the database it came from inserts nothing.
+    const result = await importInventoryCsv(inventoryXlsxToCsv(bytes), db, {
+      month: MONTH,
+    });
+    expect(result.inserted).toBe(0);
+    expect(result.updated).toBe(LEGACY.length);
+
+    const stored = raw
+      .prepare(
+        "SELECT name, pack_qty, pack_unit FROM inventory_items ORDER BY name"
+      )
+      .all() as unknown as Record<string, string | number>[];
+    expect(stored.find((row) => row.name === "Paracetamol")).toMatchObject({
+      pack_qty: 100,
+      pack_unit: "box",
+    });
   });
 
   it("composes a full display_name for every imported row", async () => {

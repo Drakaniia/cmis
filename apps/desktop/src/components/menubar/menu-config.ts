@@ -73,6 +73,13 @@ export const MENUS: MenuDef[] = [
         label: "Export…",
       },
       {
+        // The Stock Report's own export (stock-report-export E21) — navigates to
+        // the page and asks it to open the save dialog.
+        action: { id: "export-stock-report", type: "command" },
+        id: "file.export-stock-report",
+        label: "Export Stock Report…",
+      },
+      {
         enabled: false,
         id: "file.separator-2",
         label: "—",
@@ -268,7 +275,12 @@ export const MENUS: MenuDef[] = [
       {
         action: { to: "/admin/reports", type: "navigate" },
         id: "view.go-reports",
-        label: "Go to Reports",
+        label: "Go to Stock Report",
+      },
+      {
+        action: { to: "/admin/analytics", type: "navigate" },
+        id: "view.go-analytics",
+        label: "Go to Analytics",
       },
       {
         action: { to: "/admin/audit", type: "navigate" },

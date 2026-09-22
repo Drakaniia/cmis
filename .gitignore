@@ -51,8 +51,16 @@ lerna-debug.log*
 coverage
 .nyc_output
 
+# Clinic inventory workbooks — runtime data imported by the user, never tracked or required at build
+AUGUST 2026 inventory*.xlsx
+AUGUST 2026 inventory*.csv
+!docs/public/inventory - TEMPLATE.xlsx
 # Misc
 *.tgz
 .cache
 tmp
 temp
+
+# Python bytecode (scripts/generate-template.py)
+__pycache__/
+*.pyc

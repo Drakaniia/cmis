@@ -1,29 +1,28 @@
 import { Button } from "@cmis/ui/components/button";
 import { QuantityStepper } from "@cmis/ui/components/quantity-stepper";
-import { AnimatePresence, motion } from "motion/react";
-import {
-  type CSSProperties,
-  useCallback,
-  useEffect,
-  useMemo,
-  useState,
-} from "react";
+import { cn } from "@cmis/ui/lib/utils";
+import { X } from "lucide-react";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
+import { useCallback, useEffect, useState } from "react";
 
-import { sheetSpring } from "@/lib/motion";
+import {
+  materializeEnter,
+  materializeEnterReduced,
+  sheetSpring,
+} from "@/lib/motion";
 import type { LowStockRow } from "../types";
 
 /**
- * CMIS-UI-04 §3.1 — Adjust Threshold Popover
- * Inline popover anchored to the threshold cell origin.
- * Apple Design §7: spatial consistency — scales from trigger origin.
- * Apple Design §12: frosted material with materialize animation.
+ * CMIS-UI-04 §3.1 — Adjust Threshold Modal
+ * Centered modal (was inline popover). Apple Design §7 + §12: frosted material
+ * with materialize animation, centered with scrim like ReorderSheet/StockDetailModal.
  * Audit log entry on save per spec.
  */
 export function AdjustThresholdPopover({
   open,
   onOpenChange,
   row,
-  originRect,
+  originRect: _originRect,
   onConfirm,
 }: {
   onConfirm: (payload: {
@@ -38,6 +37,8 @@ export function AdjustThresholdPopover({
   row: LowStockRow | null;
 }) {
   const [threshold, setThreshold] = useState(0);
+  const reduceMotion = useReducedMotion();
+  const variants = reduceMotion ? materializeEnterReduced : materializeEnter;
 
   useEffect(() => {
     if (row) {
@@ -46,21 +47,6 @@ export function AdjustThresholdPopover({
   }, [row]);
 
   const isValid = row !== null && threshold > 0 && threshold !== row.threshold;
-
-  // Position popover near origin rect
-  const popoverStyle: CSSProperties = useMemo(() => {
-    if (!originRect) {
-      return {};
-    }
-    const top = originRect.bottom + 8;
-    const left = Math.min(originRect.left, window.innerWidth - 260);
-    return {
-      left: Math.max(8, left),
-      position: "fixed" as const,
-      top,
-      zIndex: 60,
-    };
-  }, [originRect]);
 
   const handleClose = useCallback(() => onOpenChange(false), [onOpenChange]);
 
@@ -81,64 +67,109 @@ export function AdjustThresholdPopover({
     onOpenChange(false);
   }, [isValid, onConfirm, onOpenChange, row, threshold]);
 
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        onOpenChange(false);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, onOpenChange]);
+
   return (
     <AnimatePresence>
       {open && row ? (
         <>
-          {/* Invisible backdrop to close on outside click */}
-          <button
-            aria-label="Dismiss threshold editor"
-            className="fixed inset-0 z-50 cursor-default"
-            onClick={handleClose}
-            type="button"
-          />
-          {/* Popover — CMIS-UI-04 §5: backdrop-filter frosted, scaling from origin */}
+          {/* §12 Scrim — dim to focus */}
           <motion.div
-            animate={{ filter: "blur(0px)", opacity: 1, scale: 1 }}
-            aria-label="Adjust threshold"
-            className="w-60 rounded-xl border border-border/50 bg-card/95 p-4 shadow-xl backdrop-blur-xl"
-            exit={{ filter: "blur(8px)", opacity: 0, scale: 0.95 }}
-            initial={{ filter: "blur(8px)", opacity: 0, scale: 0.95 }}
-            role="dialog"
-            style={popoverStyle}
-            transition={sheetSpring}
+            animate={{ opacity: 1 }}
+            aria-hidden
+            className="fixed inset-0 z-40 bg-black/32 backdrop-blur-[2px]"
+            exit={{ opacity: 0 }}
+            initial={{ opacity: 0 }}
+            onClick={handleClose}
+            transition={reduceMotion ? { duration: 0 } : { duration: 0.18 }}
+          />
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6"
+            onClick={handleClose}
           >
-            <div className="mb-3">
-              <h3 className="font-semibold text-foreground text-sm">
-                Adjust Threshold
-              </h3>
-              <p className="mt-0.5 text-caption text-muted-foreground">
-                {row.item.displayName}
-              </p>
-            </div>
-
-            <div className="space-y-3">
-              <div>
-                <label
-                  className="mb-1 block text-caption text-muted-foreground"
-                  htmlFor="threshold-input"
+            <motion.div
+              animate="animate"
+              aria-label="Adjust threshold"
+              aria-modal="true"
+              className={cn(
+                "flex w-full max-w-sm flex-col overflow-hidden rounded-2xl",
+                "border border-border/40 bg-card/80 shadow-xl backdrop-blur-2xl"
+              )}
+              exit="exit"
+              initial="initial"
+              onClick={(event) => event.stopPropagation()}
+              role="dialog"
+              style={{
+                transformOrigin: "center center",
+                willChange: reduceMotion
+                  ? undefined
+                  : "transform, opacity, filter",
+              }}
+              transition={reduceMotion ? { duration: 0 } : sheetSpring}
+              variants={variants}
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between border-border/30 border-b px-4 py-3">
+                <div>
+                  <h3
+                    className="font-semibold text-foreground text-sm"
+                    style={{ letterSpacing: "-0.01em" }}
+                  >
+                    Adjust Threshold
+                  </h3>
+                  <p className="mt-0.5 text-caption text-muted-foreground">
+                    {row.item.displayName}
+                  </p>
+                </div>
+                <Button
+                  aria-label="Close"
+                  className="press-feedback shrink-0"
+                  onClick={handleClose}
+                  size="icon-sm"
+                  variant="ghost"
                 >
-                  Current threshold
-                </label>
-                <QuantityStepper
-                  className="h-9"
-                  id="threshold-input"
-                  min={1}
-                  onChange={handleThresholdChange}
-                  value={threshold}
-                />
-                <p className="mt-1 text-caption text-muted-foreground">
-                  Current qty: {row.currentQty} &middot; Gap:{" "}
-                  {row.gap > 0 ? `-${row.gap}` : "OK"}
-                </p>
+                  <X className="size-4" />
+                </Button>
               </div>
 
-              {/* §8 Button hierarchy: Cancel (ghost), Save (confirm/primary) */}
-              <div className="flex justify-end gap-2">
+              <div className="space-y-4 p-4">
+                <div>
+                  <label
+                    className="mb-1 block text-caption text-muted-foreground"
+                    htmlFor="threshold-input"
+                  >
+                    Current threshold
+                  </label>
+                  <QuantityStepper
+                    className="h-9"
+                    id="threshold-input"
+                    min={1}
+                    onChange={handleThresholdChange}
+                    value={threshold}
+                  />
+                  <p className="mt-1 text-caption text-muted-foreground">
+                    Current qty: {row.currentQty} &middot; Gap:{" "}
+                    {row.gap > 0 ? `-${row.gap}` : "OK"}
+                  </p>
+                </div>
+              </div>
+
+              {/* §8 Footer — Cancel (ghost), Save (confirm/primary) */}
+              <div className="flex items-center justify-end gap-2 border-border/30 border-t px-4 py-3">
                 <Button
                   className="press-feedback"
                   onClick={handleClose}
-                  size="sm"
                   variant="ghost"
                 >
                   Cancel
@@ -147,14 +178,13 @@ export function AdjustThresholdPopover({
                   className="press-feedback"
                   disabled={!isValid}
                   onClick={handleSubmit}
-                  size="sm"
                   variant="confirm"
                 >
                   Save
                 </Button>
               </div>
-            </div>
-          </motion.div>
+            </motion.div>
+          </div>
         </>
       ) : null}
     </AnimatePresence>

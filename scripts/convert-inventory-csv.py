@@ -4,10 +4,13 @@ The clinic keeps its monthly inventory in the old flat layout::
 
     NAME OF MEDICATION,DOSAGE,stock on hand,1..31,total dispensed,stock remaining
 
-The app imports the 41-column template layout (see ``inventory - TEMPLATE.xlsx``
-/ ``scripts/generate-template.py``), which splits DOSAGE into
+The app imports the inventory template (see ``inventory - TEMPLATE.xlsx`` /
+``scripts/generate-template.py``), which splits DOSAGE into
 ``strength_value/strength_unit/form/pack_size`` and adds ``category``/``supplier``.
-This script bridges the two so an existing month can be imported as-is:
+Its day columns follow the month being exported — 28–31 days, so a file is
+``12 + D`` columns (``docs/specs/stock-report-export-spec.md``); this script
+emits the 31-day, 41-column legacy shape, which the importer still accepts
+unchanged. It bridges the two so an existing month can be imported as-is:
 
 * ``NO STOCK`` → ``0`` (the template validates stock as a number; the text is not
   importable), ``440 (April)`` → ``440``, ``14a`` → ``14``

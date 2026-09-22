@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { INVENTORY_TEMPLATE_HEADERS, parseInventoryCsv } from "./csv-parser";
+import {
+  buildInventoryTemplateHeaders,
+  INVENTORY_TEMPLATE_HEADERS,
+  LEGACY_TEMPLATE_HEADERS,
+  parseInventoryCsv,
+} from "./csv-parser";
 
 const HEADER = INVENTORY_TEMPLATE_HEADERS.join(",");
 
@@ -210,7 +215,7 @@ describe("parseInventoryCsv", () => {
   });
 
   it("forgiving: pads short rows and truncates long rows with warning", () => {
-    const shortLine = "ShortMed,10,mg,tabs,,5,1,2"; // only 8 cols, will be padded to 41
+    const shortLine = "ShortMed,10,mg,tabs,,5,1,2"; // only 8 cols, will be padded to 43
     const longCells = [
       "LongMed",
       "10",
@@ -225,7 +230,9 @@ describe("parseInventoryCsv", () => {
       "",
       "extra1",
       "extra2",
-    ]; // 43 cols >41
+      "extra3",
+      "extra4",
+    ]; // 45 cols > 43 (the 41 legacy + 2 pack columns)
     const longLine = longCells.join(",");
     const csv = [HEADER, shortLine, longLine].join("\n");
     const result = parseInventoryCsv(csv);
@@ -363,5 +370,97 @@ describe("parseInventoryCsv", () => {
       const result = parseInventoryCsv(csv);
       expect(result.rows[0].displayName).toBe(`Probe ${c.expected}`.trim());
     }
+  });
+});
+
+/** A data row for a dynamic `days`-column file, pack pair included. */
+function buildDynamicRow(
+  days: number,
+  dayValues: Record<number, string>
+): string {
+  const daily = Array.from(
+    { length: days },
+    (_, index) => dayValues[index + 1] ?? ""
+  );
+  return [
+    "Paracetamol",
+    "500",
+    "mg",
+    "tabs",
+    "(100/box)",
+    "100",
+    ...daily,
+    "7",
+    "93",
+    "Analgesic",
+    "Acme Pharma",
+    "20",
+    "box",
+  ].join(",");
+}
+
+describe("variable day columns (stock-report-export E5)", () => {
+  it.each([28, 29, 30, 31])(
+    "accepts a %i-day month template and reads every day column",
+    (days) => {
+      const header = buildInventoryTemplateHeaders(days).join(",");
+      const row = buildDynamicRow(days, { 1: "5", [days]: "2" });
+      const result = parseInventoryCsv([header, row].join("\n"));
+
+      expect(result.rows).toHaveLength(1);
+      const [item] = result.rows;
+      expect(item?.daily).toHaveLength(days);
+      expect(item?.daily[0]).toBe(5);
+      expect(item?.daily[days - 1]).toBe(2);
+      expect(item?.dailySum).toBe(7);
+      expect(item?.category).toBe("Analgesic");
+      expect(item?.packQty).toBe(20);
+      expect(item?.packUnit).toBe("box");
+      expect(
+        result.warnings.filter((warning) => warning.column === "header")
+      ).toHaveLength(0);
+    }
+  );
+
+  it("still parses a legacy 41-column file with no pack pair", () => {
+    const header = LEGACY_TEMPLATE_HEADERS.join(",");
+    const daily = new Array(31).fill("");
+    daily[0] = "5";
+    const row = [
+      "Paracetamol",
+      "500",
+      "mg",
+      "tabs",
+      "(100/box)",
+      "100",
+      ...daily,
+      "5",
+      "95",
+      "Analgesic",
+      "Acme Pharma",
+    ].join(",");
+    const result = parseInventoryCsv([header, row].join("\n"));
+
+    expect(result.rows).toHaveLength(1);
+    expect(result.rows[0]?.daily).toHaveLength(31);
+    expect(result.rows[0]?.dailySum).toBe(5);
+    // The pack pair is absent, not zero: a legacy file keeps the "not recorded"
+    // convention the backfill fills from `pack_size` (pack-size F10).
+    expect(result.rows[0]?.packQty).toBeNull();
+    expect(result.rows[0]?.packUnit).toBe("");
+    expect(
+      result.warnings.filter((warning) => warning.column === "header")
+    ).toHaveLength(0);
+  });
+
+  it("rejects a day count outside 28–31 with a descriptive warning", () => {
+    const header = buildInventoryTemplateHeaders(20).join(",");
+    const result = parseInventoryCsv([header, ""].join("\n"));
+    const warning = result.warnings.find(
+      (entry) =>
+        entry.column === "header" && entry.reason.includes("column count")
+    );
+    expect(warning).toBeDefined();
+    expect(warning?.raw).toBe(String(20 + 12));
   });
 });

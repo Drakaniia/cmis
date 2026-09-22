@@ -17,6 +17,7 @@ import {
 } from "react";
 import { toast } from "sonner";
 
+import { toBaseUnits } from "@/features/inventory/domain/pack-size";
 import type { InventoryItem } from "@/features/inventory/types";
 import { materializeEnter, sheetSpring } from "@/lib/motion";
 import {
@@ -27,7 +28,11 @@ import {
   suggestInventoryItems,
   useCreateRequests,
 } from "../hooks/use-create-requests";
-import { defaultUnitForItem, REQUEST_UNITS } from "../request-units";
+import {
+  defaultUnitForItem,
+  REQUEST_UNITS,
+  requestUnitsFor,
+} from "../request-units";
 
 /**
  * F1–F5 — the New Request form, mounted at the app root so `Ctrl+N` / `⌘N` opens
@@ -220,9 +225,35 @@ function RequestRow({
   const matched = matchInventoryItem(items, row.medicine);
   const problem = rowProblem(row, items);
   const qty = parseQuantity(row.qty);
+
+  // The item's own units lead; the fixed list is only for a row with no item
+  // picked yet (F5/D8). The current value is always kept selectable so editing
+  // a legacy row does not silently change its unit.
+  const units = useMemo(() => {
+    const options = matched ? requestUnitsFor(matched) : [...REQUEST_UNITS];
+    if (row.unit !== "" && !options.includes(row.unit)) {
+      options.push(row.unit);
+    }
+    return options;
+  }, [matched, row.unit]);
+
+  // The quantity is converted before it is compared, so `2 box` on a 10/box item
+  // warns against 100 sachets, not against 2 (G3/F5).
+  const baseQty =
+    matched && qty !== null
+      ? toBaseUnits(qty, row.unit, {
+          form: matched.form,
+          packQty: matched.packQty ?? 0,
+          packUnit: matched.packUnit ?? "",
+        })
+      : null;
   const shortfall =
-    matched && qty !== null && qty > matched.qty
+    matched && qty !== null && baseQty !== null && baseQty > matched.qty
       ? `${matched.qty} on hand — the hand-over will be partial and the rest stays in Ready to Claim.`
+      : null;
+  const unconvertible =
+    matched && qty !== null && baseQty === null
+      ? `${qty} ${row.unit} cannot be converted — this item has no pack size recorded. Dispense in ${requestUnitsFor(matched)[0]} instead, or set the pack size in Inventory.`
       : null;
 
   const handleMedicineChange = useCallback(
@@ -311,7 +342,7 @@ function RequestRow({
             onChange={handleUnitChange}
             value={row.unit}
           >
-            {REQUEST_UNITS.map((unit) => (
+            {units.map((unit) => (
               <option key={unit} value={unit}>
                 {unit}
               </option>
@@ -327,7 +358,12 @@ function RequestRow({
       </div>
 
       {problem ? <p className={ERROR_CLASS}>{problem}</p> : null}
-      {problem === null && shortfall ? (
+      {problem === null && unconvertible ? (
+        <p className={ERROR_CLASS} role="alert">
+          {unconvertible}
+        </p>
+      ) : null}
+      {problem === null && unconvertible === null && shortfall ? (
         <p className={HINT_CLASS}>{shortfall}</p>
       ) : null}
     </li>

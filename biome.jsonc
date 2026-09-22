@@ -103,7 +103,7 @@
       // cannot carry the value. expiry-timeline-widget's bars are SVG <g>
       // elements, which have no semantic HTML equivalent.
       "includes": [
-        "apps/desktop/src/features/admin/reports/components/expiry-timeline-widget.tsx",
+        "apps/desktop/src/features/admin/analytics/components/expiry-timeline-widget.tsx",
         "apps/desktop/src/features/inventory/components/expiry-list.tsx",
         "apps/desktop/src/features/inventory/components/inventory-list.tsx",
         "apps/desktop/src/features/inventory/components/inventory-page.tsx",
