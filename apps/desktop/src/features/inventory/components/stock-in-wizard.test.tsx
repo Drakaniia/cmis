@@ -17,7 +17,6 @@ vi.mock("@/features/admin/settings/hooks/use-settings", () => ({
   useSettings: vi.fn(() => ({
     state: {
       alerts: { expiryWindowDays: 30, globalLowStock: 15, overrides: [] },
-      backup: { lastBackupAt: "", nextRun: "", path: "", schedule: "off" },
       general: {
         appName: "cmis",
         dateFormat: "MM/DD/YYYY",
@@ -133,7 +132,6 @@ describe("StockInWizard — supplier UI removed, still proceed without it", () =
       mockSettingsState({
         state: {
           alerts: { expiryWindowDays: 30, globalLowStock: 15, overrides: [] },
-          backup: { lastBackupAt: "", nextRun: "", path: "", schedule: "off" },
           categories: [],
           general: {
             appName: "cmis",
