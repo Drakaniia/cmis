@@ -14,7 +14,9 @@ import Header from "@/components/header";
 import { ThemeProvider } from "@/components/theme-provider";
 import { TitleBar } from "@/components/titlebar";
 import { BackupWarningBanner } from "@/features/backup/components/backup-warning-banner";
+import { FirstRunRestorePrompt } from "@/features/backup/components/first-run-restore-prompt";
 import { useDailyBackup } from "@/features/backup/hooks/use-daily-backup";
+import { useRestoreJournal } from "@/features/backup/hooks/use-restore";
 import { DocsHeader } from "@/features/help/components/docs/docs-header";
 import { HelpDialogsProvider } from "@/features/help/help-dialogs-context";
 import { useFirstRunHint } from "@/features/help/use-first-run-hint";
@@ -243,6 +245,9 @@ function RootComponent() {
   // The daily backup runs after the UI is usable — never in `beforeLoad`
   // (backup-restore spec D16/F1). Inert outside Tauri (browser preview).
   useDailyBackup();
+  // Stamps the version keys `inspect_backup` reads, then consumes a pending
+  // restore journal into the surviving audit entry (spec §9/F10.6).
+  useRestoreJournal();
 
   return (
     <>
@@ -291,6 +296,7 @@ function RootComponent() {
             <StrengthBackfillNotice />
             <PackBackfillNotice />
             <ThresholdBackfillNotice />
+            <FirstRunRestorePrompt />
             <Toaster position="bottom-right" richColors />
           </HelpDialogsProvider>
         </UpdaterProvider>
