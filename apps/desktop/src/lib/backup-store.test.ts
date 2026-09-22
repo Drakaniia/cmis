@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_BACKUP_STORE, coerceBackupStore } from "./backup-store";
+import { coerceBackupStore, DEFAULT_BACKUP_STORE } from "./backup-store";
 
 describe("backup-store", () => {
   it("defaults to enabled with keep 10", () => {

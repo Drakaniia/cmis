@@ -30,21 +30,29 @@ export function HealthTab() {
   const handleAction = useCallback(
     (id: HealthCardId, action: HealthAction) => {
       if (action.id === "trigger-backup") {
-        void runManualBackup().then(
-          (info) => {
-            toast.success("Backup complete", { description: info.name });
-          },
-          (error: unknown) => {
-            const message =
-              error instanceof Error ? error.message : String(error);
-            toast.error("Backup failed", { description: message });
-          }
-        ).finally(() => {
-          void queryClient.invalidateQueries({
-            queryKey: [SYSTEM_HEALTH_KEY],
+        runManualBackup()
+          .then(
+            (info) => {
+              toast.success("Backup complete", { description: info.name });
+            },
+            (error: unknown) => {
+              const message =
+                error instanceof Error ? error.message : String(error);
+              toast.error("Backup failed", { description: message });
+            }
+          )
+          .finally(() => {
+            queryClient
+              .invalidateQueries({
+                queryKey: [SYSTEM_HEALTH_KEY],
+              })
+              .catch(() => undefined);
+            queryClient
+              .invalidateQueries({
+                queryKey: [BACKUP_FILES_KEY],
+              })
+              .catch(() => undefined);
           });
-          void queryClient.invalidateQueries({ queryKey: [BACKUP_FILES_KEY] });
-        });
         return;
       }
       const result = runAction(id, action.id);

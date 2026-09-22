@@ -75,7 +75,7 @@ export async function loadBackupStore(): Promise<BackupStoreState> {
 }
 
 export async function saveBackupStore(
-  patch: Partial<BackupStoreState>,
+  patch: Partial<BackupStoreState>
 ): Promise<BackupStoreState> {
   const next: BackupStoreState = { ...(await loadBackupStore()), ...patch };
   next.keep = Math.min(100, Math.max(1, Math.floor(next.keep)));

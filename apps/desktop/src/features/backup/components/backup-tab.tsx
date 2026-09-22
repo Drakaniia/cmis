@@ -4,13 +4,13 @@ import { useCallback, useState } from "react";
 import { toast } from "sonner";
 import { recordAudit } from "@/features/admin/audit/write-audit";
 import { absoluteDateTime } from "@/features/admin/format";
+import { SettingsCard } from "@/features/admin/settings/components/settings-card";
 import { getDb } from "@/lib/db";
 import { invoke } from "@/lib/tauri";
 import { manualBackupName } from "../data/backup-naming";
-import { useBackupFiles, type BackupFileInfo } from "../hooks/use-backup-files";
+import { type BackupFileInfo, useBackupFiles } from "../hooks/use-backup-files";
 import { useBackupStatus } from "../hooks/use-backup-status";
 import { useBackupActions } from "../hooks/use-daily-backup";
-import { SettingsCard } from "@/features/admin/settings/components/settings-card";
 
 function formatBytes(bytes: number): string {
   if (bytes >= 1_048_576) {
@@ -67,9 +67,8 @@ export function BackupTab() {
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  const dir = data?.dir ?? "";
-  const files: BackupFileInfo[] = data?.files ?? [];
-  const newest = files[0];
+  const { dir = "", files = [] } = data ?? {};
+  const [newest] = files;
   const totalBytes = files.reduce((sum, file) => sum + file.size, 0);
 
   const handleBackupNow = useCallback(async () => {
@@ -110,7 +109,7 @@ export function BackupTab() {
             detail: `Saved a backup copy — ${info.name}`,
             targetKind: "settings",
           },
-          { bestEffort: true },
+          { bestEffort: true }
         );
       } catch {
         // best-effort audit only
@@ -124,34 +123,36 @@ export function BackupTab() {
     }
   }, []);
 
-  const handleCopyPath = useCallback(async () => {
+  const handleCopyPath = useCallback(() => {
     if (!dir) {
-      return;
+      return Promise.resolve();
     }
-    try {
-      await navigator.clipboard.writeText(dir);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 1500);
-    } catch {
-      toast.error("Could not copy the folder path");
-    }
+    return navigator.clipboard
+      .writeText(dir)
+      .then(() => {
+        setCopied(true);
+        window.setTimeout(() => setCopied(false), 1500);
+      })
+      .catch(() => {
+        toast.error("Could not copy the folder path");
+      });
   }, [dir]);
 
   const handleToggle = useCallback(
     (event: React.ChangeEvent<HTMLInputElement>) => {
-      void setEnabled(event.target.checked);
+      setEnabled(event.target.checked).catch(() => undefined);
     },
-    [setEnabled],
+    [setEnabled]
   );
 
   const handleKeep = useCallback(
     (event: React.ChangeEvent<HTMLInputElement>) => {
       const value = Number(event.target.value);
       if (Number.isFinite(value)) {
-        void setKeep(value);
+        setKeep(value).catch(() => undefined);
       }
     },
-    [setKeep],
+    [setKeep]
   );
 
   return (
@@ -162,7 +163,7 @@ export function BackupTab() {
             <Button
               className="press-feedback"
               disabled={busy}
-              onClick={() => void handleBackupNow()}
+              onClick={handleBackupNow}
               size="sm"
             >
               <DatabaseBackup aria-hidden className="size-3.5" />
@@ -171,7 +172,7 @@ export function BackupTab() {
             <Button
               className="press-feedback"
               disabled={busy}
-              onClick={() => void handleSaveCopy()}
+              onClick={handleSaveCopy}
               size="sm"
               variant="outline"
             >
@@ -220,7 +221,7 @@ export function BackupTab() {
               <Button
                 aria-label="Copy folder path"
                 disabled={!dir}
-                onClick={() => void handleCopyPath()}
+                onClick={handleCopyPath}
                 size="sm"
                 variant="ghost"
               >

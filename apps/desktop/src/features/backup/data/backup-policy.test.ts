@@ -9,7 +9,7 @@ describe("backup-policy", () => {
         hasDatabase: true,
         lastBackupDate: "",
         today: "2026-09-22",
-      }).run,
+      }).run
     ).toBe(false);
     expect(
       shouldRunDailyBackup({
@@ -17,7 +17,7 @@ describe("backup-policy", () => {
         hasDatabase: true,
         lastBackupDate: "2026-09-22",
         today: "2026-09-22",
-      }).run,
+      }).run
     ).toBe(false);
     expect(
       shouldRunDailyBackup({
@@ -25,7 +25,7 @@ describe("backup-policy", () => {
         hasDatabase: false,
         lastBackupDate: "",
         today: "2026-09-22",
-      }).run,
+      }).run
     ).toBe(false);
     expect(
       shouldRunDailyBackup({
@@ -33,7 +33,7 @@ describe("backup-policy", () => {
         hasDatabase: true,
         lastBackupDate: "2026-09-21",
         today: "2026-09-22",
-      }).run,
+      }).run
     ).toBe(true);
   });
 });

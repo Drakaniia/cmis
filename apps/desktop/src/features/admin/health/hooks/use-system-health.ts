@@ -1,13 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
-
-import { getDb } from "@/lib/db";
 import { loadBackupStore } from "@/lib/backup-store";
+import { getDb } from "@/lib/db";
 import { isTauriRuntime } from "@/lib/open-external";
 import { invoke } from "@/lib/tauri";
 import {
+  type BackupSummary,
   buildBackupCard,
   loadSystemHealth,
-  type BackupSummary,
   type SystemHealth,
 } from "../data/system-health";
 
@@ -44,7 +43,7 @@ async function loadHealth(): Promise<SystemHealth> {
   return {
     ...health,
     cards: health.cards.map((card) =>
-      card.id === "backup" ? buildBackupCard(summary) : card,
+      card.id === "backup" ? buildBackupCard(summary) : card
     ),
   };
 }

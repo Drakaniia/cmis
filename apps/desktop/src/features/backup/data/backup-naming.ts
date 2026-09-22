@@ -50,7 +50,7 @@ export function isListableBackupName(name: string): boolean {
 /** Append `-2`, `-3`, … before `.db` until the name is unused. */
 export function resolveCollision(
   existing: readonly string[],
-  base: string,
+  base: string
 ): string {
   if (!existing.includes(base)) {
     return base;

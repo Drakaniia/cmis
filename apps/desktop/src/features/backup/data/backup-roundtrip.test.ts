@@ -22,7 +22,7 @@ describe("backup consistent-copy round trip", () => {
     db.exec("CREATE TABLE requests (id TEXT PRIMARY KEY, state TEXT)");
     db.prepare("INSERT INTO inventory_items VALUES (?, ?)").run(
       "i1",
-      "Paracetamol 500mg",
+      "Paracetamol 500mg"
     );
     db.prepare("INSERT INTO requests VALUES (?, ?)").run("r1", "submitted");
 
@@ -34,9 +34,9 @@ describe("backup consistent-copy round trip", () => {
     try {
       const items = restored.prepare("SELECT * FROM inventory_items").all();
       const requests = restored.prepare("SELECT * FROM requests").all();
-      const check = restored
-        .prepare("PRAGMA integrity_check")
-        .all() as { integrity_check: string }[];
+      const check = restored.prepare("PRAGMA integrity_check").all() as {
+        integrity_check: string;
+      }[];
       expect(items).toEqual([{ id: "i1", name: "Paracetamol 500mg" }]);
       expect(requests).toEqual([{ id: "r1", state: "submitted" }]);
       expect(check).toEqual([{ integrity_check: "ok" }]);

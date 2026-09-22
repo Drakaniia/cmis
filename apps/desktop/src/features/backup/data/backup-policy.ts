@@ -12,7 +12,7 @@ export interface DailyBackupDecision {
 }
 
 export function shouldRunDailyBackup(
-  input: DailyBackupInput,
+  input: DailyBackupInput
 ): DailyBackupDecision {
   if (!input.enabled) {
     return { reason: "disabled", run: false };

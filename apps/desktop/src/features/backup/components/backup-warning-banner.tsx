@@ -1,5 +1,6 @@
 import { Button } from "@cmis/ui/components/button";
 import { TriangleAlert } from "lucide-react";
+import { useCallback } from "react";
 import { useBackupStatus } from "../hooks/use-backup-status";
 import { useBackupActions } from "../hooks/use-daily-backup";
 
@@ -12,7 +13,11 @@ export function BackupWarningBanner() {
   const { ready, status } = useBackupStatus();
   const { retry } = useBackupActions();
 
-  if (!ready || !status.lastBackupError) {
+  const handleRetry = useCallback(() => {
+    retry().catch(() => undefined);
+  }, [retry]);
+
+  if (!(ready && status.lastBackupError)) {
     return null;
   }
   return (
@@ -27,7 +32,7 @@ export function BackupWarningBanner() {
         </span>
         <span className="text-muted-foreground">{status.lastBackupError}</span>
       </p>
-      <Button onClick={() => void retry()} size="sm" variant="outline">
+      <Button onClick={handleRetry} size="sm" variant="outline">
         Retry
       </Button>
     </div>
