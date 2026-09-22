@@ -13,7 +13,6 @@ describe("useSettings", () => {
     expect(result.current.state.general.dateFormat).toBeDefined();
     expect(result.current.state.alerts.overrides).toBeInstanceOf(Array);
     expect(result.current.state.suppliers).toBeInstanceOf(Array);
-    expect(result.current.state.backup.lastBackupAt).toBeDefined();
   });
 
   it("updateGeneral patches general settings without clobbering other sections", () => {

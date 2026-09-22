@@ -14,12 +14,6 @@ export const DEFAULT_SETTINGS: SettingsState = {
     globalLowStock: 15,
     overrides: [],
   },
-  backup: {
-    lastBackupAt: "",
-    nextRun: "",
-    path: "%APPDATA%/com.cmis.app/backups",
-    schedule: "off",
-  },
   general: {
     appName: "cmis",
     dateFormat: "MM/DD/YYYY",
@@ -95,30 +89,12 @@ export function useSettings(initial: SettingsState = DEFAULT_SETTINGS) {
     }));
   }, []);
 
-  const triggerBackup = useCallback(() => {
-    const at = new Date().toISOString();
-    setState((prev) => ({
-      ...prev,
-      backup: { ...prev.backup, lastBackupAt: at },
-    }));
-    return at;
-  }, []);
-
-  const setBackupSchedule = useCallback(
-    (schedule: SettingsState["backup"]["schedule"]) => {
-      setState((prev) => ({ ...prev, backup: { ...prev.backup, schedule } }));
-    },
-    []
-  );
-
   return {
     addSupplier,
     removeSupplier,
     setAlerts,
-    setBackupSchedule,
     setOverride,
     state,
-    triggerBackup,
     updateGeneral,
     updateSupplier,
   } as const;

@@ -3,10 +3,10 @@ import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useEffect, useState } from "react";
 import { branchCrossfadeMs } from "@/lib/motion";
 import { useSettings } from "../hooks/use-settings";
+import { BackupTab } from "@/features/backup/components/backup-tab";
 import type { SettingsTabId } from "../types";
 import { isSettingsTabId, SETTINGS_TABS } from "../types";
 import { AuditTab } from "./audit-tab";
-import { BackupTab } from "./backup-tab";
 import { CategoriesTab } from "./categories-tab";
 import { DataTab } from "./data-tab";
 import { GeneralTab } from "./general-tab";
@@ -93,13 +93,7 @@ export function SettingsPage() {
               {tab === "audit" ? <AuditTab /> : null}
               {tab === "data" ? <DataTab /> : null}
               {tab === "health" ? <HealthTab /> : null}
-              {tab === "backup" ? (
-                <BackupTab
-                  backup={settings.state.backup}
-                  onSetSchedule={settings.setBackupSchedule}
-                  onTrigger={settings.triggerBackup}
-                />
-              ) : null}
+              {tab === "backup" ? <BackupTab /> : null}
               {tab === "updates" ? <UpdatesTab /> : null}
             </motion.div>
           </AnimatePresence>

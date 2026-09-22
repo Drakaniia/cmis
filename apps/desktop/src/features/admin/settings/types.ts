@@ -109,16 +109,8 @@ export interface AlertSettings {
   overrides: ThresholdOverride[];
 }
 
-export interface BackupSettings {
-  lastBackupAt: string;
-  nextRun: string;
-  path: string;
-  schedule: "off" | "daily" | "weekly";
-}
-
 export interface SettingsState {
   alerts: AlertSettings;
-  backup: BackupSettings;
   general: GeneralSettings;
   suppliers: Supplier[];
 }
