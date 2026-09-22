@@ -2,6 +2,12 @@ import { useReducedMotion } from "motion/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
+import {
+  baseUnitFor,
+  describeQuantity,
+  hasPack,
+  toBaseUnits,
+} from "../../domain/pack-size";
 import type { InventoryItem } from "../../types";
 import { WizardShell } from "../wizard-shell";
 import { EMPTY_DETAILS } from "./constants";
@@ -11,10 +17,31 @@ import { StepIdentify } from "./steps/step-identify";
 import { StepReview } from "./steps/step-review";
 import type {
   InventoryCategory,
+  QuantityUnit,
+  QuantityUnitControl,
   StockInDraft,
   StockInWizardProps,
 } from "./types";
-import { allStepsValid, detailsFromItem, validateStep } from "./validation";
+import {
+  allStepsValid,
+  detailsFromItem,
+  packErrors,
+  validateStep,
+} from "./validation";
+
+/**
+ * A lot code for a delivery nobody labelled. Module level because it is a pure
+ * function of the clock and nothing in the component — a copy rebuilt on every
+ * render cannot be a hook dependency.
+ */
+function autoBatchCode(): string {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, "0");
+  const d = String(now.getDate()).padStart(2, "0");
+  const rnd = Math.random().toString(36).slice(2, 6).toUpperCase();
+  return `AUTO-${y}${m}${d}-${rnd}`;
+}
 
 export function StockInWizard({
   open,
@@ -33,18 +60,23 @@ export function StockInWizard({
   const [isNew, setIsNew] = useState(false);
 
   // Step 2: item details. The four strength fields are prefilled from an
-  // existing item on lookup and never block Next (decision 7).
+  // existing item on lookup and never block Next (decision 7). The pack pair is
+  // the structured multiple (F3/D4); `packSize` stays the rendered text.
   const [name, setName] = useState("");
   const [category, setCategory] = useState<InventoryCategory>("");
   const [strengthValue, setStrengthValue] = useState("");
   const [strengthUnit, setStrengthUnit] = useState("");
   const [form, setForm] = useState("");
+  const [packQty, setPackQty] = useState<number | "">("");
+  const [packUnit, setPackUnit] = useState("");
   const [packSize, setPackSize] = useState("");
 
-  // Step 3: batch
+  // Step 3: batch. `qty` is **as typed**, in whichever unit is selected; the
+  // draft converts it to base units before anything leaves this component (F4).
   const [batch, setBatch] = useState("");
   const [expiry, setExpiry] = useState("");
   const [qty, setQty] = useState("");
+  const [qtyUnit, setQtyUnit] = useState<QuantityUnit>("base");
   const [notes, setNotes] = useState("");
 
   const [attemptedNext, setAttemptedNext] = useState(false);
@@ -65,45 +97,81 @@ export function StockInWizard({
       setCategory(details.category);
       setForm(details.form);
       setName(details.name);
+      setPackQty(details.packQty);
       setPackSize(details.packSize);
+      setPackUnit(details.packUnit);
       setStrengthUnit(details.strengthUnit);
       setStrengthValue(details.strengthValue);
       setBatch("");
       setExpiry("");
       setQty("");
+      setQtyUnit("base");
       setNotes("");
     }
   }, [open, initialItemId, items]);
+
+  const packItem = useMemo(
+    () => ({ form: form.trim(), packQty, packUnit: packUnit.trim() }),
+    [form, packQty, packUnit]
+  );
+  const packAvailable = hasPack(packItem);
+  const baseUnit = baseUnitFor(packItem);
+  // The pack option only exists when the pair is usable, so a stale selection
+  // (the operator went back and cleared the pack) silently falls back to base
+  // units rather than converting against a multiple that is gone (F4).
+  const selectedUnit: QuantityUnit = packAvailable ? qtyUnit : "base";
+  const typedQty = qty === "" ? 0 : Number(qty);
+  const unitToken = selectedUnit === "pack" ? packItem.packUnit : baseUnit;
+  const baseQty = toBaseUnits(typedQty, unitToken, packItem) ?? 0;
+  const conversionLabel =
+    selectedUnit === "pack" && typedQty > 0 ? `${baseQty} ${baseUnit}` : null;
+
+  const quantityUnit = useMemo<QuantityUnitControl>(
+    () => ({
+      baseUnit,
+      conversionLabel,
+      onSelect: setQtyUnit,
+      packUnit: packItem.packUnit,
+      packUnitAvailable: packAvailable,
+      selected: selectedUnit,
+    }),
+    [baseUnit, conversionLabel, packAvailable, packItem.packUnit, selectedUnit]
+  );
 
   const draft = useMemo<StockInDraft>(
     () => ({
       batch: batch.trim(),
       category,
       expiry,
-      form: form.trim(),
+      form: packItem.form,
       identifier,
       isNew,
       itemId: foundItem?.id ?? null,
       name: name.trim(),
       notes: notes.trim(),
+      packQty,
       packSize: packSize.trim(),
-      qty: Number(qty),
+      packUnit: packItem.packUnit,
+      // Always base units: the batch, the item total and the audit entry all
+      // read one number, in the unit the shelf counts in (D12, F4).
+      qty: baseQty,
       strengthUnit,
       strengthValue: strengthValue.trim(),
       supplier: null,
     }),
     [
+      baseQty,
       batch,
       category,
       expiry,
-      form,
       foundItem,
       identifier,
       isNew,
       name,
       notes,
+      packItem,
+      packQty,
       packSize,
-      qty,
       strengthUnit,
       strengthValue,
     ]
@@ -120,6 +188,13 @@ export function StockInWizard({
 
   const goNext = useCallback(
     (force = false) => {
+      // Step 3 is soft: batch/expiry/qty warnings never hard-block Next
+      if (step === 3 && !force) {
+        setAttemptedNext(false);
+        setDirection(1);
+        setStep((s) => s + 1);
+        return;
+      }
       const valid = validateStep(step, draft);
       if (!(valid || force)) {
         setAttemptedNext(true);
@@ -131,11 +206,22 @@ export function StockInWizard({
         setStep((s) => s + 1);
         return;
       }
-      onConfirm(draft);
-      toast.success(`Logged: ${name || identifier} +${qty}`);
+      // Final confirm — hard qty check, soft batch/expiry
+      if (!Number.isFinite(draft.qty) || draft.qty < 1) {
+        toast.error("Quantity must be 1 or more.");
+        setAttemptedNext(true);
+        return;
+      }
+      const finalDraft: StockInDraft = draft.batch.trim()
+        ? draft
+        : { ...draft, batch: autoBatchCode() };
+      onConfirm(finalDraft);
+      toast.success(
+        `Logged: ${name || identifier} +${describeQuantity(finalDraft.qty, packItem)}`
+      );
       onOpenChange(false);
     },
-    [draft, identifier, name, onConfirm, onOpenChange, qty, step]
+    [draft, identifier, name, onConfirm, onOpenChange, packItem, step]
   );
 
   const lookup = useCallback(() => {
@@ -161,9 +247,12 @@ export function StockInWizard({
       setCategory(details.category);
       setForm(details.form);
       setName(details.name);
+      setPackQty(details.packQty);
       setPackSize(details.packSize);
+      setPackUnit(details.packUnit);
       setStrengthUnit(details.strengthUnit);
       setStrengthValue(details.strengthValue);
+      setQtyUnit("base");
       toast.success(`Found: ${found.displayName}`);
       // jump to step 3 per spec if scan hits existing → jump to Step 3
       goNext(true);
@@ -172,9 +261,12 @@ export function StockInWizard({
       setCategory(EMPTY_DETAILS.category);
       setForm(EMPTY_DETAILS.form);
       setName(EMPTY_DETAILS.name);
+      setPackQty(EMPTY_DETAILS.packQty);
       setPackSize(EMPTY_DETAILS.packSize);
+      setPackUnit(EMPTY_DETAILS.packUnit);
       setStrengthUnit(EMPTY_DETAILS.strengthUnit);
       setStrengthValue(EMPTY_DETAILS.strengthValue);
+      setQtyUnit("base");
       toast.message("Not found — Create new item?", {
         description: `No match for "${identifier}". Fill details to create.`,
       });
@@ -197,8 +289,9 @@ export function StockInWizard({
   const handleCancel = useCallback(() => onOpenChange(false), [onOpenChange]);
   const handleNext = useCallback(() => goNext(), [goNext]);
 
-  const dirty = Boolean(identifier || name || batch || qty || notes);
-  const stepValid = validateStep(step, draft);
+  const dirty = Boolean(identifier || name || batch || qty || notes || packQty);
+  // Step 3 soft: never hard-block Next; warnings only
+  const stepValid = step === 3 ? true : validateStep(step, draft);
 
   return (
     <WizardShell
@@ -239,10 +332,15 @@ export function StockInWizard({
           onCategoryChange={setCategory}
           onFormChange={setForm}
           onNameChange={setName}
+          onPackQtyChange={setPackQty}
           onPackSizeChange={setPackSize}
+          onPackUnitChange={setPackUnit}
           onStrengthUnitChange={setStrengthUnit}
           onStrengthValueChange={setStrengthValue}
+          packErrors={packErrors({ form, packQty, packUnit })}
+          packQty={packQty}
           packSize={packSize}
+          packUnit={packUnit}
           preFilled={foundItem !== null}
           showErrors={attemptedNext}
           strengthUnit={strengthUnit}
@@ -261,6 +359,7 @@ export function StockInWizard({
           onNotesChange={setNotes}
           onQtyChange={setQty}
           qty={qty}
+          quantityUnit={quantityUnit}
           showErrors={attemptedNext}
         />
       ) : null}

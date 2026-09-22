@@ -80,6 +80,67 @@ function renderList(
   return { onAdjustThreshold, onOpenInStockManagement, onReorder, onView };
 }
 
+/** A pack-forming item: `600 mg sachet (10/box)`, stock counted in sachets. */
+function packRow(qty: number, threshold: number): LowStockRow {
+  const item: InventoryItem = {
+    batches: [],
+    category: "Analgesic",
+    detailsIncomplete: false,
+    dispensingHistory: [],
+    displayName: "Paracetamol 600 mg sachet (10/box)",
+    expiry: "",
+    form: "sachet",
+    id: "pack-1",
+    name: "Paracetamol",
+    packQty: 10,
+    packSize: "(10/box)",
+    packUnit: "box",
+    qty,
+    sku: "SKU-PACK",
+    status: "low",
+    strengthUnit: "mg",
+    strengthValue: "600",
+    supplier: "PharmaCorp",
+    threshold,
+  };
+  return {
+    currentQty: qty,
+    gap: threshold - qty,
+    gapPercent: (qty / threshold) * 100,
+    item,
+    lowStockStatus: "low-stock",
+    suggestedQty: Math.max(threshold * 2 - qty, threshold),
+    threshold,
+  };
+}
+
+/**
+ * pack-size F11/AC17 — the moment a quantity can mean sachets or boxes, every
+ * number the alert shows must name its unit, while the stored values, the meter
+ * and the sorting stay base units.
+ */
+describe("LowStockList quantities name their unit", () => {
+  it("reads the current level in both units and the threshold in base units", () => {
+    renderList({ rows: [packRow(20, 20)] });
+
+    expect(screen.getByText("20 sachet (2 box)")).toBeInTheDocument();
+    expect(screen.getByText("20 sachet")).toBeInTheDocument();
+    const meter = screen.getByRole("meter");
+    // The meter's proportions remain base units (F11 rule 1).
+    expect(meter).toHaveAttribute("aria-valuenow", "20");
+    expect(meter).toHaveAttribute("aria-valuemax", "20");
+    expect(meter).toHaveAccessibleName("20 of 20 sachet threshold");
+  });
+
+  it("breaks a remainder into packs plus base units, never a fraction", () => {
+    renderList({ rows: [packRow(13, 20)] });
+
+    expect(screen.getByText("13 sachet (1 box + 3 sachet)")).toBeInTheDocument();
+    expect(screen.queryByText(/1\.3/)).toBeNull();
+    expect(screen.getByText("-7 sachet")).toBeInTheDocument(); // the gap
+  });
+});
+
 describe("LowStockList row activation", () => {
   it("opens the detail view when anywhere on the row body is clicked", async () => {
     const user = userEvent.setup();

@@ -24,7 +24,14 @@ export interface ParsedInventoryRow {
   form: string;
   isNoStock: boolean;
   name: string;
+  /**
+   * The structured pack pair (migration 0012 / template columns 41–42). `null`
+   * and `""` on a legacy 41-column file, which the run-once backfill fills from
+   * the `pack_size` text instead (pack-size F10).
+   */
+  packQty: number | null;
   packSize: string;
+  packUnit: string;
   row: number;
   stockOnHand: number | null;
   stockRemaining: number | null;

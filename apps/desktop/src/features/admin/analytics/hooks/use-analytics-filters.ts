@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from "react";
 import type { ReportsFilters, ReportsPreset } from "../types";
 
-export function useReportsFilters(initial?: Partial<ReportsFilters>) {
+export function useAnalyticsFilters(initial?: Partial<ReportsFilters>) {
   const [filters, setFilters] = useState<ReportsFilters>({
     category: initial?.category ?? "All",
     customRange: initial?.customRange,

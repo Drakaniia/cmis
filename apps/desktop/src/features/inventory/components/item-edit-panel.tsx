@@ -1,16 +1,26 @@
+import { AppleDatePicker } from "@cmis/ui/components/apple-date-picker";
 import { Button } from "@cmis/ui/components/button";
 import { cn } from "@cmis/ui/lib/utils";
-import { type ChangeEvent, useCallback, useMemo, useState } from "react";
+import { type ChangeEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { recordAudit } from "@/features/admin/audit/write-audit";
+import { getDb } from "@/lib/db";
 import {
   batchQuantityTotal,
   buildItemUpdate,
   draftFromItem,
+  type ItemDraftErrors,
   type ItemEditDraft,
   isRename,
   validateItemDraft,
 } from "../domain/item-update";
-import { MEDICINE_FORMS, STRENGTH_UNITS } from "../domain/vocabulary";
+import { packSizeText } from "../domain/pack-size";
+import {
+  MEDICINE_FORMS,
+  PACK_UNITS,
+  STRENGTH_UNITS,
+} from "../domain/vocabulary";
+import { useQueryClient } from "@tanstack/react-query";
 import { useItemUpdateMutation } from "../hooks/use-item-update";
 import type { InventoryItem } from "../types";
 import { CategoryPicker } from "./category-picker";
@@ -41,22 +51,84 @@ const SELECT_CLASS = FIELD_CLASS;
 function Field({
   children,
   error,
+  hint,
   label,
 }: {
   children: React.ReactNode;
   error?: string;
+  /** Explains what the field means when the label alone is not enough. */
+  hint?: string;
   label: string;
 }) {
   return (
     <label className="block font-medium text-caption text-foreground">
       {label}
       {children}
+      {hint ? (
+        <span className="mt-1 block text-caption text-muted-foreground">
+          {hint}
+        </span>
+      ) : null}
       {error ? (
         <span className="mt-1 block text-caption text-destructive">
           {error}
         </span>
       ) : null}
     </label>
+  );
+}
+
+/**
+ * The structured pack pair (F3/D4), module level for two reasons: React must
+ * not remount the inputs mid-edit, and keeping it out of `ItemEditPanel` keeps
+ * that function's cognitive complexity inside the lint budget.
+ */
+function PackPairFields({
+  draft,
+  errors,
+  onPackQtyChange,
+  onPackUnitChange,
+  showErrors,
+}: {
+  draft: ItemEditDraft;
+  errors: ItemDraftErrors;
+  onPackQtyChange: (event: ChangeEvent<HTMLInputElement>) => void;
+  onPackUnitChange: (event: ChangeEvent<HTMLSelectElement>) => void;
+  showErrors: boolean;
+}) {
+  return (
+    <>
+      <Field
+        error={showErrors ? errors.packQty : undefined}
+        hint="How many base units one pack holds."
+        label="Pack quantity"
+      >
+        <input
+          className={cn(
+            FIELD_CLASS,
+            showErrors && errors.packQty && "border-destructive"
+          )}
+          onChange={onPackQtyChange}
+          placeholder="10"
+          type="number"
+          value={draft.packQty === "" ? "" : draft.packQty}
+        />
+      </Field>
+      <Field error={showErrors ? errors.packUnit : undefined} label="Pack unit">
+        <select
+          className={SELECT_CLASS}
+          onChange={onPackUnitChange}
+          value={draft.packUnit}
+        >
+          <option value="">—</option>
+          {PACK_UNITS.map((unit) => (
+            <option key={unit} value={unit}>
+              {unit}
+            </option>
+          ))}
+        </select>
+      </Field>
+    </>
   );
 }
 
@@ -75,19 +147,42 @@ export function ItemEditPanel({
   const [draft, setDraft] = useState<ItemEditDraft>(() => draftFromItem(item));
   const [attempted, setAttempted] = useState(false);
   const [confirmDiscard, setConfirmDiscard] = useState(false);
+  const qc = useQueryClient();
   const update = useItemUpdateMutation();
+  const [batchExpiries, setBatchExpiries] = useState<Record<string, string>>(
+    () => Object.fromEntries(item.batches.map((b) => [b.batch, b.expiry]))
+  );
+
+  useEffect(() => {
+    setDraft(draftFromItem(item));
+    setBatchExpiries(Object.fromEntries(item.batches.map((b) => [b.batch, b.expiry])));
+    setAttempted(false);
+    setConfirmDiscard(false);
+  }, [item]);
 
   const errors = useMemo(
     () => validateItemDraft(draft, items, item.id),
     [draft, items, item.id]
   );
   const _invalid = Object.keys(errors).length > 0;
+  // The structured pair, rendered (D24) — a hint rather than a second editable
+  // copy, so the operator sees exactly what `pack_size` will read.
+  const derivedPackText = packSizeText({
+    packQty: draft.packQty,
+    packUnit: draft.packUnit,
+  });
+  const batchDirty = useMemo(
+    () => item.batches.some((b) => batchExpiries[b.batch] !== b.expiry),
+    [batchExpiries, item.batches]
+  );
+
   const dirty = useMemo(() => {
     const initial = draftFromItem(item);
-    return (Object.keys(initial) as (keyof ItemEditDraft)[]).some(
+    const draftDirty = (Object.keys(initial) as (keyof ItemEditDraft)[]).some(
       (key) => initial[key] !== draft[key]
     );
-  }, [draft, item]);
+    return draftDirty || batchDirty;
+  }, [draft, item, batchDirty]);
 
   const patch = useCallback((values: Partial<ItemEditDraft>) => {
     setDraft((previous) => ({ ...previous, ...values }));
@@ -117,25 +212,79 @@ export function ItemEditPanel({
     [patch]
   );
 
-  const handleSave = useCallback(() => {
+  /**
+   * The pack multiple is `number | ""`, not a number: `""` is the draft's "no
+   * pack recorded" (F2). The shared `numberHandler` writes `NaN` for a blank
+   * field, which the insert would then store as a non-integer, so the pair gets
+   * its own translation.
+   */
+  const packQtyHandler = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => {
+      const raw = event.target.value.trim();
+      const parsed = Number(raw);
+      patch({ packQty: raw === "" || !Number.isFinite(parsed) ? "" : parsed });
+    },
+    [patch]
+  );
+
+  const handleBatchExpiryChange = useCallback(
+    (batchName: string, value: string) => {
+      setBatchExpiries((previous) => ({ ...previous, [batchName]: value }));
+    },
+    []
+  );
+
+  const handleSave = useCallback(async () => {
     setAttempted(true);
     if (Object.keys(validateItemDraft(draft, items, item.id)).length > 0) {
       return;
     }
-    update.mutate(
-      { ...buildItemUpdate(item, draft), id: item.id },
-      {
-        onError: (error) =>
-          toast.error("Could not save the item", {
-            description: error instanceof Error ? error.message : String(error),
-          }),
-        onSuccess: () => {
-          toast.success(`Saved ${draft.name.trim()}`);
-          onSaved?.();
-        },
+    try {
+      await update.mutateAsync({ ...buildItemUpdate(item, draft), id: item.id });
+      const changedBatches = item.batches.filter(
+        (b) => (batchExpiries[b.batch] ?? "") !== (b.expiry ?? "")
+      );
+      if (changedBatches.length > 0) {
+        const db = await getDb();
+        for (const batch of changedBatches) {
+          const newExpiry = batchExpiries[batch.batch] ?? "";
+          const rows = await db.select<{ id: string; expiry: string | null }[]>(
+            "SELECT id, expiry FROM inventory_batches WHERE item_id = ? AND batch = ? LIMIT 1",
+            [item.id, batch.batch]
+          );
+          const row = rows[0];
+          if (!row) {
+            continue;
+          }
+          const previousExpiry = row.expiry ?? "";
+          await db.execute("UPDATE inventory_batches SET expiry = ? WHERE id = ?", [
+            newExpiry,
+            row.id,
+          ]);
+          await recordAudit(
+            db,
+            {
+              action: "correction",
+              after: { batch: batch.batch, expiry: newExpiry },
+              before: { batch: batch.batch, expiry: previousExpiry },
+              detail: `Corrected batch expiry for ${batch.batch} from ${previousExpiry || "no date"} to ${newExpiry || "no date"}`,
+              targetId: row.id,
+              targetKind: "batch",
+            },
+            { bestEffort: true }
+          );
+          qc.invalidateQueries({ queryKey: ["inventory_items"] });
+          qc.invalidateQueries({ queryKey: ["dashboard-stats"] });
+        }
       }
-    );
-  }, [draft, item, items, onSaved, update]);
+      toast.success(`Saved ${draft.name.trim()}`);
+      onSaved?.();
+    } catch (error) {
+      toast.error("Could not save the item", {
+        description: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }, [batchExpiries, draft, item, items, onSaved, update]);
 
   const handleCancel = useCallback(() => {
     // The dirty guard is local rather than a modal: the panel already owns the
@@ -151,7 +300,7 @@ export function ItemEditPanel({
 
   return (
     <form
-      className="flex h-full flex-col overflow-hidden"
+      className="flex min-h-0 flex-1 flex-col overflow-hidden"
       onSubmit={(event) => {
         event.preventDefault();
         handleSave();
@@ -246,6 +395,11 @@ export function ItemEditPanel({
             </Field>
             <Field
               error={attempted ? errors.packSize : undefined}
+              hint={
+                derivedPackText === ""
+                  ? "Legacy text — kept as typed while the pair below is blank."
+                  : `Reads as ${derivedPackText}, derived from the pair.`
+              }
               label="Pack size"
             >
               <input
@@ -259,8 +413,73 @@ export function ItemEditPanel({
                 value={draft.packSize}
               />
             </Field>
+
+            {/* F3/D4 — the structured multiple. The text above is derived from
+                this pair on save (D24); the pair is what arithmetic reads. */}
+            <PackPairFields
+              draft={draft}
+              errors={errors}
+              onPackQtyChange={packQtyHandler}
+              onPackUnitChange={selectHandler("packUnit")}
+              showErrors={attempted}
+            />
           </div>
         </fieldset>
+
+        {item.batches.length > 0 ? (
+          <fieldset className="space-y-2 rounded-md border border-border/50 p-3">
+            <legend className="px-1 text-caption text-muted-foreground">
+              Batch expiries — edit expiry dates (past dates warn, not block)
+            </legend>
+            <div className="space-y-2">
+              {[...item.batches]
+                .sort(
+                  (a, b) =>
+                    new Date(a.expiry).getTime() - new Date(b.expiry).getTime()
+                )
+                .map((batch) => {
+                  const current = batchExpiries[batch.batch] ?? "";
+                  const isPast =
+                    current !== "" &&
+                    new Date(current) <=
+                      new Date(new Date().setHours(0, 0, 0, 0));
+                  const isChanged = current !== batch.expiry;
+                  return (
+                    <div
+                      className="flex flex-col gap-1 rounded-md border border-border bg-card px-2.5 py-2"
+                      key={batch.batch}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-medium text-caption">
+                          {batch.batch}
+                        </span>
+                        <span className="text-caption text-muted-foreground">
+                          Qty {batch.qty}
+                        </span>
+                        {isChanged ? (
+                          <span className="text-[10px] font-medium text-[var(--warning)]">
+                            modified
+                          </span>
+                        ) : null}
+                      </div>
+                      <AppleDatePicker
+                        onChange={(value) =>
+                          handleBatchExpiryChange(batch.batch, value)
+                        }
+                        placeholder="Select expiry date"
+                        value={current}
+                      />
+                      {isPast ? (
+                        <span className="text-caption text-[var(--warning)]">
+                          Warning: expiry is in the past (not blocked).
+                        </span>
+                      ) : null}
+                    </div>
+                  );
+                })}
+            </div>
+          </fieldset>
+        ) : null}
 
         <div className="grid grid-cols-2 gap-3">
           <Field label="Supplier">
@@ -283,7 +502,8 @@ export function ItemEditPanel({
           </Field>
           <Field
             error={attempted ? errors.threshold : undefined}
-            label="Low-stock threshold"
+            hint="App-only alert level — not a column in the import file. Derived from this item's dispensing usage; edit to override."
+            label="Low-stock alert level"
           >
             <input
               className={cn(

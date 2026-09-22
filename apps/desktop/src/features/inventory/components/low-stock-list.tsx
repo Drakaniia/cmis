@@ -33,6 +33,11 @@ import {
 } from "react";
 import { densitySpring } from "@/lib/motion";
 import { getLeadTime, LOW_STOCK_STATUS_CONFIG } from "../domain/low-stock";
+import {
+  baseUnitFor,
+  describeQuantity,
+  packItemOf,
+} from "../domain/pack-size";
 import { composeListLabel } from "../domain/strength";
 import type { LowStockRow, LowStockSortKey } from "../types";
 import { StockDetailMenu } from "./stock-detail-menu";
@@ -61,12 +66,21 @@ function gridColsFor(
   return "grid-cols-[32px_1.4fr_1.2fr_0.6fr_0.5fr_0.9fr_80px]";
 }
 
-/** §6.4 — announce item, quantity, threshold and status, not just the name. */
+/**
+ * §6.4 — announce item, quantity, threshold and status, not just the name.
+ *
+ * Every number names its unit (pack-size F11/AC17): once a quantity can be read
+ * as sachets or boxes, a bare `20 on hand, threshold 20` is ambiguous, so the
+ * base unit is spelled out and the pack parenthetical follows when it exists.
+ */
 function rowAriaLabel(row: LowStockRow): string {
   const config = LOW_STOCK_STATUS_CONFIG[row.lowStockStatus];
+  const baseUnit = baseUnitFor(packItemOf(row.item));
   const gap =
-    row.gap > 0 ? `${row.gap} below threshold` : `${Math.abs(row.gap)} above`;
-  return `${row.item.displayName}, ${row.currentQty} on hand, threshold ${row.threshold}, ${gap}, ${config.label}`;
+    row.gap > 0
+      ? `${row.gap} ${baseUnit} below threshold`
+      : `${Math.abs(row.gap)} ${baseUnit} above`;
+  return `${row.item.displayName}, ${describeQuantity(row.currentQty, packItemOf(row.item))} on hand, threshold ${row.threshold} ${baseUnit}, ${gap}, ${config.label}`;
 }
 
 function ariaSortFor(
@@ -176,7 +190,7 @@ function QuantityBar({
   return (
     <div className="flex items-center gap-2">
       <div
-        aria-label={`${row.currentQty} of ${row.threshold} threshold`}
+        aria-label={`${row.currentQty} of ${row.threshold} ${baseUnitFor(packItemOf(row.item))} threshold`}
         aria-valuemax={row.threshold}
         aria-valuemin={0}
         aria-valuenow={row.currentQty}
@@ -196,8 +210,10 @@ function QuantityBar({
           }
         />
       </div>
+      {/* F11 — the level in both units: `20 sachet (2 box)`, or base units alone
+       * when the item has no usable pack. The meter itself stays base units. */}
       <span className="whitespace-nowrap text-caption text-muted-foreground tabular-nums">
-        {row.currentQty} / {row.threshold}
+        {describeQuantity(row.currentQty, packItemOf(row.item))}
       </span>
     </div>
   );
@@ -206,19 +222,20 @@ function QuantityBar({
 // ─── CMIS-UI-04 §2 — Gap Display ───────────────────────────────────────────
 
 function GapDisplay({ row }: { row: LowStockRow }) {
+  const baseUnit = baseUnitFor(packItemOf(row.item));
   if (row.lowStockStatus === "out-of-stock") {
     return <span className="font-medium text-destructive text-xs">Out</span>;
   }
   if (row.gap <= 0) {
     return (
       <span className="font-medium text-muted-foreground text-xs">
-        +{Math.abs(row.gap)}
+        +{Math.abs(row.gap)} {baseUnit}
       </span>
     );
   }
   return (
     <span className="font-medium text-[var(--warning)] text-xs tabular-nums">
-      -{row.gap}
+      -{row.gap} {baseUnit}
     </span>
   );
 }
@@ -359,9 +376,10 @@ function LowStockRowItem({
         <QuantityBar row={row} />
       </span>
 
-      {/* Threshold */}
+      {/* Threshold — the stored value is unchanged (base units, D13); only the
+       * rendering names its unit (F11). */}
       <span className="text-caption tabular-nums" role="cell">
-        {row.threshold}
+        {row.threshold} {baseUnitFor(packItemOf(row.item))}
       </span>
 
       {/* Gap — CMIS-UI-04 §2 primary signal */}

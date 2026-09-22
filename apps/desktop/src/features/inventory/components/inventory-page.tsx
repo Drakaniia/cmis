@@ -34,6 +34,7 @@ import { InventoryList } from "./inventory-list";
 import { InventorySelectionToolbar } from "./inventory-selection-toolbar";
 import { NoInventoryEmptyState } from "./no-inventory-empty-state";
 import { StockInWizard } from "./stock-in-wizard/stock-in-wizard";
+import type { StockInDraft } from "./stock-in-wizard/types";
 import { StockOutWizard } from "./stock-out-wizard";
 import { TrashList } from "./trash-list";
 
@@ -314,21 +315,7 @@ export function InventoryPage({
   }, [openStockOut, originRect]);
 
   const handleStockInConfirm = useCallback(
-    (payload: {
-      itemId: string | null;
-      isNew: boolean;
-      name: string;
-      category: string;
-      form: string;
-      packSize: string;
-      strengthUnit: string;
-      strengthValue: string;
-      batch: string;
-      expiry: string;
-      qty: number;
-      supplier: string | null;
-      notes: string;
-    }) => {
+    (payload: StockInDraft) => {
       if (payload.isNew || !payload.itemId) {
         (async () => {
           try {
@@ -350,7 +337,9 @@ export function InventoryPage({
           form: payload.form,
           identifier: payload.itemId ?? payload.name,
           name: payload.name,
+          packQty: payload.packQty,
           packSize: payload.packSize,
+          packUnit: payload.packUnit,
           qty: payload.qty,
           strengthUnit: payload.strengthUnit,
           strengthValue: payload.strengthValue,
@@ -595,7 +584,7 @@ export function InventoryPage({
                   </button>
                 </div>
               ) : (
-                <div className="flex h-full flex-col overflow-hidden">
+                <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
                   <InventoryDetailContent
                     autoFocus={!!selectedId}
                     item={selectedItem}

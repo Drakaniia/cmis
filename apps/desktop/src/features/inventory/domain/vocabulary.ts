@@ -20,6 +20,37 @@ export const STRENGTH_UNITS = [
   "units",
 ] as const;
 
+/**
+ * The pack vocabulary — the containers one pack multiple may be counted in
+ * (pack-size-handling D17). One list, read by the item form's pack-unit select
+ * and by the request form's item-aware unit list, so `box` cannot mean two
+ * things on two screens.
+ */
+export const PACK_UNITS = [
+  "box",
+  "strip",
+  "pack",
+  "carton",
+  "bottle",
+  "tube",
+] as const;
+
+/**
+ * The containers the **parser** may read off a legacy `pack_size` cell.
+ *
+ * A superset of `PACK_UNITS`: the reference workbook's leftover bucket also names
+ * `vial`, `ampule` and `nebule`, and a `(10/vial)` group is still an unambiguous
+ * pack multiple worth pairing. These three are read-only — they are never
+ * offered in the form select, so a new item can only be written in a
+ * `PACK_UNITS` token (V6).
+ */
+export const PACK_CONTAINER_TOKENS = [
+  ...PACK_UNITS,
+  "vial",
+  "ampule",
+  "nebule",
+] as const;
+
 export const MEDICINE_FORMS = [
   "tablet",
   "capsule",

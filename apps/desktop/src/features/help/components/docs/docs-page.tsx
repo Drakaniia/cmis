@@ -6,10 +6,11 @@ import {
   DocsTocRail,
   useActiveSection,
 } from "./docs-toc";
+import { AnalyticsSection } from "./sections/analytics";
 import { DispensingSection } from "./sections/dispensing";
 import { ExpirySection } from "./sections/expiry";
 import { LowStockSection } from "./sections/low-stock";
-import { ReportsSection } from "./sections/reports";
+import { StockReportSection } from "./sections/reports";
 import { RequestsSection } from "./sections/requests";
 import { StillStuckSection } from "./sections/still-stuck";
 import { StockSection } from "./sections/stock";
@@ -47,7 +48,8 @@ export function DocsPage() {
           <LowStockSection />
           <RequestsSection />
           <DispensingSection />
-          <ReportsSection />
+          <StockReportSection />
+          <AnalyticsSection />
           <StillStuckSection />
         </div>
       </article>

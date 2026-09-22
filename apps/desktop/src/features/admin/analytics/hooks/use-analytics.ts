@@ -127,14 +127,21 @@ export function useTopDispensed(month: string, category: string) {
   });
 }
 
-export function useExpiryBuckets(_category: string) {
+export function useExpiryBuckets(category: string) {
   return useQuery({
     placeholderData: (previousData) => previousData,
     queryFn: async (): Promise<ExpiryBucket[]> => {
       const db = await getDb();
       try {
+        // The category argument used to be accepted and ignored (SL11), which
+        // left the bars un-narrowed by the filter bar. Filtering now joins the
+        // batch to its item so the widget honours the same category as its
+        // neighbours.
         const rows = await db.select<{ expiry: string }[]>(
-          "SELECT expiry FROM inventory_batches WHERE expiry IS NOT NULL AND expiry != ''"
+          category === "All"
+            ? "SELECT expiry FROM inventory_batches WHERE expiry IS NOT NULL AND expiry != ''"
+            : "SELECT b.expiry AS expiry FROM inventory_batches b JOIN inventory_items i ON i.id = b.item_id WHERE b.expiry IS NOT NULL AND b.expiry != '' AND i.category = ?",
+          category === "All" ? [] : [category]
         );
         if (rows.length === 0) {
           return [];
@@ -168,7 +175,7 @@ export function useExpiryBuckets(_category: string) {
         return [];
       }
     },
-    queryKey: ["reports-expiry-buckets"],
+    queryKey: ["reports-expiry-buckets", category],
   });
 }
 

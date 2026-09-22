@@ -1,0 +1,114 @@
+"use client";
+
+import { motion, useReducedMotion } from "motion/react";
+
+import { monthKey } from "@/lib/month";
+import {
+  useExpiryBuckets,
+  useFulfillment,
+  useLowStockTrend,
+  useStockMovement,
+  useTopDispensed,
+  useUsageByCategory,
+} from "../hooks/use-analytics";
+import { useAnalyticsFilters } from "../hooks/use-analytics-filters";
+import { AnalyticsFilterBar } from "./analytics-filter-bar";
+import { DispensedVsRequestedWidget } from "./dispensed-vs-requested-widget";
+import { ExpiryTimelineWidget } from "./expiry-timeline-widget";
+import { LowStockTrendWidget } from "./low-stock-trend-widget";
+import { StockMovementWidget } from "./stock-movement-widget";
+import { TopDispensedTable } from "./top-dispensed-table";
+import { UsageDonutWidget } from "./usage-donut-widget";
+
+/**
+ * Analytics (`/admin/analytics`) — the six analytic widgets, relocated from the
+ * old Reports page (D25). Functionally unchanged: the same grid, stagger and
+ * filter behaviour, minus the Import and Export controls that belonged to the
+ * stock report.
+ *
+ * The live queries chart the month the data is being written in, so a running
+ * install shows the current window rather than a hardcoded one.
+ */
+export function AnalyticsPage() {
+  const { filters, setCategory, setPreset } = useAnalyticsFilters();
+  const reduceMotion = useReducedMotion();
+
+  const month = monthKey();
+  const { data: movementData } = useStockMovement(month, filters.category);
+  const { data: topData } = useTopDispensed(month, filters.category);
+  const { data: expiryData } = useExpiryBuckets(filters.category);
+  const { data: usageData } = useUsageByCategory(month);
+  const { data: lowStockData } = useLowStockTrend(month, filters.category);
+  const { data: fulfillmentData } = useFulfillment(month);
+
+  const movement = movementData ?? [];
+  const expiry = expiryData ?? [];
+  const usage = usageData ?? [];
+  const top = topData ?? [];
+  const lowStock = lowStockData ?? [];
+  const fulfillment = fulfillmentData ?? [];
+
+  const isEmptyDb =
+    movement.length === 0 &&
+    top.length === 0 &&
+    usage.length === 0 &&
+    expiry.length === 0 &&
+    lowStock.length === 0;
+
+  return (
+    <div className="flex h-full flex-col overflow-hidden">
+      <AnalyticsFilterBar
+        category={filters.category}
+        onCategoryChange={setCategory}
+        onPresetChange={setPreset}
+        preset={filters.preset}
+      />
+
+      {/* Grid — density-aware breakpoints per spec §6: 2 cols ≥900 Compact, ≥1200 Comfortable */}
+      <div className="min-h-0 flex-1 overflow-auto p-3 pb-6 sm:p-4 sm:pb-8">
+        {isEmptyDb ? (
+          <div className="mx-auto max-w-md py-16 text-center">
+            <h3 className="font-semibold text-lg">
+              No activity to analyse yet
+            </h3>
+            <p className="mt-2 text-muted-foreground text-sm">
+              Once medicines are dispensed and deliveries recorded, these cards
+              will fill with movement, expiry and usage trends.
+            </p>
+            <a
+              className="mt-4 inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 font-medium text-primary-foreground text-sm"
+              href="/admin/inventory"
+            >
+              Go to Stock Management
+            </a>
+          </div>
+        ) : (
+          <div className="mx-auto max-w-[1280px]">
+            <motion.div
+              animate={{ opacity: 1 }}
+              className="grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-2"
+              initial={{ opacity: 1 }}
+              transition={
+                reduceMotion
+                  ? { duration: 0 }
+                  : { delayChildren: 0.04, staggerChildren: 0.05 }
+              }
+            >
+              <StockMovementWidget data={movement} />
+              <LowStockTrendWidget data={lowStock} />
+              <ExpiryTimelineWidget buckets={expiry} />
+              <UsageDonutWidget data={usage} />
+              <DispensedVsRequestedWidget data={fulfillment} />
+              <TopDispensedTable rows={top} />
+            </motion.div>
+
+            <p className="mt-4 text-center text-[11px] text-muted-foreground leading-relaxed">
+              Generated {new Date().toLocaleString()} · Filters:{" "}
+              {filters.preset.toUpperCase()} · {filters.category}
+            </p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

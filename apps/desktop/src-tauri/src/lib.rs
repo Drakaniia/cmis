@@ -1,6 +1,8 @@
 use tauri::Emitter;
 use tauri_plugin_sql::{Migration, MigrationKind};
 
+mod commands;
+
 /// Connection string shared by the frontend (`src/lib/db.ts`) and the preload
 /// list in `tauri.conf.json`. The plugin only runs migrations registered under
 /// this exact key.
@@ -83,6 +85,12 @@ fn db_migrations() -> Vec<Migration> {
             sql: include_str!("../migrations/0011_request_queue_board_state.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 12,
+            description: "pack_size_fields",
+            sql: include_str!("../migrations/0012_pack_size_fields.sql"),
+            kind: MigrationKind::Up,
+        },
     ]
 }
 
@@ -98,6 +106,13 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
+        .invoke_handler(tauri::generate_handler![
+            commands::backup::backup_default_dir,
+            commands::backup::backup_live_db_path,
+            commands::reports::save_stock_report_workbook,
+            commands::reports::generate_stock_report_pdf
+        ])
         .setup(|app| {
             if cfg!(debug_assertions) {
                 app.handle().plugin(
@@ -126,11 +141,30 @@ fn setup_native_menu(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::E
     use tauri::menu::{Menu, MenuItem, PredefinedMenuItem, Submenu};
 
     // File menu — minimal per spec: New Request, Import/Export, Settings, Exit (Quit)
-    let new_request = MenuItem::with_id(app, "file.new-request", "New Request…", true, Some("CmdOrCtrl+N"))?;
+    let new_request = MenuItem::with_id(
+        app,
+        "file.new-request",
+        "New Request…",
+        true,
+        Some("CmdOrCtrl+N"),
+    )?;
     // Ctrl+D / ⌘D — the one-action counter hand-over (quick deduct spec D5).
-    let quick_deduct = MenuItem::with_id(app, "file.quick-deduct", "Deduct Stock…", true, Some("CmdOrCtrl+D"))?;
+    let quick_deduct = MenuItem::with_id(
+        app,
+        "file.quick-deduct",
+        "Deduct Stock…",
+        true,
+        Some("CmdOrCtrl+D"),
+    )?;
     let import_item = MenuItem::with_id(app, "file.import", "Import…", true, None::<&str>)?;
     let export_item = MenuItem::with_id(app, "file.export", "Export…", true, None::<&str>)?;
+    let export_stock_report = MenuItem::with_id(
+        app,
+        "file.export-stock-report",
+        "Export Stock Report…",
+        true,
+        None::<&str>,
+    )?;
     let settings = MenuItem::with_id(app, "file.settings", "Settings…", true, Some("CmdOrCtrl+,"))?;
     let file_menu = Submenu::with_items(
         app,
@@ -142,6 +176,7 @@ fn setup_native_menu(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::E
             &PredefinedMenuItem::separator(app)?,
             &import_item,
             &export_item,
+            &export_stock_report,
             &PredefinedMenuItem::separator(app)?,
             &settings,
             &PredefinedMenuItem::separator(app)?,
@@ -167,27 +202,112 @@ fn setup_native_menu(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::E
     )?;
 
     // View menu — chrome + navigation
-    let toggle_sidebar = MenuItem::with_id(app, "view.toggle-sidebar", "Toggle Sidebar", true, Some("CmdOrCtrl+B"))?;
+    let toggle_sidebar = MenuItem::with_id(
+        app,
+        "view.toggle-sidebar",
+        "Toggle Sidebar",
+        true,
+        Some("CmdOrCtrl+B"),
+    )?;
     let zoom_in = MenuItem::with_id(app, "view.zoom-in", "Zoom In", true, Some("CmdOrCtrl+Plus"))?;
     let zoom_out = MenuItem::with_id(app, "view.zoom-out", "Zoom Out", true, Some("CmdOrCtrl+-"))?;
-    let zoom_reset = MenuItem::with_id(app, "view.zoom-reset", "Actual Size", true, Some("CmdOrCtrl+0"))?;
-    let fullscreen = MenuItem::with_id(app, "view.fullscreen", "Toggle Full Screen", true, Some("F11"))?;
+    let zoom_reset = MenuItem::with_id(
+        app,
+        "view.zoom-reset",
+        "Actual Size",
+        true,
+        Some("CmdOrCtrl+0"),
+    )?;
+    let fullscreen = MenuItem::with_id(
+        app,
+        "view.fullscreen",
+        "Toggle Full Screen",
+        true,
+        Some("F11"),
+    )?;
     let theme_light = MenuItem::with_id(app, "view.appearance.light", "Light", true, None::<&str>)?;
     let theme_dark = MenuItem::with_id(app, "view.appearance.dark", "Dark", true, None::<&str>)?;
-    let theme_system = MenuItem::with_id(app, "view.appearance.system", "System", true, None::<&str>)?;
-    let appearance = Submenu::with_items(app, "Appearance", true, &[&theme_light, &theme_dark, &theme_system])?;
-    let go_overview = MenuItem::with_id(app, "view.go-overview", "Go to Overview", true, None::<&str>)?;
-    let go_inventory = MenuItem::with_id(app, "view.go-inventory", "Go to Stock Management", true, None::<&str>)?;
-    let go_expiry = MenuItem::with_id(app, "view.go-expiry", "Go to Expiry Alerts", true, None::<&str>)?;
-    let go_lowstock = MenuItem::with_id(app, "view.go-lowstock", "Go to Low-Stock Alerts", true, None::<&str>)?;
-    let go_requests = MenuItem::with_id(app, "view.go-requests", "Go to Request Queue", true, None::<&str>)?;
-    let go_dispensing = MenuItem::with_id(app, "view.go-dispensing", "Go to Dispensing Log", true, None::<&str>)?;
-    let go_reports = MenuItem::with_id(app, "view.go-reports", "Go to Reports", true, None::<&str>)?;
+    let theme_system =
+        MenuItem::with_id(app, "view.appearance.system", "System", true, None::<&str>)?;
+    let appearance = Submenu::with_items(
+        app,
+        "Appearance",
+        true,
+        &[&theme_light, &theme_dark, &theme_system],
+    )?;
+    let go_overview = MenuItem::with_id(
+        app,
+        "view.go-overview",
+        "Go to Overview",
+        true,
+        None::<&str>,
+    )?;
+    let go_inventory = MenuItem::with_id(
+        app,
+        "view.go-inventory",
+        "Go to Stock Management",
+        true,
+        None::<&str>,
+    )?;
+    let go_expiry = MenuItem::with_id(
+        app,
+        "view.go-expiry",
+        "Go to Expiry Alerts",
+        true,
+        None::<&str>,
+    )?;
+    let go_lowstock = MenuItem::with_id(
+        app,
+        "view.go-lowstock",
+        "Go to Low-Stock Alerts",
+        true,
+        None::<&str>,
+    )?;
+    let go_requests = MenuItem::with_id(
+        app,
+        "view.go-requests",
+        "Go to Request Queue",
+        true,
+        None::<&str>,
+    )?;
+    let go_dispensing = MenuItem::with_id(
+        app,
+        "view.go-dispensing",
+        "Go to Dispensing Log",
+        true,
+        None::<&str>,
+    )?;
+    let go_reports = MenuItem::with_id(
+        app,
+        "view.go-reports",
+        "Go to Stock Report",
+        true,
+        None::<&str>,
+    )?;
+    let go_analytics = MenuItem::with_id(
+        app,
+        "view.go-analytics",
+        "Go to Analytics",
+        true,
+        None::<&str>,
+    )?;
     let go_audit = MenuItem::with_id(app, "view.go-audit", "Go to Audit Logs", true, None::<&str>)?;
-    let go_health = MenuItem::with_id(app, "view.go-health", "Go to System Health", true, None::<&str>)?;
+    let go_health = MenuItem::with_id(
+        app,
+        "view.go-health",
+        "Go to System Health",
+        true,
+        None::<&str>,
+    )?;
     let go_data = MenuItem::with_id(app, "view.go-data", "Go to Data", true, None::<&str>)?;
     let go_users = MenuItem::with_id(app, "view.go-users", "Go to Users", true, None::<&str>)?;
-    let go_settings = MenuItem::with_id(app, "view.go-settings", "Go to Settings", true, None::<&str>)?;
+    let go_settings = MenuItem::with_id(
+        app,
+        "view.go-settings",
+        "Go to Settings",
+        true,
+        None::<&str>,
+    )?;
     let view_menu = Submenu::with_items(
         app,
         "View",
@@ -209,6 +329,7 @@ fn setup_native_menu(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::E
             &go_requests,
             &go_dispensing,
             &go_reports,
+            &go_analytics,
             &go_audit,
             &go_health,
             &go_data,
@@ -232,9 +353,27 @@ fn setup_native_menu(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::E
 
     // Help menu — standard set, native About is handled separately; we add custom items
     let about = MenuItem::with_id(app, "help.about", "About CMIS", true, None::<&str>)?;
-    let check_updates = MenuItem::with_id(app, "help.check-updates", "Check for Updates…", true, None::<&str>)?;
-    let shortcuts = MenuItem::with_id(app, "help.shortcuts", "Keyboard Shortcuts", true, Some("CmdOrCtrl+/"))?;
-    let report_issue = MenuItem::with_id(app, "help.report-issue", "Report Issue…", true, None::<&str>)?;
+    let check_updates = MenuItem::with_id(
+        app,
+        "help.check-updates",
+        "Check for Updates…",
+        true,
+        None::<&str>,
+    )?;
+    let shortcuts = MenuItem::with_id(
+        app,
+        "help.shortcuts",
+        "Keyboard Shortcuts",
+        true,
+        Some("CmdOrCtrl+/"),
+    )?;
+    let report_issue = MenuItem::with_id(
+        app,
+        "help.report-issue",
+        "Report Issue…",
+        true,
+        None::<&str>,
+    )?;
     let docs = MenuItem::with_id(app, "help.docs", "View Documentation", true, None::<&str>)?;
     let help_menu = Submenu::with_items(
         app,
@@ -250,7 +389,10 @@ fn setup_native_menu(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::E
         ],
     )?;
 
-    let menu = Menu::with_items(app, &[&file_menu, &edit_menu, &view_menu, &window_menu, &help_menu])?;
+    let menu = Menu::with_items(
+        app,
+        &[&file_menu, &edit_menu, &view_menu, &window_menu, &help_menu],
+    )?;
     app.set_menu(menu)?;
     Ok(())
 }
@@ -263,6 +405,7 @@ fn handle_menu_event(app: &tauri::AppHandle, event: tauri::menu::MenuEvent) {
         "file.quick-deduct",
         "file.import",
         "file.export",
+        "file.export-stock-report",
         "file.settings",
         "view.toggle-sidebar",
         "view.zoom-in",
@@ -279,6 +422,7 @@ fn handle_menu_event(app: &tauri::AppHandle, event: tauri::menu::MenuEvent) {
         "view.go-requests",
         "view.go-dispensing",
         "view.go-reports",
+        "view.go-analytics",
         "view.go-audit",
         "view.go-health",
         "view.go-data",

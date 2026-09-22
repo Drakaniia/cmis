@@ -1,69 +1,129 @@
 import { identityKey } from "../domain/identity";
+import { isPackIncomplete } from "../domain/pack-size";
 import {
   composeDisplayName,
   isDetailsIncomplete,
   normalizeText,
 } from "../domain/strength";
+import { PACK_UNITS } from "../domain/vocabulary";
 import type { ImportWarning, ParsedInventoryRow, ParseResult } from "./types";
 
-const EXPECTED_COLUMNS = 41;
+/**
+ * The template's day columns follow the month being exported (28–31, spec
+ * stock-report-export E2/E5), so the importer no longer assumes a fixed 31. The
+ * layout is detected from the header row — `total_dispensed` marks where the days
+ * end — and every positional index is derived from it. A file written before
+ * migration 0012 has no `pack_qty` / `pack_unit` pair (41 columns rather than 43);
+ * both are accepted, and a malformed width still warns exactly as it did before
+ * (PK12).
+ */
+export const DAYS_MIN = 28;
+export const DAYS_MAX = 31;
 
-/** Column positions in the 41-column template (see `INVENTORY_TEMPLATE_HEADERS`). */
+/** Columns before the daily block: name … stock_on_hand. */
 const COL_STOCK_ON_HAND = 5;
 const COL_DAYS_START = 6;
-const COL_DAYS_END = 37; // exclusive — day 31 sits at index 36
-const COL_TOTAL_DISPENSED = 37;
-const COL_STOCK_REMAINING = 38;
-const COL_CATEGORY = 39;
-const COL_SUPPLIER = 40;
+/** Columns after the daily block that every template width carries. */
+const SUFFIX_COLUMNS = 4; // total_dispensed, stock_remaining, category, supplier
+/** Appended by migration 0012 — present only in the 43-column shape. */
+const PACK_COLUMNS = 2; // pack_qty, pack_unit
+
+/**
+ * The template header for a month of `daysInMonth` days (28–31).
+ *
+ * Exported so the exporter and the importer cannot disagree about the shape:
+ * both derive their columns from this one function rather than from a pair of
+ * hand-maintained constants (pack-size D26).
+ */
+export function buildInventoryTemplateHeaders(daysInMonth: number): string[] {
+  const days = Array.from({ length: daysInMonth }, (_, index) =>
+    String(index + 1)
+  );
+  return [
+    "name",
+    "strength_value",
+    "strength_unit",
+    "form",
+    "pack_size",
+    "stock_on_hand",
+    ...days,
+    "total_dispensed",
+    "stock_remaining",
+    "category",
+    "supplier",
+    "pack_qty",
+    "pack_unit",
+  ];
+}
+
+/** The 31-day, 43-column template — the widest month and the legacy shape. */
+export const INVENTORY_TEMPLATE_HEADERS = buildInventoryTemplateHeaders(31);
+
+/** The 31-day, 41-column shape a build before migration 0012 wrote. */
+export const LEGACY_TEMPLATE_HEADERS = INVENTORY_TEMPLATE_HEADERS.slice(
+  0,
+  INVENTORY_TEMPLATE_HEADERS.length - PACK_COLUMNS
+);
+
+/**
+ * The positional shape of one file, derived from its header row.
+ *
+ * `days` is the number of day columns actually present (28–31); `hasPack` says
+ * whether the trailing pack pair is there. Every index below is computed, so a
+ * 30-day file is read where a 31-day file is, without a second set of constants.
+ */
+export interface TemplateLayout {
+  category: number;
+  columnCount: number;
+  days: number;
+  hasPack: boolean;
+  packQty: number;
+  packUnit: number;
+  stockRemaining: number;
+  supplier: number;
+  totalDispensed: number;
+}
+
+function layoutFrom(days: number, hasPack: boolean): TemplateLayout {
+  const totalDispensed = COL_DAYS_START + days;
+  return {
+    category: totalDispensed + 2,
+    columnCount: totalDispensed + SUFFIX_COLUMNS + (hasPack ? PACK_COLUMNS : 0),
+    days,
+    hasPack,
+    packQty: totalDispensed + 4,
+    packUnit: totalDispensed + 5,
+    stockRemaining: totalDispensed + 1,
+    supplier: totalDispensed + 3,
+    totalDispensed,
+  };
+}
+
+/** Fallback used only when the header is unrecognisable — the legacy 31-day read. */
+const DEFAULT_LAYOUT = layoutFrom(31, true);
+
+/** Reads the layout from a header row, or `null` when it is not a template. */
+function detectLayout(headerCells: string[]): TemplateLayout | null {
+  const totalDispensed = headerCells.indexOf("total_dispensed");
+  if (totalDispensed < 0) {
+    return null;
+  }
+  const days = totalDispensed - COL_DAYS_START;
+  if (days < DAYS_MIN || days > DAYS_MAX) {
+    return null;
+  }
+  if (headerCells.length === totalDispensed + SUFFIX_COLUMNS) {
+    return layoutFrom(days, false);
+  }
+  if (headerCells.length === totalDispensed + SUFFIX_COLUMNS + PACK_COLUMNS) {
+    return layoutFrom(days, true);
+  }
+  return null;
+}
 
 /** First integer in a free-text cell — "440 (April)" → 440, "14a" → 14. */
 const INTEGER = /-?\d+/;
 const LINE_BREAK = /\r?\n/;
-
-export const INVENTORY_TEMPLATE_HEADERS = [
-  "name",
-  "strength_value",
-  "strength_unit",
-  "form",
-  "pack_size",
-  "stock_on_hand",
-  "1",
-  "2",
-  "3",
-  "4",
-  "5",
-  "6",
-  "7",
-  "8",
-  "9",
-  "10",
-  "11",
-  "12",
-  "13",
-  "14",
-  "15",
-  "16",
-  "17",
-  "18",
-  "19",
-  "20",
-  "21",
-  "22",
-  "23",
-  "24",
-  "25",
-  "26",
-  "27",
-  "28",
-  "29",
-  "30",
-  "31",
-  "total_dispensed",
-  "stock_remaining",
-  "category",
-  "supplier",
-] as const;
 
 // Forgiving RFC4180 line splitter — handles quoted commas and trims whitespace per cell
 function splitCsvLine(line: string): string[] {
@@ -204,20 +264,27 @@ export function assembleDisplayName(
   });
 }
 
-/** Header echo vs the template contract (spec 5.1 #3). */
-function isTemplateHeader(headerCells: string[]): boolean {
-  if (headerCells.length !== INVENTORY_TEMPLATE_HEADERS.length) {
-    return false;
-  }
-  return INVENTORY_TEMPLATE_HEADERS.every(
-    (header, index) => cellAt(headerCells, index) === header
+/** Header echo vs the template contract for the detected layout (spec 5.1 #3). */
+function isTemplateHeader(
+  headerCells: string[],
+  layout: TemplateLayout
+): boolean {
+  const expected = buildInventoryTemplateHeaders(layout.days);
+  return (
+    headerCells.length === layout.columnCount &&
+    headerCells.every((cell, index) => cell === expected[index])
   );
 }
 
-function collectHeaderWarnings(
+/**
+ * Validates the header, pushes any warnings, and returns the layout the rest of
+ * the file is read with. An unrecognisable header keeps the legacy 31-day read so
+ * a malformed file still yields rows and warnings rather than nothing.
+ */
+function resolveLayout(
   headerCells: string[],
   warnings: ImportWarning[]
-): void {
+): TemplateLayout {
   if (cellAt(headerCells, 0).toLowerCase() !== "name") {
     warnings.push({
       coerced: null,
@@ -227,69 +294,68 @@ function collectHeaderWarnings(
       row: 1,
     });
   }
-  if (headerCells.length !== EXPECTED_COLUMNS) {
+  const layout = detectLayout(headerCells);
+  if (!layout) {
     warnings.push({
       coerced: null,
       column: "header",
       raw: String(headerCells.length),
-      reason: `header column count ${headerCells.length} != ${EXPECTED_COLUMNS}`,
+      reason: `header column count ${headerCells.length} does not match a supported template (${DAYS_MIN}–${DAYS_MAX} day columns, optionally followed by pack_qty and pack_unit)`,
       row: 1,
     });
+    return DEFAULT_LAYOUT;
   }
-  if (isTemplateHeader(headerCells)) {
-    return;
-  }
-  // A wrong width already produced its own warning above; only a same-width
-  // mismatch (wrong labels or wrong order) needs the detailed one.
-  if (headerCells.length === EXPECTED_COLUMNS) {
+  if (!isTemplateHeader(headerCells, layout)) {
     warnings.push({
       coerced: null,
       column: "header",
       raw: headerCells.join(","),
-      reason: `header mismatch: expected ${INVENTORY_TEMPLATE_HEADERS.join(",")}`,
+      reason: `header mismatch: expected ${buildInventoryTemplateHeaders(layout.days).join(",")}`,
       row: 1,
     });
   }
+  return layout;
 }
 
 /** Pad short rows and truncate long ones, so column reads stay positional. */
 function normalizeCells(
   cells: string[],
   rowNum: number,
-  warnings: ImportWarning[]
+  warnings: ImportWarning[],
+  layout: TemplateLayout
 ): string[] {
-  if (cells.length < EXPECTED_COLUMNS) {
+  if (cells.length < layout.columnCount) {
     const padded = [...cells];
-    while (padded.length < EXPECTED_COLUMNS) {
+    while (padded.length < layout.columnCount) {
       padded.push("");
     }
     return padded;
   }
-  if (cells.length > EXPECTED_COLUMNS) {
+  if (cells.length > layout.columnCount) {
     warnings.push({
       coerced: null,
       column: "row",
       raw: String(cells.length),
-      reason: `column count ${cells.length} > ${EXPECTED_COLUMNS} truncated`,
+      reason: `column count ${cells.length} > ${layout.columnCount} truncated`,
       row: rowNum,
     });
-    return cells.slice(0, EXPECTED_COLUMNS);
+    return cells.slice(0, layout.columnCount);
   }
   return cells;
 }
 
 /** True when nothing outside the name/dosage columns holds data (spec 6). */
-function isRestAllBlank(cells: string[]): boolean {
+function isRestAllBlank(cells: string[], layout: TemplateLayout): boolean {
   const dailyBlank = cells
-    .slice(COL_DAYS_START, COL_DAYS_END)
+    .slice(COL_DAYS_START, layout.totalDispensed)
     .every((cell) => cell.trim() === "");
   return (
     dailyBlank &&
     cellAt(cells, COL_STOCK_ON_HAND).trim() === "" &&
-    cellAt(cells, COL_TOTAL_DISPENSED).trim() === "" &&
-    cellAt(cells, COL_STOCK_REMAINING).trim() === "" &&
-    cellAt(cells, COL_CATEGORY).trim() === "" &&
-    cellAt(cells, COL_SUPPLIER).trim() === ""
+    cellAt(cells, layout.totalDispensed).trim() === "" &&
+    cellAt(cells, layout.stockRemaining).trim() === "" &&
+    cellAt(cells, layout.category).trim() === "" &&
+    cellAt(cells, layout.supplier).trim() === ""
   );
 }
 
@@ -341,7 +407,8 @@ function parseRow(
   cells: string[],
   line: string,
   rowNum: number,
-  warnings: ImportWarning[]
+  warnings: ImportWarning[],
+  layout: TemplateLayout
 ): ParsedInventoryRow | null {
   const name = cellAt(cells, 0).trim();
   const strengthValue = cellAt(cells, 1).trim();
@@ -359,7 +426,7 @@ function parseRow(
   const decision = classifyRow(
     name,
     normalizeText(`${strengthValue} ${strengthUnit} ${form} ${packSize}`),
-    isRestAllBlank(cells)
+    isRestAllBlank(cells, layout)
   );
   if (!decision.keep) {
     if (decision.reason) {
@@ -387,14 +454,14 @@ function parseRow(
   }
 
   const daily: number[] = [];
-  for (let day = 1; day <= 31; day += 1) {
+  for (let day = 1; day <= layout.days; day += 1) {
     // stock_on_hand sits at column 5, so day 1 is the next cell
     const cell = cells[COL_STOCK_ON_HAND + day];
     daily.push(coerceDailyCell(cell ?? "", rowNum, day, warnings));
   }
   const dailySum = daily.reduce((a, b) => a + b, 0);
 
-  const rawTotalDispensed = cellAt(cells, COL_TOTAL_DISPENSED);
+  const rawTotalDispensed = cellAt(cells, layout.totalDispensed);
   const totalDispensed = coerceIntCell(
     rawTotalDispensed,
     rowNum,
@@ -405,7 +472,7 @@ function parseRow(
     dropBlankCellWarning(warnings, rowNum, "total_dispensed");
   }
 
-  const rawStockRemaining = cellAt(cells, COL_STOCK_REMAINING);
+  const rawStockRemaining = cellAt(cells, layout.stockRemaining);
   const stockRemaining = coerceIntCell(
     rawStockRemaining,
     rowNum,
@@ -416,8 +483,31 @@ function parseRow(
     dropBlankCellWarning(warnings, rowNum, "stock_remaining");
   }
 
-  const category = cellAt(cells, COL_CATEGORY).trim() || null;
-  const supplier = cellAt(cells, COL_SUPPLIER).trim() || null;
+  const category = cellAt(cells, layout.category).trim() || null;
+  const supplier = cellAt(cells, layout.supplier).trim() || null;
+
+  // The appended pack pair (43-column files only). A unit outside the shared
+  // vocabulary is folded to blank with a warning rather than rejected (V6).
+  const rawPackQty = cellAt(cells, layout.packQty).trim();
+  const packQty =
+    rawPackQty === ""
+      ? null
+      : coerceIntCell(rawPackQty, rowNum, "pack_qty", warnings);
+  if (rawPackQty.trim() === "") {
+    dropBlankCellWarning(warnings, rowNum, "pack_qty");
+  }
+  const rawPackUnit = cellAt(cells, layout.packUnit).trim();
+  let packUnit = rawPackUnit.toLowerCase();
+  if (packUnit !== "" && !PACK_UNITS.includes(packUnit as never)) {
+    warnings.push({
+      coerced: null,
+      column: "pack_unit",
+      raw: rawPackUnit,
+      reason: `unknown pack unit “${rawPackUnit}” ignored`,
+      row: rowNum,
+    });
+    packUnit = "";
+  }
 
   let totalMismatch = false;
   if (totalDispensed !== null && totalDispensed !== dailySum) {
@@ -435,18 +525,17 @@ function parseRow(
     category,
     daily,
     dailySum,
-    detailsIncomplete: isDetailsIncomplete({
-      form,
-      packSize,
-      strengthUnit,
-      strengthValue,
-    }),
+    detailsIncomplete:
+      isDetailsIncomplete({ form, packSize, strengthUnit, strengthValue }) ||
+      isPackIncomplete({ form, packQty: packQty ?? 0, packUnit }),
     displayName,
     form,
     // The strict template has no NO STOCK text: blank/0 stock always means qty 0.
     isNoStock: false,
     name,
+    packQty,
     packSize,
+    packUnit,
     row: rowNum,
     stockOnHand,
     stockRemaining,
@@ -481,7 +570,7 @@ export function parseInventoryCsv(
     };
   }
 
-  collectHeaderWarnings(splitCsvLine(rawLines[0]), warnings);
+  const layout = resolveLayout(splitCsvLine(rawLines[0]), warnings);
 
   for (let lineIdx = 1; lineIdx < rawLines.length; lineIdx += 1) {
     const line = rawLines[lineIdx];
@@ -492,10 +581,11 @@ export function parseInventoryCsv(
     }
 
     const row = parseRow(
-      normalizeCells(splitCsvLine(line), rowNum, warnings),
+      normalizeCells(splitCsvLine(line), rowNum, warnings, layout),
       line,
       rowNum,
-      warnings
+      warnings,
+      layout
     );
     if (row === null) {
       skippedEmptyRows += 1;

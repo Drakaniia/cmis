@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as DocsRouteImport } from './routes/docs'
 import { Route as InventoryRouteImport } from './routes/inventory'
 import { Route as AdminIndexRouteImport } from './routes/admin.index'
+import { Route as AdminAnalyticsRouteImport } from './routes/admin.analytics'
 import { Route as AdminAuditRouteImport } from './routes/admin.audit'
 import { Route as AdminDataRouteImport } from './routes/admin.data'
 import { Route as AdminDispensingRouteImport } from './routes/admin.dispensing'
@@ -44,6 +45,11 @@ const InventoryRoute = InventoryRouteImport.update({
 const AdminIndexRoute = AdminIndexRouteImport.update({
   id: '/admin/',
   path: '/admin/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminAnalyticsRoute = AdminAnalyticsRouteImport.update({
+  id: '/admin/analytics',
+  path: '/admin/analytics',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminAuditRoute = AdminAuditRouteImport.update({
@@ -111,6 +117,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/docs': typeof DocsRoute
   '/inventory': typeof InventoryRoute
+  '/admin/analytics': typeof AdminAnalyticsRoute
   '/admin/audit': typeof AdminAuditRoute
   '/admin/data': typeof AdminDataRoute
   '/admin/dispensing': typeof AdminDispensingRoute
@@ -129,6 +136,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/docs': typeof DocsRoute
   '/inventory': typeof InventoryRoute
+  '/admin/analytics': typeof AdminAnalyticsRoute
   '/admin/audit': typeof AdminAuditRoute
   '/admin/data': typeof AdminDataRoute
   '/admin/dispensing': typeof AdminDispensingRoute
@@ -147,6 +155,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/docs': typeof DocsRoute
   '/inventory': typeof InventoryRoute
+  '/admin/analytics': typeof AdminAnalyticsRoute
   '/admin/audit': typeof AdminAuditRoute
   '/admin/data': typeof AdminDataRoute
   '/admin/dispensing': typeof AdminDispensingRoute
@@ -167,6 +176,7 @@ export interface FileRouteTypes {
     | '/'
     | '/docs'
     | '/inventory'
+    | '/admin/analytics'
     | '/admin/audit'
     | '/admin/data'
     | '/admin/dispensing'
@@ -185,6 +195,7 @@ export interface FileRouteTypes {
     | '/'
     | '/docs'
     | '/inventory'
+    | '/admin/analytics'
     | '/admin/audit'
     | '/admin/data'
     | '/admin/dispensing'
@@ -202,6 +213,7 @@ export interface FileRouteTypes {
     | '/'
     | '/docs'
     | '/inventory'
+    | '/admin/analytics'
     | '/admin/audit'
     | '/admin/data'
     | '/admin/dispensing'
@@ -221,6 +233,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   DocsRoute: typeof DocsRoute
   InventoryRoute: typeof InventoryRoute
+  AdminAnalyticsRoute: typeof AdminAnalyticsRoute
   AdminAuditRoute: typeof AdminAuditRoute
   AdminDataRoute: typeof AdminDataRoute
   AdminDispensingRoute: typeof AdminDispensingRoute
@@ -260,6 +273,13 @@ declare module '@tanstack/react-router' {
       path: '/admin'
       fullPath: '/admin/'
       preLoaderRoute: typeof AdminIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/analytics': {
+      id: '/admin/analytics'
+      path: '/admin/analytics'
+      fullPath: '/admin/analytics'
+      preLoaderRoute: typeof AdminAnalyticsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin/audit': {
@@ -371,6 +391,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   DocsRoute: DocsRoute,
   InventoryRoute: InventoryRoute,
+  AdminAnalyticsRoute: AdminAnalyticsRoute,
   AdminAuditRoute: AdminAuditRoute,
   AdminDataRoute: AdminDataRoute,
   AdminDispensingRoute: AdminDispensingRoute,

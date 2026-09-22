@@ -106,6 +106,14 @@ export interface RequestItem {
   /** Medicine + strength, matching the inventory item name verbatim */
   medicine: string;
   notes: InternalNote[];
+  /**
+   * The linked item's base unit and pack pair, joined in at load time so a
+   * pack-worded request renders `2 box (20 sachet)` (pack-size F8). Absent when
+   * the request has no item link or the item has no usable pack.
+   */
+  baseUnit?: string;
+  packQty?: number;
+  packUnit?: string;
   qty: number;
   /** Viewer's stated reason for the request */
   reason: string;
@@ -202,6 +210,29 @@ export function dispensedTotal(item: RequestItem): number {
  */
 export function isPartiallyDispensed(item: RequestItem): boolean {
   return item.dispensingRecords.length > 0 && item.status === "ready";
+}
+
+/**
+ * The request's quantity as written, with the base-unit equivalent when it was
+ * written in packs: `2 box (20 sachet)`. A base-unit or unknown-unit request
+ * reads exactly as it was typed (pack-size F8/G4).
+ *
+ * The as-written unit leads here — unlike `describeQuantity`, which is base-first
+ * for the shelf views — because a card is the operator's promise and the pack is
+ * what they wrote down.
+ */
+export function requestQuantityLabel(item: RequestItem): string {
+  const unit = item.unit.trim();
+  const packQty = item.packQty ?? 0;
+  const packUnit = item.packUnit ?? "";
+  if (
+    packQty > 1 &&
+    packUnit !== "" &&
+    unit.toLowerCase() === packUnit.toLowerCase()
+  ) {
+    return `${item.qty} ${packUnit} (${item.qty * packQty} ${item.baseUnit ?? "unit"})`;
+  }
+  return unit === "" ? String(item.qty) : `${item.qty} ${unit}`;
 }
 
 /** "Walk-in" whenever the requestor is anonymous (D2/D23 stores blank strings). */

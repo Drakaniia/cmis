@@ -15,6 +15,7 @@
 // The plugin exports its class as the default; the dynamic import below pulls
 // the same shape at runtime so the module stays inert on the web.
 import type Database from "@tauri-apps/plugin-sql";
+import { baseUnitFor } from "@/features/inventory/domain/pack-size";
 import type {
   DenyReason,
   DispensingRecord,
@@ -54,6 +55,10 @@ interface RequestRow {
   /** Added by migration 0009; absent on a build that has not run it yet. */
   item_id?: string | null;
   medicine: string;
+  /** Joined pack context, for the mixed render `2 box (20 sachet)` (F8). */
+  pack_form?: string | null;
+  pack_qty?: number | null;
+  pack_unit?: string | null;
   qty: number;
   reason: string;
   requestor_email: string;
@@ -123,6 +128,28 @@ function toDenyReason(value: string | null): DenyReason | undefined {
 }
 
 /**
+ * The joined pack pair, attached only when it is usable for a conversion so the
+ * render helper falls back to the request's own text for an unpacked item
+ * (pack-size F1 `hasPack`).
+ */
+function packContextOf(row: RequestRow): {
+  baseUnit?: string;
+  packQty?: number;
+  packUnit?: string;
+} {
+  const packQty = row.pack_qty ?? 0;
+  const packUnit = (row.pack_unit ?? "").trim();
+  if (packQty <= 1 || packUnit === "") {
+    return {};
+  }
+  return {
+    baseUnit: baseUnitFor({ form: row.pack_form ?? "" }),
+    packQty,
+    packUnit,
+  };
+}
+
+/**
  * Unknown stored values fall back to `queue`, the column default — a value this
  * build does not know about must never be read as a quick deduction.
  */
@@ -188,6 +215,7 @@ function assemble(
       ...(row.item_id ? { itemId: row.item_id } : { itemId: null }),
       medicine: row.medicine,
       notes: notesByRequest.get(row.id) ?? [],
+      ...packContextOf(row),
       qty: row.qty,
       reason: row.reason,
       requestor,
@@ -324,7 +352,15 @@ export async function loadRequests(): Promise<RequestItem[] | null> {
   }
   try {
     const [rows, history, notes, dispensing] = await Promise.all([
-      db.select<RequestRow[]>("SELECT * FROM requests"),
+      db.select<RequestRow[]>(
+        // The pack pair is joined in so the board can render `2 box (20 sachet)`
+        // without a second query per card (pack-size F8). A request with no
+        // `item_id` (pre-0009) simply gets nulls and falls back to its text.
+        `SELECT requests.*, inventory_items.form AS pack_form,
+                inventory_items.pack_qty AS pack_qty, inventory_items.pack_unit AS pack_unit
+           FROM requests
+           LEFT JOIN inventory_items ON inventory_items.id = requests.item_id`
+      ),
       db.select<HistoryRow[]>("SELECT * FROM request_history"),
       db.select<NoteRow[]>("SELECT * FROM request_notes"),
       db.select<DispensingRow[]>("SELECT * FROM dispensing_records"),

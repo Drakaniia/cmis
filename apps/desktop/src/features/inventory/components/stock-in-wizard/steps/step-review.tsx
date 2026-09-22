@@ -1,4 +1,6 @@
+import { draftHasPack, packSizeTextOf } from "../../../creation/draft";
 import { expiryLabel } from "../../../domain/expiry";
+import { describeQuantity } from "../../../domain/pack-size";
 import { composeDisplayName } from "../../../domain/strength";
 import type { StockInDraft } from "../types";
 
@@ -11,14 +13,26 @@ export function StepReview({
 }) {
   // The review shows the composed label rather than the raw parts, so the
   // operator sees the medication the way the lists and the dispense lookup will
-  // read it back (decision 18).
+  // read it back (decision 18). The pack text is derived from the pair, exactly
+  // as the write does (D24), so the label here cannot differ from the stored one.
   const label = composeDisplayName({
     form: draft.form,
     name: draft.name || draft.identifier,
-    packSize: draft.packSize,
+    packSize: packSizeTextOf(draft),
     strengthUnit: draft.strengthUnit,
     strengthValue: draft.strengthValue,
   });
+  // `draft.qty` is base units (F4), so a delivery typed as `5 box` reads back as
+  // the mixed form: the shelf's number leads and the pack follows (G4, D11).
+  const packItem = {
+    form: draft.form,
+    packQty: draft.packQty,
+    packUnit: draft.packUnit,
+  };
+  const qtyLabel = draft.qty > 0 ? describeQuantity(draft.qty, packItem) : "—";
+  const packNote = draftHasPack(draft)
+    ? `One pack holds ${draft.packQty} ${draft.packUnit} — the quantity above is stored in base units.`
+    : "No pack size recorded for this item — quantities are in base units.";
   return (
     <div className="space-y-3">
       <h3 className="font-semibold text-foreground text-sm">
@@ -38,7 +52,7 @@ export function StepReview({
             <p className="font-medium">{draft.batch || "—"}</p>
             <p className="text-caption">
               Expiry: {draft.expiry ? expiryLabel(draft.expiry) : "—"} · Qty:{" "}
-              {draft.qty || "—"}
+              {qtyLabel}
             </p>
           </div>
         </div>
@@ -48,6 +62,7 @@ export function StepReview({
           </p>
         ) : null}
       </div>
+      <p className="text-caption text-muted-foreground">{packNote}</p>
       <p className="text-caption text-muted-foreground">
         Confirm enables only if all steps valid — currently{" "}
         {allValid ? "valid ✓" : "fix errors above"}

@@ -14,7 +14,8 @@ export const DOCS_TOC_ITEMS: DocsTocItem[] = [
   { id: "low-stock-alerts", title: "Low-Stock Alerts" },
   { id: "request-queue", title: "Request Queue" },
   { id: "dispensing-log", title: "Dispensing Log" },
-  { id: "reports-analytics", title: "Reports & Analytics" },
+  { id: "stock-report", title: "Stock Report" },
+  { id: "analytics", title: "Analytics" },
   { id: "still-stuck", title: "Still stuck?" },
 ];
 

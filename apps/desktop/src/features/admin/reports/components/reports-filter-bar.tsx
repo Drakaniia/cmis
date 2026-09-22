@@ -1,123 +1,121 @@
 import { Button } from "@cmis/ui/components/button";
 import { cn } from "@cmis/ui/lib/utils";
-import { Download, FileDown, Upload } from "lucide-react";
-import { motion, useReducedMotion } from "motion/react";
-import { type ChangeEvent, useCallback, useRef } from "react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  Download,
+  FileDown,
+  Printer,
+} from "lucide-react";
+import { useCallback } from "react";
 
 import { CategoryPicker } from "@/features/inventory/components/category-picker";
-import { densitySpring } from "@/lib/motion";
-import type { ReportsPreset } from "../types";
-
-const PRESETS: { label: string; value: ReportsPreset }[] = [
-  { label: "7D", value: "7d" },
-  { label: "30D", value: "30d" },
-  { label: "90D", value: "90d" },
-  { label: "1Y", value: "1y" },
-];
 
 /**
- * §4 — Segmented pill selector with spring layout animation.
- * Active pill uses layoutId spring for fluid sliding indicator (Apple §3).
- * §1 — Press feedback on every pill (scale 0.97 on pointerdown).
- * §14 — Reduced motion: no spring layout, instant swap.
+ * The Stock Report's sticky bar: a month stepper, the shared category picker,
+ * Print, and Export. The three toolbar actions the old page carried are gone
+ * (F1, D28); the document leaves through the system print dialog (Phase 1) and a
+ * native PDF (Phase 2), while Export writes the importable inventory workbook
+ * (spec stock-report-export E8).
+ *
+ * §12 Heavy translucent material — content scrolls under it. Every control
+ * carries `press-feedback` (§1).
  */
-function PresetButton({
-  active,
-  label,
-  onSelect,
-  value,
+function MonthStepper({
+  isCurrentMonth,
+  monthLabel,
+  onCurrentMonth,
+  onStepBack,
+  onStepForward,
 }: {
-  active: boolean;
-  label: string;
-  onSelect: (preset: ReportsPreset) => void;
-  value: ReportsPreset;
+  isCurrentMonth: boolean;
+  monthLabel: string;
+  onCurrentMonth: () => void;
+  onStepBack: () => void;
+  onStepForward: () => void;
 }) {
-  const reduceMotion = useReducedMotion();
-  const handleClick = useCallback(() => onSelect(value), [onSelect, value]);
-
   return (
-    <button
-      aria-pressed={active}
-      className={cn(
-        "press-feedback relative z-10 rounded-full border px-3 py-1 font-medium text-xs transition-colors",
-        active
-          ? "border-primary text-primary-foreground"
-          : "border-border bg-card text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+    <div className="flex items-center gap-1.5">
+      <span className="mr-1 hidden font-semibold text-[11px] text-muted-foreground/70 uppercase tracking-[0.06em] sm:inline">
+        Month
+      </span>
+      <div className="flex items-center rounded-md border border-input bg-background">
+        <button
+          aria-label="Previous month"
+          className="press-feedback flex size-7 items-center justify-center rounded-l-md text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+          onClick={onStepBack}
+          type="button"
+        >
+          <ChevronLeft aria-hidden className="size-3.5" />
+        </button>
+        <span
+          aria-live="polite"
+          className="min-w-[130px] px-1 text-center font-medium text-xs tabular-nums"
+        >
+          {monthLabel}
+        </span>
+        <button
+          aria-label="Next month"
+          className="press-feedback flex size-7 items-center justify-center rounded-r-md text-muted-foreground hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-40"
+          disabled={isCurrentMonth}
+          onClick={onStepForward}
+          type="button"
+        >
+          <ChevronRight aria-hidden className="size-3.5" />
+        </button>
+      </div>
+      {isCurrentMonth ? null : (
+        <button
+          className="press-feedback rounded-md px-2 py-1 font-medium text-muted-foreground text-xs hover:bg-accent hover:text-accent-foreground"
+          onClick={onCurrentMonth}
+          type="button"
+        >
+          Current month
+        </button>
       )}
-      onClick={handleClick}
-      type="button"
-    >
-      {active ? (
-        <motion.span
-          aria-hidden
-          className="absolute inset-0 rounded-full bg-primary shadow-sm"
-          layoutId="reports-date-pill"
-          transition={reduceMotion ? { duration: 0 } : densitySpring}
-        />
-      ) : null}
-      <span className="relative">{label}</span>
-    </button>
+    </div>
   );
 }
 
-/**
- * CMIS-UI-07 §2 + Apple §12 — sticky, translucent filter bar.
- *
- * Apple Design:
- * §12 — Heavy translucent material: backdrop-blur 16px, saturate 180%.
- *        Content scrolls *under* it. Material weight = structural (heavy).
- * §8  — Button hierarchy: Import/Export CSV are outline (secondary),
- *        Export PDF is ghost (tertiary). Import has Upload icon for clarity.
- * §1  — All buttons have instant press feedback (scale 0.97).
- * §4  — Pill selector uses spring layout animation for fluid selection.
- * §14 — Reduced motion: no spring layout, instant pill swap.
- * §15 — Filter labels use small tracking for legibility.
- */
 export function ReportsFilterBar({
+  canExport,
+  canPrint,
+  canSavePdf,
   category,
-  hasData,
+  isCurrentMonth,
+  isSavingPdf,
+  monthLabel,
   onCategoryChange,
-  onExportCsv,
-  onExportPdf,
-  onPresetChange,
-  preset,
+  onCurrentMonth,
+  onExport,
+  onPrint,
+  onSavePdf,
+  onStepBack,
+  onStepForward,
 }: {
+  canExport: boolean;
+  canPrint: boolean;
+  canSavePdf: boolean;
   category: string;
-  hasData: boolean;
-  onCategoryChange: (c: string) => void;
-  onExportCsv: () => void;
-  onExportPdf: () => void;
-  onPresetChange: (p: ReportsPreset) => void;
-  preset: ReportsPreset;
+  isCurrentMonth: boolean;
+  isSavingPdf: boolean;
+  monthLabel: string;
+  onCategoryChange: (category: string) => void;
+  onCurrentMonth: () => void;
+  onExport: () => void;
+  onPrint: () => void;
+  onSavePdf: () => void;
+  onStepBack: () => void;
+  onStepForward: () => void;
 }) {
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const handleImportClick = useCallback(() => {
-    fileInputRef.current?.click();
-  }, []);
-
-  const handleImportFile = useCallback(
-    (event: ChangeEvent<HTMLInputElement>) => {
-      const file = event.target.files?.[0];
-      if (!file) {
-        return;
-      }
-      // Reset so the same file can be re-selected
-      event.target.value = "";
-      // Import logic would go here — for now, show a toast placeholder
-      import("sonner").then(({ toast }) => {
-        toast.success(`Imported: ${file.name}`, {
-          description: `${(file.size / 1024).toFixed(1)} KB`,
-        });
-      });
-    },
-    []
-  );
+  const handlePrint = useCallback(() => onPrint(), [onPrint]);
+  const handleExport = useCallback(() => onExport(), [onExport]);
+  const handleSavePdf = useCallback(() => onSavePdf(), [onSavePdf]);
 
   return (
     <div
       className={cn(
-        "sticky top-0 z-10",
+        "sticky top-0 z-10 print:hidden",
         /* §12 Heavy translucent material — structural layer */
         "border-border/50 border-b",
         "bg-background/60 backdrop-blur-[16px] backdrop-saturate-[180%]",
@@ -130,30 +128,21 @@ export function ReportsFilterBar({
       }
     >
       <div className="flex flex-wrap items-center gap-2 px-3 py-2.5 sm:px-4">
-        {/* §4 Date presets — spring pill selector */}
-        <fieldset aria-label="Date range" className="flex items-center gap-1.5">
-          <span className="mr-1 hidden font-semibold text-[11px] text-muted-foreground/70 uppercase tracking-[0.06em] sm:inline">
-            Range
-          </span>
-          {PRESETS.map((p) => (
-            <PresetButton
-              active={preset === p.value}
-              key={p.value}
-              label={p.label}
-              onSelect={onPresetChange}
-              value={p.value}
-            />
-          ))}
-        </fieldset>
+        <MonthStepper
+          isCurrentMonth={isCurrentMonth}
+          monthLabel={monthLabel}
+          onCurrentMonth={onCurrentMonth}
+          onStepBack={onStepBack}
+          onStepForward={onStepForward}
+        />
 
         <div aria-hidden className="hidden h-5 w-px bg-border/60 sm:block" />
 
-        {/* Category */}
         <div className="flex items-center gap-1.5">
           <span className="hidden font-semibold text-[11px] text-muted-foreground/70 uppercase tracking-[0.06em] sm:inline">
             Category
           </span>
-          {/* The shared picker: reports filter by the same list the forms
+          {/* The shared picker: the report filters by the same list the forms
               write to, and one can be added or renamed from here. */}
           <CategoryPicker
             allLabel="All categories"
@@ -165,47 +154,36 @@ export function ReportsFilterBar({
           />
         </div>
 
-        {/* §8 Action buttons — Import (outline, secondary), Export CSV (outline, secondary),
-         * Export PDF (ghost, tertiary). Hierarchy through visual weight. */}
         <div className="ml-auto flex items-center gap-1.5">
-          {/* Hidden file input for import */}
-          <input
-            accept=".csv,.xlsx,.xls"
-            aria-hidden="true"
-            className="hidden"
-            onChange={handleImportFile}
-            ref={fileInputRef}
-            tabIndex={-1}
-            type="file"
-          />
           <Button
             className="press-feedback"
-            onClick={handleImportClick}
-            size="sm"
-            variant="outline"
-          >
-            <Upload aria-hidden className="size-3.5" />
-            Import
-          </Button>
-          <Button
-            className="press-feedback"
-            disabled={!hasData}
-            onClick={onExportCsv}
+            disabled={!canExport}
+            onClick={handleExport}
             size="sm"
             variant="outline"
           >
             <Download aria-hidden className="size-3.5" />
-            Export CSV
+            Export
           </Button>
           <Button
             className="press-feedback"
-            disabled={!hasData}
-            onClick={onExportPdf}
+            disabled={!canPrint}
+            onClick={handlePrint}
             size="sm"
-            variant="ghost"
+            variant="outline"
+          >
+            <Printer aria-hidden className="size-3.5" />
+            Print
+          </Button>
+          <Button
+            className="press-feedback"
+            disabled={!canSavePdf || isSavingPdf}
+            onClick={handleSavePdf}
+            size="sm"
+            variant="outline"
           >
             <FileDown aria-hidden className="size-3.5" />
-            Export PDF
+            {isSavingPdf ? "Saving…" : "Save as PDF"}
           </Button>
         </div>
       </div>

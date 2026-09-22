@@ -28,6 +28,7 @@
 import { getOperatorName } from "@/features/admin/audit/operator";
 import { recordAudit } from "@/features/admin/audit/write-audit";
 import { planDeduct } from "@/features/inventory/domain/deduct-plan";
+import { describeQuantity } from "@/features/inventory/domain/pack-size";
 import {
   decrementBatch,
   recordDispensing,
@@ -51,6 +52,10 @@ export interface DeductPlan {
    */
   missingBatch: boolean;
   onHand: number;
+  /** The item's pack multiple, for the mixed render `20 sachet (2 box)`. */
+  packQty: number;
+  /** The item's pack container, e.g. `box`. Blank when no usable pack. */
+  packUnit: string;
   /** Quantity that stays on the card, still in Ready to Claim. */
   remaining: number;
   requested: number;
@@ -80,7 +85,7 @@ export interface DeductOptions {
 }
 
 export interface DeductError {
-  code: "no-batch" | "no-inventory-item" | "short";
+  code: "no-batch" | "no-inventory-item" | "pack-unknown" | "short";
   message: string;
 }
 
@@ -145,16 +150,29 @@ export async function planDeduction(
     };
   }
 
-  // The refusal wording and the FEFO split are the planner's, so an item that
-  // cannot be dispensed is refused in the same words wherever it is asked about.
+  // The chosen unit could not be placed (a pack-worded request on an item with
+  // no usable pack, or a unit that is neither base nor pack): refuse rather than
+  // treat a box as a single (pack-size F5, D10, E4/E5). Nothing is written.
+  if (check.state === "pack-unknown") {
+    return {
+      error: {
+        code: "pack-unknown",
+        message: `This item has no pack size recorded, so ${qty} ${unit} cannot be converted. Dispense in ${check.baseUnit} instead, or set the pack size in Inventory.`,
+      },
+      ok: false,
+    };
+  }
+
+  // Everything past this point is **base units**: the request's own unit was
+  // converted by the stock check before planning (D9).
   const outcome = planDeduct({
     allowMissingBatch: options.allowMissingBatch ?? false,
     allowPartial: options.allowPartial ?? true,
     batchCount: check.batchCount,
     onHand: check.onHand,
     options: check.options,
-    requested: qty,
-    unit,
+    requested: check.baseQty,
+    unit: check.baseUnit,
   });
 
   if (!outcome.ok) {
@@ -173,11 +191,13 @@ export async function planDeduction(
       medicine,
       missingBatch: outcome.plan.missingBatch,
       onHand: check.onHand,
+      packQty: check.packQty,
+      packUnit: check.packUnit,
       remaining: outcome.plan.remaining,
-      requested: qty,
+      requested: check.baseQty,
       take: outcome.plan.take,
       threshold: check.threshold,
-      unit,
+      unit: check.baseUnit,
     },
   };
 }
@@ -280,6 +300,13 @@ export async function deductStock(
   ].join(", ");
   const batchNote =
     batchLabel === "" ? "no batch on record" : `batch ${batchLabel}`;
+  // Mixed wording — `20 sachet (2 box)` — so the audit trail reads in the unit
+  // the shelf counts in and the pack the operator handed over (F6/D11).
+  const quantityLabel = describeQuantity(plan.take, {
+    form: plan.unit,
+    packQty: plan.packQty,
+    packUnit: plan.packUnit,
+  });
 
   await recordAudit(
     db,
@@ -287,7 +314,7 @@ export async function deductStock(
       action: "stock-out",
       after: { qty: newQty, status: newStatus },
       before: { qty: plan.onHand },
-      detail: `${plan.medicine}: dispensed ${plan.take} ${plan.unit} on request ${request.id} (${batchNote}), ${newQty} left`,
+      detail: `${plan.medicine}: dispensed ${quantityLabel} on request ${request.id} (${batchNote}), ${newQty} left`,
       requestRef: request.id,
       targetId: plan.itemId,
       targetKind: "item",

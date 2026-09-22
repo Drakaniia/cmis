@@ -23,23 +23,8 @@ import { LowStockList } from "./low-stock-list";
 import { ReorderSheet } from "./reorder-sheet";
 import { StockDetailModal } from "./stock-detail-modal";
 import { StockInWizard } from "./stock-in-wizard/stock-in-wizard";
+import type { StockInDraft } from "./stock-in-wizard/types";
 import { StockOutWizard } from "./stock-out-wizard";
-
-interface WizardStockInDraft {
-  batch: string;
-  category: string;
-  expiry: string;
-  form: string;
-  isNew: boolean;
-  itemId: string | null;
-  name: string;
-  notes: string;
-  packSize: string;
-  qty: number;
-  strengthUnit: string;
-  strengthValue: string;
-  supplier: string | null;
-}
 
 interface WizardStockOutDraft {
   batch: string;
@@ -269,7 +254,7 @@ export function LowStockPage({
   }, [queryClient]);
 
   const handleStockInConfirm = useCallback(
-    (payload: WizardStockInDraft) => {
+    (payload: StockInDraft) => {
       if (payload.isNew || !payload.itemId) {
         (async () => {
           try {
@@ -290,7 +275,9 @@ export function LowStockPage({
           form: payload.form,
           identifier: payload.itemId ?? payload.name,
           name: payload.name,
+          packQty: payload.packQty,
           packSize: payload.packSize,
+          packUnit: payload.packUnit,
           qty: payload.qty,
           strengthUnit: payload.strengthUnit,
           strengthValue: payload.strengthValue,

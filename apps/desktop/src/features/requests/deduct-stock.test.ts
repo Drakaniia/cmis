@@ -144,8 +144,66 @@ describe("deductStock", () => {
       return;
     }
     expect(result.error.code).toBe("short");
-    expect(result.error.message).toBe("Only 10 tabs in stock.");
+    // The plan works in **base units** now (pack-size F6/D9): the request said
+    // `12 tabs`, the item counts in `tab`, so the refusal names the base unit.
+    expect(result.error.message).toBe("Only 10 tab in stock.");
     expect(db.tables.inventory_items[0]?.qty).toBe(10);
+    expect(db.tables.dispensing_events).toHaveLength(0);
+    expect(db.tables.audit_log).toHaveLength(0);
+  });
+
+  it("converts a box-wording request to base units before deducting (E1)", async () => {
+    seed({
+      inventory_batches: [batch({ qty: 100 })],
+      inventory_items: [
+        item({
+          form: "sachet",
+          pack_qty: 10,
+          pack_size: "(10/box)",
+          pack_unit: "box",
+          qty: 100,
+        }),
+      ],
+    });
+
+    const result = await deductStock({
+      id: "REQ-2026-0002",
+      medicine: "Paracetamol 500 mg",
+      qty: 2,
+      unit: "box",
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      return;
+    }
+    // 2 box × 10 = 20 sachets, and everything downstream is base units.
+    expect(result.plan.take).toBe(20);
+    expect(result.plan.unit).toBe("sachet");
+    expect(db.tables.inventory_items[0]?.qty).toBe(80);
+    expect(db.tables.dispensing_events[0]?.qty).toBe(20);
+  });
+
+  it("blocks a box-wording request when the pack is unusable, writing nothing (E4)", async () => {
+    seed({
+      inventory_batches: [batch({ qty: 100 })],
+      inventory_items: [item({ form: "tablet", pack_qty: 0, pack_unit: "", qty: 100 })],
+    });
+
+    const result = await deductStock({
+      id: "REQ-2026-0003",
+      medicine: "Paracetamol 500 mg",
+      qty: 2,
+      unit: "box",
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) {
+      return;
+    }
+    expect(result.error.code).toBe("pack-unknown");
+    expect(result.error.message).toContain("no pack size recorded");
+    expect(db.tables.inventory_items[0]?.qty).toBe(100);
     expect(db.tables.dispensing_events).toHaveLength(0);
     expect(db.tables.audit_log).toHaveLength(0);
   });

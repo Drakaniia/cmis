@@ -4,6 +4,7 @@ import { Download } from "lucide-react";
 import { useCallback, useState } from "react";
 import { toast } from "sonner";
 
+import { daysInMonth, monthKey } from "@/lib/month";
 import { invoke } from "@/lib/tauri";
 import { SettingsCard } from "../../settings/components/settings-card";
 import { useExportCounts } from "../hooks/use-export-counts";
@@ -133,7 +134,9 @@ export function ExportCard() {
             category: string | null;
             form: string | null;
             name: string;
+            pack_qty: number | null;
             pack_size: string | null;
+            pack_unit: string | null;
             stock_on_hand: number | null;
             stock_remaining: number | null;
             strength_unit: string | null;
@@ -143,12 +146,14 @@ export function ExportCard() {
             id: string;
           }[]
         >(
-          "SELECT id, name, strength_value, strength_unit, form, pack_size, stock_on_hand, total_dispensed, stock_remaining, category, supplier FROM inventory_items ORDER BY name"
+          "SELECT id, name, strength_value, strength_unit, form, pack_size, pack_qty, pack_unit, stock_on_hand, total_dispensed, stock_remaining, category, supplier FROM inventory_items ORDER BY name"
         )) as unknown as {
           category: string | null;
           form: string | null;
           name: string;
+          pack_qty: number | null;
           pack_size: string | null;
+          pack_unit: string | null;
           stock_on_hand: number | null;
           stock_remaining: number | null;
           strength_unit: string | null;
@@ -163,9 +168,14 @@ export function ExportCard() {
               "SELECT day, qty FROM dispensing_events WHERE item_id = ? ORDER BY day",
               [it.id]
             )) as unknown as { day: number; qty: number }[];
-            const daily = new Array(31).fill(0);
+            // The day columns follow the current month (stock-report-export
+            // E2/E13), so a 30-day month writes 30 not 31.
+            const daily = Array.from(
+              { length: daysInMonth(monthKey()) },
+              () => 0
+            );
             for (const e of events) {
-              if (e.day >= 1 && e.day <= 31) {
+              if (e.day >= 1 && e.day <= daily.length) {
                 daily[e.day - 1] = e.qty;
               }
             }
@@ -174,7 +184,9 @@ export function ExportCard() {
               daily,
               form: it.form ?? "",
               name: it.name,
+              packQty: it.pack_qty ?? null,
               packSize: it.pack_size ?? "",
+              packUnit: it.pack_unit ?? "",
               stockOnHand: it.stock_on_hand,
               stockRemaining: it.stock_remaining,
               strengthUnit: it.strength_unit ?? "",
@@ -185,7 +197,11 @@ export function ExportCard() {
           })
         );
         const stamp = new Date().toISOString().slice(0, 10);
-        downloadInventoryXlsx(rows, `cmis-export-${stamp}.xlsx`);
+        downloadInventoryXlsx(
+          rows,
+          `cmis-export-${stamp}.xlsx`,
+          daysInMonth(monthKey())
+        );
         webFallbackDone = true;
       } catch {
         // fallback toast below
@@ -243,8 +259,8 @@ export function ExportCard() {
         </div>
         {format === "xlsx" ? (
           <p className="mt-1.5 text-caption text-muted-foreground">
-            XLSX uses the 41-col Inventory Template — re-importable on any empty
-            DB.
+            XLSX uses the Inventory Template with this month's day columns —
+            re-importable on any empty DB.
           </p>
         ) : null}
       </fieldset>

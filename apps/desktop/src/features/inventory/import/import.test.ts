@@ -255,9 +255,11 @@ describe("importInventoryCsv", () => {
     );
     expect(invInsert).toBeDefined();
     const params = invInsert?.[1] as unknown[];
-    expect(params[10]).toBe(0);
-    // is_no_stock param index 16
-    expect(params[16]).toBe(1);
+    // The INSERT now also carries `pack_qty` and `pack_unit` after `pack_size`
+    // (migration 0012), so every later index shifts by two.
+    expect(params[12]).toBe(0);
+    // is_no_stock param index 18
+    expect(params[18]).toBe(1);
   });
 
   it("upserts by name+dosage preserving UUID/sku and updates category/supplier", async () => {
@@ -315,9 +317,9 @@ describe("importInventoryCsv", () => {
       String(c[0]).includes("INSERT INTO inventory_items")
     );
     const params = insert?.[1] as unknown[];
-    // The INSERT now carries the four strength columns and `display_name` ahead
-    // of `category`, which sits at index 17.
-    expect(params[17]).toBe("Analgesic");
+    // The INSERT carries the four strength columns, `display_name` and the pack
+    // pair ahead of `category`, which sits at index 19.
+    expect(params[19]).toBe("Analgesic");
   });
 
   it("creates backup table and keeps last 3", async () => {

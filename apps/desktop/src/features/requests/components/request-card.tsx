@@ -20,6 +20,7 @@ import {
   isPartiallyDispensed,
   QUICK_DEDUCT_LABEL,
   requestorLabel,
+  requestQuantityLabel,
   statusMetaOf,
 } from "../types";
 import { RequestCardMenu } from "./request-card-menu";
@@ -67,7 +68,7 @@ export function RequestCardContent({
 
       <span className="flex items-center gap-2 pr-7">
         <span className="text-caption text-muted-foreground">
-          {item.qty} {item.unit}
+          {requestQuantityLabel(item)}
         </span>
         <RequestStatusBadge status={item.status} />
         {item.source === "quick-deduct" ? (
@@ -248,7 +249,7 @@ export function RequestCard({
         </span>
       ) : null}
       <button
-        aria-label={`${who}, ${item.medicine}, ${item.qty} ${item.unit}, ${item.source === "quick-deduct" ? `${QUICK_DEDUCT_LABEL}, ` : ""}${meta.label}, requested ${time}. Alt+arrow keys move it between columns.`}
+        aria-label={`${who}, ${item.medicine}, ${requestQuantityLabel(item)}, ${item.source === "quick-deduct" ? `${QUICK_DEDUCT_LABEL}, ` : ""}${meta.label}, requested ${time}. Alt+arrow keys move it between columns.`}
         className="press-feedback block w-full cursor-grab touch-none rounded-xl text-left outline-none focus-visible:ring-2 focus-visible:ring-ring active:cursor-grabbing"
         data-drag-handle
         type="button"

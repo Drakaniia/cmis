@@ -79,7 +79,8 @@ export function DispensingSection() {
       />
       <DocsP>
         Totals, trends and category breakdowns live on{" "}
-        <DocsRoute to="/admin/reports">Reports &amp; Analytics</DocsRoute>.
+        <DocsRoute to="/admin/analytics">Analytics</DocsRoute>, and the current
+        shelf is on <DocsRoute to="/admin/reports">Stock Report</DocsRoute>.
       </DocsP>
     </DocsSection>
   );

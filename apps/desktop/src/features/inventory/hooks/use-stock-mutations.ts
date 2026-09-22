@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { recordAudit } from "@/features/admin/audit/write-audit";
 import { getDb } from "@/lib/db";
+import { isPackIncomplete, packSizeText } from "../domain/pack-size";
 import {
   composeDisplayName,
   isDetailsIncomplete,
@@ -97,9 +98,16 @@ export function useStockInMutation() {
       const db = await getDb();
       // Find item by sku or name match
       const rows = await db.select<
-        { id: string; qty: number; threshold: number }[]
+        {
+          id: string;
+          pack_qty: number | null;
+          pack_size: string | null;
+          pack_unit: string | null;
+          qty: number;
+          threshold: number;
+        }[]
       >(
-        "SELECT id, qty, threshold FROM inventory_items WHERE sku = ? OR lower(trim(name)) = lower(trim(?)) OR lower(trim(display_name)) = lower(trim(?)) LIMIT 1",
+        "SELECT id, qty, threshold, pack_qty, pack_unit, pack_size FROM inventory_items WHERE sku = ? OR lower(trim(name)) = lower(trim(?)) OR lower(trim(display_name)) = lower(trim(?)) LIMIT 1",
         [payload.identifier, payload.name, payload.name]
       );
       if (rows.length === 0) {
@@ -108,9 +116,26 @@ export function useStockInMutation() {
       const [item] = rows;
       const newQty = item.qty + payload.qty;
       const newStatus = deriveStatus(newQty, item.threshold);
+      // A caller that carries the pack pair overwrites it; one that does not
+      // leaves the item's existing pair alone rather than clearing it.
+      const packQty =
+        payload.packQty === undefined
+          ? (item.pack_qty ?? 0)
+          : payload.packQty === ""
+            ? 0
+            : payload.packQty;
+      const packUnit =
+        payload.packUnit === undefined
+          ? (item.pack_unit ?? "")
+          : payload.packUnit.trim();
+      const packParts = { packQty, packUnit };
+      const derivedPackText = packSizeText(packParts);
       const parts: StrengthParts = {
         form: payload.form,
-        packSize: payload.packSize,
+        packSize:
+          derivedPackText !== ""
+            ? derivedPackText
+            : payload.packSize.trim() || (item.pack_size ?? ""),
         strengthUnit: payload.strengthUnit,
         strengthValue: payload.strengthValue,
       };
@@ -138,6 +163,7 @@ export function useStockInMutation() {
       await db.execute(
         `UPDATE inventory_items SET qty = ?, status = ?, needs_batch = 0,
               strength_value = ?, strength_unit = ?, form = ?, pack_size = ?,
+              pack_qty = ?, pack_unit = ?,
               display_name = ?, dosage_missing = ?, updated_at = ?
          WHERE id = ?`,
         [
@@ -147,8 +173,13 @@ export function useStockInMutation() {
           parts.strengthUnit,
           parts.form,
           parts.packSize,
+          packQty,
+          packUnit,
           composeDisplayName({ ...parts, name: payload.name }),
-          isDetailsIncomplete(parts) ? 1 : 0,
+          isDetailsIncomplete(parts) ||
+          isPackIncomplete({ ...packParts, form: parts.form })
+            ? 1
+            : 0,
           nowIso(),
           item.id,
         ]

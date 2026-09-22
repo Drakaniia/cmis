@@ -80,8 +80,17 @@ export interface InventoryItem {
   id: string;
   /** The bare medication name; the strength lives in its own fields (§10). */
   name: string;
+  /**
+   * How many base units one pack holds, from the `pack_qty` column (pack-size
+   * spec D4). `0` means "not recorded", the same convention as the blank
+   * strings around it. Optional on the type so hand-built fixtures that predate
+   * the pair stay valid; `mapRowToItem` always supplies the real value.
+   */
+  packQty?: number;
   /** Pack size token, e.g. "10". May be blank. */
   packSize: string;
+  /** The container a pack multiple is counted in, e.g. `box`. May be blank. */
+  packUnit?: string;
   qty: number; // total across batches
   sku: string; // SKU-001
   status: InventoryStatus;
@@ -145,7 +154,14 @@ export interface StockInPayload {
   identifier: string; // SKU or barcode
   name: string;
   notes?: string;
+  /**
+   * The pack multiple this delivery also records on the item (pack-size F4/D12).
+   * Optional: a caller that predates the pack fields leaves the item's existing
+   * pair untouched rather than clearing it. `""` and `0` both mean "not set".
+   */
+  packQty?: number | "";
   packSize: string;
+  packUnit?: string;
   qty: number;
   strengthUnit: string;
   strengthValue: string;

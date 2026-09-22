@@ -2,6 +2,11 @@ import {
   hasStrengthColumns,
   identityKeysOf as identityKeysForParts,
 } from "../domain/identity";
+import {
+  hasPack,
+  type PackParts,
+  packSizeText,
+} from "../domain/pack-size";
 import { composeDisplayName } from "../domain/strength";
 
 /**
@@ -33,7 +38,14 @@ export interface ProductDraft {
   form: string;
   name: string;
   notes: string;
+  /**
+   * The structured pack multiple (pack-size spec F2). `""` means "not typed",
+   * which pairs with a blank `packUnit` = "no pack recorded". `packSize` stays
+   * as the rendered text and is **derived from the pair on write** (D24).
+   */
+  packQty: number | "";
   packSize: string;
+  packUnit: string;
   sku: string;
   strengthUnit: string;
   strengthValue: string;
@@ -94,7 +106,9 @@ export function newProductDraft(): ProductDraft {
     form: "",
     name: "",
     notes: "",
+    packQty: "",
     packSize: "",
+    packUnit: "",
     sku: "",
     strengthUnit: "",
     strengthValue: "",
@@ -133,6 +147,36 @@ export function thresholdOf(draft: ProductDraft): number {
 /** `name + strength + form + pack size`, the full display label (spec §5). */
 export function displayNameOf(input: IdentityInput): string {
   return composeDisplayName(input);
+}
+
+/** The pack pair a draft or form holds, in the shape `pack-size.ts` expects. */
+export function packPartsOf(draft: {
+  packQty: number | "";
+  packUnit: string;
+}): PackParts {
+  return { packQty: draft.packQty, packUnit: draft.packUnit };
+}
+
+/**
+ * The `pack_size` text a draft writes (D24): the pair's `10/box` when it is
+ * renderable, otherwise the operator's own text — which the backfill may have
+ * left, and which is kept so a row's identity never changes under a save.
+ */
+export function packSizeTextOf(draft: {
+  packQty: number | "";
+  packSize: string;
+  packUnit: string;
+}): string {
+  const derived = packSizeText(packPartsOf(draft));
+  return derived !== "" ? derived : draft.packSize.trim();
+}
+
+/** True when the draft records a usable pack multiple for arithmetic (F1). */
+export function draftHasPack(draft: {
+  packQty: number | "";
+  packUnit: string;
+}): boolean {
+  return hasPack(packPartsOf(draft));
 }
 
 function normalize(value: string): string {

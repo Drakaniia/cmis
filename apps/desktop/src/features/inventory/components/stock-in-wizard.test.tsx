@@ -4,6 +4,7 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useSettings } from "@/features/admin/settings/hooks/use-settings";
+import type { InventoryItem } from "../types";
 import { StockInWizard } from "./stock-in-wizard/stock-in-wizard";
 
 // The category dropdown owns the shared category list and its own popover; the
@@ -40,6 +41,66 @@ const mockedUseSettings = vi.mocked(useSettings);
  */
 function mockSettingsState(value: Record<string, unknown>) {
   return value as unknown as ReturnType<typeof useSettings>;
+}
+
+/** The fields the wizard reads off an existing item, with a usable pack. */
+function item(overrides: Partial<InventoryItem> = {}): InventoryItem {
+  return {
+    batches: [{ batch: "LOT-1", expiry: "2027-01-31", qty: 40, supplier: "" }],
+    category: "Antibiotic",
+    detailsIncomplete: false,
+    dispensingHistory: [],
+    displayName: "Acetylcysteine 600 mg sachet 10/box",
+    expiry: "2027-01-31",
+    form: "sachet",
+    id: "item-1",
+    name: "Acetylcysteine",
+    packQty: 10,
+    packSize: "10/box",
+    packUnit: "box",
+    qty: 40,
+    sku: "SKU-ACET",
+    status: "in",
+    strengthUnit: "mg",
+    strengthValue: "600",
+    supplier: "",
+    threshold: 20,
+    ...overrides,
+  };
+}
+
+/**
+ * Steps 1 → 3 for a brand new medicine: type an identifier, fill the details
+ * that block Next, then land on the batch step.
+ */
+async function reachBatchStep(
+  user: ReturnType<typeof userEvent.setup>,
+  opts: { category: string; form?: string; name: string }
+) {
+  await user.type(screen.getByPlaceholderText(/Scan barcode/i), "SKU-NEW");
+  await user.click(screen.getByRole("button", { name: /Next/i }));
+  await screen.findByText(/Step 2 — Item Details/i);
+  await user.type(
+    screen.getByPlaceholderText(/e\.g\., Paracetamol/i),
+    opts.name
+  );
+  if (opts.form) {
+    await user.selectOptions(screen.getByLabelText(/^Form$/i), opts.form);
+  }
+  await chooseCategory(user, opts.category);
+  await user.click(screen.getByRole("button", { name: /Next/i }));
+  await screen.findByText(/Step 3 — Batch Info/i);
+}
+
+/** Batch, expiry and a quantity — what step 3 needs before Next enables. */
+async function fillBatchStep(
+  user: ReturnType<typeof userEvent.setup>,
+  qty: string
+) {
+  await user.type(screen.getByPlaceholderText("B-2026-04"), "BATCH-PACK");
+  const expiryInput = screen.getByLabelText(/Expiry date/i) as HTMLInputElement;
+  await user.type(expiryInput, futureIso(10));
+  await user.type(screen.getByPlaceholderText("0"), qty);
 }
 
 function futureIso(days = 30): string {
@@ -284,5 +345,192 @@ describe("StockInWizard — supplier UI removed, still proceed without it", () =
     );
     // still disabled because category missing
     expect(screen.getByRole("button", { name: /Next/i })).toBeDisabled();
+  });
+});
+
+/**
+ * The pack pair on the details step (F3) and the quantity step's unit toggle
+ * (F4). Both exist so a delivery written as `5 box` is stored as 50 base units
+ * — the ×10 bug this spec was opened to fix — and so a person recording a new
+ * `10/box` item has somewhere to type the multiple at all.
+ */
+describe("StockInWizard — pack pair and pack-to-base conversion", () => {
+  it("collects the pack pair and derives the pack-size text (F3/D24)", async () => {
+    const onConfirm = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <StockInWizard
+        items={[]}
+        onConfirm={onConfirm}
+        onOpenChange={noop}
+        open
+      />
+    );
+
+    await user.type(screen.getByPlaceholderText(/Scan barcode/i), "SKU-NEW");
+    await user.click(screen.getByRole("button", { name: /Next/i }));
+    await screen.findByText(/Step 2 — Item Details/i);
+    await user.type(
+      screen.getByPlaceholderText(/e\.g\., Paracetamol/i),
+      "Cefalexin"
+    );
+    await chooseCategory(user, "Antibiotic");
+
+    await user.type(screen.getByLabelText(/Pack quantity/i), "10");
+    await user.selectOptions(screen.getByLabelText(/Pack unit/i), "box");
+
+    // The text field follows the pair rather than being typed beside it (F3).
+    const packSize = screen.getByLabelText(/Pack size/i) as HTMLInputElement;
+    expect(packSize.value).toBe("10/box");
+    expect(packSize.readOnly).toBe(true);
+    expect(
+      screen.getByText(/Reads as 10\/box, derived from the pair/i)
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /Next/i }));
+    await screen.findByText(/Step 3 — Batch Info/i);
+    await fillBatchStep(user, "20");
+    await user.click(screen.getByRole("button", { name: /Next/i }));
+    await screen.findByText(/Step 4 — Review/i);
+    await user.click(screen.getByRole("button", { name: /Confirm Stock In/i }));
+
+    expect(onConfirm).toHaveBeenCalledWith(
+      expect.objectContaining({ packQty: 10, packUnit: "box", qty: 20 })
+    );
+  });
+
+  it("stores a pack quantity as base units and shows the conversion (F4/D12)", async () => {
+    const onConfirm = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <StockInWizard
+        initialItemId="item-1"
+        items={[item()]}
+        onConfirm={onConfirm}
+        onOpenChange={noop}
+        open
+      />
+    );
+
+    // Step 1 is prefilled from the item, and step 2 prefills the pair with it too
+    // — an item that already records `10/box` must not look unpaired (F3).
+    await user.click(screen.getByRole("button", { name: /Next/i }));
+    await screen.findByText(/Step 2 — Item Details/i);
+    expect(
+      (screen.getByLabelText(/Pack quantity/i) as HTMLInputElement).value
+    ).toBe("10");
+    await user.click(screen.getByRole("button", { name: /Next/i }));
+    await screen.findByText(/Step 3 — Batch Info/i);
+
+    await user.type(screen.getByPlaceholderText("B-2026-04"), "BATCH-PACK");
+    const expiryInput = screen.getByLabelText(
+      /Expiry date/i
+    ) as HTMLInputElement;
+    await user.type(expiryInput, futureIso(10));
+    await user.type(screen.getByPlaceholderText("0"), "5");
+    // Base units by default: no conversion is happening, so nothing is claimed.
+    expect(screen.queryByText(/^= /)).toBeNull();
+
+    await user.click(screen.getByRole("button", { name: "box" }));
+    expect(await screen.findByText("= 50 sachet")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /Next/i }));
+    await screen.findByText(/Step 4 — Review/i);
+    // The review reads back the stored number first, with the pack it came from.
+    expect(screen.getByText(/50 sachet \(5 box\)/)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /Confirm Stock In/i }));
+
+    expect(onConfirm).toHaveBeenCalledWith(
+      expect.objectContaining({ qty: 50 })
+    );
+  });
+
+  it("offers only the base unit when the item records no usable pack (F4)", async () => {
+    const user = userEvent.setup();
+    render(
+      <StockInWizard items={[]} onConfirm={vi.fn()} onOpenChange={noop} open />
+    );
+
+    await reachBatchStep(user, {
+      category: "Analgesic",
+      form: "sachet",
+      name: "Ibuprofen",
+    });
+
+    expect(screen.getByRole("button", { name: "sachet" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "pack" })).toBeDisabled();
+    // The reason is shown, not just implied by a dead button.
+    expect(screen.getByText(/No pack size recorded/)).toBeInTheDocument();
+  });
+
+  it("blocks Next when a pack unit has no multiple, and says why (V1/V2)", async () => {
+    const user = userEvent.setup();
+    render(
+      <StockInWizard items={[]} onConfirm={vi.fn()} onOpenChange={noop} open />
+    );
+
+    await user.type(screen.getByPlaceholderText(/Scan barcode/i), "SKU-NEW");
+    await user.click(screen.getByRole("button", { name: /Next/i }));
+    await screen.findByText(/Step 2 — Item Details/i);
+    await user.type(
+      screen.getByPlaceholderText(/e\.g\., Paracetamol/i),
+      "Cefalexin"
+    );
+    await chooseCategory(user, "Antibiotic");
+    await user.selectOptions(screen.getByLabelText(/Pack unit/i), "box");
+
+    expect(
+      screen.getByText(/Enter how many base units one pack holds/i)
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Next/i })).toBeDisabled();
+  });
+
+  it("resets the pack pair when the wizard is pointed at another item", async () => {
+    const packed = item();
+    const bare = item({
+      id: "item-2",
+      name: "Ibuprofen",
+      packQty: 0,
+      packSize: "",
+      packUnit: "",
+      sku: "SKU-IBU",
+    });
+    const items: InventoryItem[] = [packed, bare];
+    const user = userEvent.setup();
+    const { rerender } = render(
+      <StockInWizard
+        initialItemId="item-1"
+        items={items}
+        onConfirm={vi.fn()}
+        onOpenChange={noop}
+        open
+      />
+    );
+
+    await user.click(screen.getByRole("button", { name: /Next/i }));
+    await screen.findByText(/Step 2 — Item Details/i);
+    expect(
+      (screen.getByLabelText(/Pack quantity/i) as HTMLInputElement).value
+    ).toBe("10");
+
+    rerender(
+      <StockInWizard
+        initialItemId="item-2"
+        items={items}
+        onConfirm={vi.fn()}
+        onOpenChange={noop}
+        open
+      />
+    );
+
+    // A second delivery must not inherit the last one's multiple.
+    await user.click(screen.getByRole("button", { name: /Next/i }));
+    await screen.findByText(/Step 2 — Item Details/i);
+    expect(
+      (screen.getByLabelText(/Pack quantity/i) as HTMLInputElement).value
+    ).toBe("");
+    expect(
+      (screen.getByLabelText(/Pack unit/i) as HTMLSelectElement).value
+    ).toBe("");
   });
 });

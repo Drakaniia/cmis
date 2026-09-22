@@ -19,7 +19,10 @@ interface InventoryRow {
   is_no_stock: number;
   name: string;
   needs_batch: number;
+  /** Present from migration 0012; absent on a database that predates it. */
+  pack_qty: number | null;
   pack_size: string | null;
+  pack_unit: string | null;
   qty: number;
   sku: string;
   status: string;
@@ -84,7 +87,12 @@ function mapRowToItem(row: InventoryRow, batches: BatchRow[]): InventoryItem {
     // The bare name: the list renders `composeListLabel` and the detail header
     // renders `displayName`, so nothing needs the two glued together here.
     name,
+    // The pack pair (migration 0012) drives the pack parenthetical in
+    // `describeQuantity`; a database from before that migration reads `null`
+    // and the rendering falls back to base units.
+    packQty: row.pack_qty ?? 0,
     packSize: row.pack_size ?? "",
+    packUnit: row.pack_unit ?? "",
     qty: row.qty,
     sku: row.sku,
     status: row.status as InventoryItem["status"],

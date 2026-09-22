@@ -12,6 +12,7 @@ import {
   BarChart3,
   ClipboardCheck,
   ClipboardList,
+  FileText,
   LayoutDashboard,
   type LucideIcon,
   Package,
@@ -117,11 +118,18 @@ const ROUTE_ITEMS: RouteCommandEntry[] = [
     to: "/admin/dispensing",
   },
   {
-    icon: BarChart3,
+    icon: FileText,
     kind: "route",
-    label: "Reports & Analytics",
+    label: "Stock Report",
     section: "Reports",
     to: "/admin/reports",
+  },
+  {
+    icon: BarChart3,
+    kind: "route",
+    label: "Analytics",
+    section: "Reports",
+    to: "/admin/analytics",
   },
   {
     icon: Settings,
