@@ -46,6 +46,7 @@ describe("parseImportDiff", () => {
     const diff = parseImportDiff("backup.db", "binary-ish");
     // Invented counts on a destructive confirm are worse than no counts.
     expect(diff.counts).toEqual({ deletes: 0, inserts: 0, updates: 0 });
-    expect(diff.warnings.join(" ")).toContain("nothing is written");
+    expect(diff.warnings.join(" ")).toContain("writes nothing");
+    expect(diff.warnings.join(" ")).toContain("Settings → Backup");
   });
 });
