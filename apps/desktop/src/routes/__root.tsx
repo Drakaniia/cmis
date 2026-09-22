@@ -13,6 +13,8 @@ import { AppSidebar } from "@/components/app-sidebar";
 import Header from "@/components/header";
 import { ThemeProvider } from "@/components/theme-provider";
 import { TitleBar } from "@/components/titlebar";
+import { BackupWarningBanner } from "@/features/backup/components/backup-warning-banner";
+import { useDailyBackup } from "@/features/backup/hooks/use-daily-backup";
 import { DocsHeader } from "@/features/help/components/docs/docs-header";
 import { HelpDialogsProvider } from "@/features/help/help-dialogs-context";
 import { useFirstRunHint } from "@/features/help/use-first-run-hint";
@@ -238,6 +240,10 @@ function RootComponent() {
 
   useFirstRunHint({ enabled: !isDocsRoute });
 
+  // The daily backup runs after the UI is usable — never in `beforeLoad`
+  // (backup-restore spec D16/F1). Inert outside Tauri (browser preview).
+  useDailyBackup();
+
   return (
     <>
       <HeadContent />
@@ -265,6 +271,7 @@ function RootComponent() {
                 ) : (
                   <div className="flex h-svh flex-col overflow-hidden overflow-x-hidden">
                     <TitleBar onToggleSidebar={handleToggle} />
+                    <BackupWarningBanner />
                     <div className="flex flex-1 overflow-hidden overflow-x-hidden">
                       <AppSidebar
                         collapsed={sidebarCollapsed}
