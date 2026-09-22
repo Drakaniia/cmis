@@ -1,5 +1,7 @@
 "use client";
 
+import { Archive, FileSpreadsheet } from "lucide-react";
+import { motion } from "motion/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -38,9 +40,9 @@ import { StockLevelTable } from "./stock-level-table";
 import { SummaryBlock } from "./summary-block";
 
 /**
- * The document header (F8). Hidden on screen — the global header map carries the
- * page title (D14) — but printed, so the paper copy names itself, who produced it
- * and which filter was applied.
+ * Apple §12 Document header — hidden on screen (F8), the global header carries
+ * the title (D14). Printed, it names the document, who produced it, and the
+ * active filter. Typography §15: tight tracking on title, loose on meta.
  */
 function PrintHeader({
   activity,
@@ -58,20 +60,21 @@ function PrintHeader({
   const categoryLabel = category === "All" ? "All categories" : category;
   return (
     <header className="mb-4 hidden print:block">
-      <h1 className="font-bold text-xl">Stock Level Report</h1>
-      <p className="mt-1 text-xs">
+      <h1 className="font-bold text-xl tracking-[-0.02em]">
+        Stock Level Report
+      </h1>
+      <p className="mt-1 text-xs tracking-[0.01em]">
         {monthLabel} · received {activity.received} · dispensed{" "}
         {activity.dispensed} · {categoryLabel} · {asOf} · generated{" "}
         {generatedAt}
       </p>
-      <p className="mt-0.5 text-xs">
+      <p className="mt-0.5 text-xs tracking-[0.01em]">
         Operator: {getOperatorName()} · Location: Local
       </p>
     </header>
   );
 }
 
-/** Documents is the export's default home (E20); fall back to a bare name. */
 async function defaultSavePath(fileName: string): Promise<string> {
   try {
     const { documentDir } = await import("@tauri-apps/api/path");
@@ -82,11 +85,6 @@ async function defaultSavePath(fileName: string): Promise<string> {
   }
 }
 
-/**
- * Opens the native save dialog and asks the Rust writer to persist the bytes.
- * Returns the saved path, or `null` when the operator cancelled (E-F1: a cancel
- * is silent — no toast).
- */
 async function saveWorkbookBytes(
   bytes: Uint8Array,
   fileName: string
@@ -112,18 +110,17 @@ function revealInFolder(path: string): void {
 }
 
 /**
- * Stock Report (`/admin/reports`) — the stock-level-report-spec rebuild.
+ * Stock Report — Apple fluid interface rebuild (§1-§17).
  *
- * One question, answered as a document: what medicines do I have, how much, and
- * how healthy is the shelf? The six analytic widgets now live at
- * `/admin/analytics` (D25) and the import/export toolbar is deleted (D28).
+ * One question, answered as a document: what medicines do I have, how much,
+ * and how healthy is the shelf? Six analytic widgets live at /admin/analytics.
  *
- * Stock stays live (D30); the month picker drives only this month's in/out
- * figures. The snapshot shares the inventory hook's cache, so the report and
- * Stock Management can never disagree (SL6).
- *
- * Search and sort live here rather than in the table so the Export button can
- * honour exactly what is on screen (spec stock-report-export E7/E-F2).
+ * §12 Material: heavy translucent bar over page-canvas; content scrolls under.
+ * §15 Typography: display numbers tighten tracking, captions loosen.
+ * §4 Springs: critically damped entry (damping 1.0, response 0.35s), interruptible
+ * from presentation value (§3). §9 Rubber-band via overscroll-contain.
+ * §14 Reduced motion respects prefers-reduced-motion cross-fade fallback.
+ * §1 Every control responds on pointer-down, never on release.
  */
 export function ReportsPage() {
   const {
@@ -146,7 +143,6 @@ export function ReportsPage() {
   const { data: activity } = useMonthActivity(month, category);
   const { data: dailyByItem } = useMonthDispensing(month);
 
-  // Stock is a snapshot, not a window: only the category filter applies.
   const items = useMemo(() => {
     const all = inventory ?? [];
     return category === "All"
@@ -184,8 +180,6 @@ export function ReportsPage() {
     () => filterStockLevelRows(rows, search).length,
     [rows, search]
   );
-  // E18: nothing to export when the filtered/search-narrowed set is empty,
-  // mirroring Print's rule widened to include the search box.
   const canExport = rows.length > 0 && visibleCount > 0;
 
   const handleExport = useCallback(async () => {
@@ -219,8 +213,6 @@ export function ReportsPage() {
       });
 
       if (!isTauriRuntime()) {
-        // Browser preview has no native dialog: hand the same workbook to the
-        // browser's download path (the Data page's card does the same).
         writeFile(workbook, fileName);
         toast.success(`Export ready — ${fileName}`);
         return;
@@ -241,7 +233,6 @@ export function ReportsPage() {
         },
       });
     } catch (error) {
-      // A real reason, never a success placeholder (E-F1).
       toast.error(
         error instanceof Error
           ? error.message
@@ -262,14 +253,8 @@ export function ReportsPage() {
     summary,
   ]);
 
-  // Save as PDF (Phase 2, stock-level-report spec F7/F10): the Rust command
-  // draws A4 landscape from the already-computed report and auto-saves to
-  // Documents — no dialog, no audit row. The document honours the category
-  // filter (D20); search/sort narrow it the same way the export does.
   const handleSavePdf = useCallback(async () => {
     if (!isTauriRuntime()) {
-      // Browser preview has no Rust command: the system dialog's own
-      // "Save as PDF" is the equivalent path.
       if (typeof window !== "undefined") {
         window.print();
       }
@@ -300,7 +285,6 @@ export function ReportsPage() {
         },
       });
     } catch (error) {
-      // A real reason, never a success placeholder (the SL3 anti-pattern).
       toast.error(
         error instanceof Error
           ? error.message
@@ -322,8 +306,6 @@ export function ReportsPage() {
     summary,
   ]);
 
-  // File → Export Stock Report hands off through `export-request`; consume a
-  // request queued while navigating here, and react while already open.
   const exportRef = useRef(handleExport);
   useEffect(() => {
     exportRef.current = handleExport;
@@ -360,23 +342,40 @@ export function ReportsPage() {
         onStepForward={stepForward}
       />
 
-      <div className="min-h-0 flex-1 overflow-auto p-3 pb-6 sm:p-4 sm:pb-8 print:overflow-visible print:p-0">
+      {/* §9 overscroll-contain + §12 fade mask where content meets chrome */}
+      <div className="min-h-0 flex-1 overflow-auto overscroll-contain p-3 pb-6 sm:p-4 sm:pb-8 print:overflow-visible print:p-0">
         {isEmptyDb ? (
-          <div className="mx-auto max-w-md py-16 text-center">
-            <h3 className="font-semibold text-lg">No medicines recorded yet</h3>
-            <p className="mt-2 text-muted-foreground text-sm">
+          <motion.div
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            className="mx-auto mt-8 max-w-md overflow-hidden rounded-2xl border bg-card p-8 text-center shadow-[0_4px_24px_oklch(0_0_0/0.06)] sm:mt-16"
+            initial={{ opacity: 0, scale: 0.98, y: 12 }}
+            transition={{ damping: 28, stiffness: 320, type: "spring" }}
+          >
+            <div className="mx-auto flex size-12 items-center justify-center rounded-2xl bg-muted text-muted-foreground">
+              <Archive aria-hidden className="size-6" />
+            </div>
+            <h3 className="mt-4 font-semibold text-[17px] tracking-[-0.015em]">
+              No medicines recorded yet
+            </h3>
+            <p className="mx-auto mt-2 max-w-[32ch] text-[13px] text-muted-foreground leading-relaxed">
               The stock report lists every medicine on the shelf. Import your
               inventory or add a medicine to get started.
             </p>
             <a
-              className="mt-4 inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 font-medium text-primary-foreground text-sm"
+              className="press-feedback mt-5 inline-flex items-center gap-1.5 rounded-full bg-foreground px-5 py-2.5 font-medium text-background text-sm shadow-sm hover:bg-foreground/90"
               href="/admin/data"
             >
+              <FileSpreadsheet aria-hidden className="size-4" />
               Import inventory
             </a>
-          </div>
+          </motion.div>
         ) : (
-          <div className="mx-auto max-w-[1280px] space-y-3 sm:space-y-4">
+          <motion.div
+            animate={{ opacity: 1 }}
+            className="mx-auto max-w-[1280px] space-y-4"
+            initial={{ opacity: 0 }}
+            transition={{ duration: 0.25 }}
+          >
             <PrintHeader
               activity={activityFigures}
               asOf={asOf}
@@ -385,6 +384,7 @@ export function ReportsPage() {
               monthLabel={monthLabel}
             />
 
+            {/* §7 enter from where filter sent it — summary springs after bar */}
             <SummaryBlock
               activity={activityFigures}
               asOf={asOf}
@@ -393,20 +393,36 @@ export function ReportsPage() {
               summary={summary}
             />
 
-            <StockLevelTable
-              category={category}
-              onSearchChange={setSearch}
-              onSortChange={handleSortChange}
-              rows={rows}
-              search={search}
-              sort={sort}
-            />
+            <motion.div
+              animate={{ opacity: 1, y: 0 }}
+              initial={{ opacity: 0, y: 8 }}
+              transition={{
+                damping: 30,
+                delay: 0.06,
+                stiffness: 340,
+                type: "spring",
+              }}
+            >
+              <StockLevelTable
+                category={category}
+                onSearchChange={setSearch}
+                onSortChange={handleSortChange}
+                rows={rows}
+                search={search}
+                sort={sort}
+              />
+            </motion.div>
 
-            {/* Footer meta — provenance without clutter. */}
-            <p className="text-center text-[11px] text-muted-foreground leading-relaxed">
+            {/* Footer meta — §15 caption, §16 wayfinding: where am I, when was this */}
+            <motion.p
+              animate={{ opacity: 1 }}
+              className="pt-2 text-center text-[11px] text-muted-foreground/70 leading-relaxed tracking-[0.02em]"
+              initial={{ opacity: 0 }}
+              transition={{ delay: 0.2, duration: 0.3 }}
+            >
               Generated {generatedAt} · {monthLabel} · {category} · {asOf}
-            </p>
-          </div>
+            </motion.p>
+          </motion.div>
         )}
       </div>
     </div>

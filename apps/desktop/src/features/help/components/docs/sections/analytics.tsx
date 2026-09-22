@@ -47,8 +47,8 @@ export function AnalyticsSection() {
       <DocsP>
         Analytics turns the day-to-day record into answers: what is moving, what
         is sitting still, where the shortfalls are. Every card reads the same
-        filters, so the numbers on screen always agree with each other. The stock
-        report lives next door, at{" "}
+        filters, so the numbers on screen always agree with each other. The
+        stock report lives next door, at{" "}
         <DocsRoute to="/admin/reports">Stock Report</DocsRoute>.
       </DocsP>
 
@@ -81,16 +81,16 @@ export function AnalyticsSection() {
       </ul>
 
       <DocsCallout title="Empty chart? Check the period first" tone="tip">
-        A card with no movement in the selected range draws an empty state rather
-        than a flat line. Widen the date range before assuming something is
-        wrong.
+        A card with no movement in the selected range draws an empty state
+        rather than a flat line. Widen the date range before assuming something
+        is wrong.
       </DocsCallout>
       <DocsCallout title="Charts follow the records" tone="note">
         Analytics are built from the same data as{" "}
-        <span className="font-medium text-foreground">Stock Management</span> and
-        the{" "}
-        <span className="font-medium text-foreground">Dispensing Log</span>. If a
-        figure looks wrong, correct the underlying stock movement — the chart
+        <span className="font-medium text-foreground">Stock Management</span>{" "}
+        and the{" "}
+        <span className="font-medium text-foreground">Dispensing Log</span>. If
+        a figure looks wrong, correct the underlying stock movement — the chart
         will follow.
       </DocsCallout>
 

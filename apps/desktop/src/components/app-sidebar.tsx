@@ -355,20 +355,23 @@ export function AppSidebar({
               collapsed && brandHovered && "opacity-0"
             )}
           >
-            <img
-              alt="CMIS logo"
-              className="size-7 shrink-0 rounded-[0.5rem] dark:hidden"
-              height={28}
-              src="/cmis-dark-rounded.png"
-              width={28}
-            />
-            <img
-              alt="CMIS logo"
-              className="hidden size-7 shrink-0 rounded-[0.5rem] dark:block"
-              height={28}
-              src="/cmis-white-rounded.png"
-              width={28}
-            />
+            {/* Apple card style — same as splash (dark-theme apple style) — bg-card + transparent logo */}
+            <span className="flex size-7 shrink-0 items-center justify-center overflow-hidden rounded-[0.5rem] border bg-card p-[3px] shadow-sm">
+              <img
+                alt="CMIS logo"
+                className="size-[22px] object-contain dark:hidden"
+                height={22}
+                src="/cmis-dark-transparent.png"
+                width={22}
+              />
+              <img
+                alt="CMIS logo"
+                className="hidden size-[22px] object-contain dark:block"
+                height={22}
+                src="/cmis-white-transparent.png"
+                width={22}
+              />
+            </span>
           </div>
         </div>
         {/* Expand affordance — the mark morphs into it in place on hover. */}

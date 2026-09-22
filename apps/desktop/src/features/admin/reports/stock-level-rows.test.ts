@@ -78,7 +78,12 @@ describe("buildStockLevelRows", () => {
     const rows = buildStockLevelRows([
       item({
         batches: [
-          { batch: "B-1", expiry: farFuture.toISOString(), qty: 5, supplier: "S" },
+          {
+            batch: "B-1",
+            expiry: farFuture.toISOString(),
+            qty: 5,
+            supplier: "S",
+          },
         ],
         expiry: farFuture.toISOString(),
       }),

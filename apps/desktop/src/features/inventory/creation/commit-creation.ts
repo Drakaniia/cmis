@@ -8,9 +8,9 @@ import {
   batchQty,
   type CreationDraft,
   displayNameOf,
+  type ProductDraft,
   packPartsOf,
   packSizeTextOf,
-  type ProductDraft,
   thresholdOf,
 } from "./draft";
 import { insertRow, insertRows, type Row } from "./rows";

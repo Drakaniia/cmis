@@ -187,7 +187,9 @@ describe("deductStock", () => {
   it("blocks a box-wording request when the pack is unusable, writing nothing (E4)", async () => {
     seed({
       inventory_batches: [batch({ qty: 100 })],
-      inventory_items: [item({ form: "tablet", pack_qty: 0, pack_unit: "", qty: 100 })],
+      inventory_items: [
+        item({ form: "tablet", pack_qty: 0, pack_unit: "", qty: 100 }),
+      ],
     });
 
     const result = await deductStock({

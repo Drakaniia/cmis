@@ -109,7 +109,9 @@ it("imports the monthly workbook into the desktop database", async () => {
   log(`database : ${DB_PATH}`);
 
   if (!existsSync(WORKBOOK)) {
-    log(`skipped  : workbook not present — place clinic file at ${WORKBOOK} or set CMIS_WORKBOOK (data is imported, not tracked)`);
+    log(
+      `skipped  : workbook not present — place clinic file at ${WORKBOOK} or set CMIS_WORKBOOK (data is imported, not tracked)`
+    );
     return;
   }
   expect(

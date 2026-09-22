@@ -16,7 +16,9 @@ function sourceFiles(dir: string): string[] {
     .filter((entry) => entry.isFile())
     .map((entry) => join(entry.parentPath, entry.name))
     .filter((path) => [".ts", ".tsx"].includes(extname(path)))
-    .filter((path) => !path.endsWith(".test.ts") && !path.endsWith(".test.tsx"));
+    .filter(
+      (path) => !(path.endsWith(".test.ts") || path.endsWith(".test.tsx"))
+    );
 }
 
 describe("stock report guard", () => {

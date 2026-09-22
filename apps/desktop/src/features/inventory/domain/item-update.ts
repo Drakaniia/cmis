@@ -1,8 +1,8 @@
 import { deriveStatus } from "../import/inventory-status";
 import type { InventoryItem, InventoryStatus } from "../types";
-import { PACK_UNITS } from "./vocabulary";
 import { isPackIncomplete, packSizeText } from "./pack-size";
 import { composeDisplayName, isDetailsIncomplete } from "./strength";
+import { PACK_UNITS } from "./vocabulary";
 
 /**
  * Stock detail modal §10 — the rules behind the Edit form.
@@ -225,7 +225,7 @@ export function buildItemUpdate(
   const derivedText = packSizeText(packItem);
   const parts = {
     form: draft.form.trim(),
-    packSize: derivedText !== "" ? derivedText : draft.packSize.trim(),
+    packSize: derivedText === "" ? draft.packSize.trim() : derivedText,
     strengthUnit: draft.strengthUnit.trim(),
     strengthValue: draft.strengthValue.trim(),
   };

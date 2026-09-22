@@ -133,9 +133,9 @@ export function useStockInMutation() {
       const parts: StrengthParts = {
         form: payload.form,
         packSize:
-          derivedPackText !== ""
-            ? derivedPackText
-            : payload.packSize.trim() || (item.pack_size ?? ""),
+          derivedPackText === ""
+            ? payload.packSize.trim() || (item.pack_size ?? "")
+            : derivedPackText,
         strengthUnit: payload.strengthUnit,
         strengthValue: payload.strengthValue,
       };

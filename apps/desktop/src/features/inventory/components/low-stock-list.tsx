@@ -33,11 +33,7 @@ import {
 } from "react";
 import { densitySpring } from "@/lib/motion";
 import { getLeadTime, LOW_STOCK_STATUS_CONFIG } from "../domain/low-stock";
-import {
-  baseUnitFor,
-  describeQuantity,
-  packItemOf,
-} from "../domain/pack-size";
+import { baseUnitFor, describeQuantity, packItemOf } from "../domain/pack-size";
 import { composeListLabel } from "../domain/strength";
 import type { LowStockRow, LowStockSortKey } from "../types";
 import { StockDetailMenu } from "./stock-detail-menu";

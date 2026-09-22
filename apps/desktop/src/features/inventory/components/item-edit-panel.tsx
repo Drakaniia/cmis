@@ -1,7 +1,14 @@
 import { AppleDatePicker } from "@cmis/ui/components/apple-date-picker";
 import { Button } from "@cmis/ui/components/button";
 import { cn } from "@cmis/ui/lib/utils";
-import { type ChangeEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import {
+  type ChangeEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import { toast } from "sonner";
 import { recordAudit } from "@/features/admin/audit/write-audit";
 import { getDb } from "@/lib/db";
@@ -20,7 +27,6 @@ import {
   PACK_UNITS,
   STRENGTH_UNITS,
 } from "../domain/vocabulary";
-import { useQueryClient } from "@tanstack/react-query";
 import { useItemUpdateMutation } from "../hooks/use-item-update";
 import type { InventoryItem } from "../types";
 import { CategoryPicker } from "./category-picker";
@@ -155,7 +161,9 @@ export function ItemEditPanel({
 
   useEffect(() => {
     setDraft(draftFromItem(item));
-    setBatchExpiries(Object.fromEntries(item.batches.map((b) => [b.batch, b.expiry])));
+    setBatchExpiries(
+      Object.fromEntries(item.batches.map((b) => [b.batch, b.expiry]))
+    );
     setAttempted(false);
     setConfirmDiscard(false);
   }, [item]);
@@ -240,7 +248,10 @@ export function ItemEditPanel({
       return;
     }
     try {
-      await update.mutateAsync({ ...buildItemUpdate(item, draft), id: item.id });
+      await update.mutateAsync({
+        ...buildItemUpdate(item, draft),
+        id: item.id,
+      });
       const changedBatches = item.batches.filter(
         (b) => (batchExpiries[b.batch] ?? "") !== (b.expiry ?? "")
       );
@@ -257,10 +268,10 @@ export function ItemEditPanel({
             continue;
           }
           const previousExpiry = row.expiry ?? "";
-          await db.execute("UPDATE inventory_batches SET expiry = ? WHERE id = ?", [
-            newExpiry,
-            row.id,
-          ]);
+          await db.execute(
+            "UPDATE inventory_batches SET expiry = ? WHERE id = ?",
+            [newExpiry, row.id]
+          );
           await recordAudit(
             db,
             {
@@ -457,7 +468,7 @@ export function ItemEditPanel({
                           Qty {batch.qty}
                         </span>
                         {isChanged ? (
-                          <span className="text-[10px] font-medium text-[var(--warning)]">
+                          <span className="font-medium text-[10px] text-[var(--warning)]">
                             modified
                           </span>
                         ) : null}
@@ -470,7 +481,7 @@ export function ItemEditPanel({
                         value={current}
                       />
                       {isPast ? (
-                        <span className="text-caption text-[var(--warning)]">
+                        <span className="text-[var(--warning)] text-caption">
                           Warning: expiry is in the past (not blocked).
                         </span>
                       ) : null}

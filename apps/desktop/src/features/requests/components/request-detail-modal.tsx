@@ -35,8 +35,8 @@ import {
   dispensedTotal,
   isPartiallyDispensed,
   QUICK_DEDUCT_LABEL,
-  requestQuantityLabel,
   requestorLabel,
+  requestQuantityLabel,
   statusMetaOf,
 } from "../types";
 import { RequestStatusBadge } from "./request-status-badge";

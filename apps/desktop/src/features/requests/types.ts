@@ -79,6 +79,12 @@ export interface RequestItem {
    */
   archivedAt?: string | null;
   /**
+   * The linked item's base unit and pack pair, joined in at load time so a
+   * pack-worded request renders `2 box (20 sachet)` (pack-size F8). Absent when
+   * the request has no item link or the item has no usable pack.
+   */
+  baseUnit?: string;
+  /**
    * Manual order within the lane, 0-based, `0` = top (migration 0011). Lanes
    * sort by this, so a card stays where it was dropped across a restart.
    */
@@ -106,12 +112,6 @@ export interface RequestItem {
   /** Medicine + strength, matching the inventory item name verbatim */
   medicine: string;
   notes: InternalNote[];
-  /**
-   * The linked item's base unit and pack pair, joined in at load time so a
-   * pack-worded request renders `2 box (20 sachet)` (pack-size F8). Absent when
-   * the request has no item link or the item has no usable pack.
-   */
-  baseUnit?: string;
   packQty?: number;
   packUnit?: string;
   qty: number;

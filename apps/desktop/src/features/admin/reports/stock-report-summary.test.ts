@@ -46,9 +46,9 @@ describe("buildStockSummary", () => {
   it("returns zeros for an empty catalogue", () => {
     expect(buildStockSummary([])).toEqual({
       categories: 0,
+      expired: 0,
       expiringLater: 0,
       expiringSoon: 0,
-      expired: 0,
       low: 0,
       medicines: 0,
       out: 0,

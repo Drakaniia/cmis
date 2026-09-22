@@ -3,9 +3,9 @@ import { join } from "node:path";
 import { DatabaseSync, type SQLInputValue } from "node:sqlite";
 import { describe, expect, it } from "vitest";
 import { MIGRATIONS_DIR, REPO_ROOT } from "@/test/project-paths";
+import type { DbLike } from "../creation/db-like";
 import { importInventoryCsv } from "../import/import";
 import { inventoryXlsxToCsv } from "../import/xlsx-parser";
-import type { DbLike } from "../creation/db-like";
 import {
   backfillPackSizeFields,
   PACK_BACKFILL_META_KEY,
@@ -42,7 +42,9 @@ function adapter(raw: DatabaseSync): DbLike {
       return Promise.resolve(undefined);
     },
     select: <T>(sql: string, params: unknown[] = []) =>
-      Promise.resolve(raw.prepare(sql).all(...(params as SQLInputValue[])) as T),
+      Promise.resolve(
+        raw.prepare(sql).all(...(params as SQLInputValue[])) as T
+      ),
   };
 }
 
@@ -89,7 +91,11 @@ describe("backfillPackSizeFields", () => {
   it("pairs a named container wherever the group sits, leaving the text alone", async () => {
     const { db, raw } = openWith([
       { id: "1", name: "Acetylcysteine", packSize: "(10/box)" },
-      { id: "2", name: "Flavored Sachet", packSize: "Flavored Sachet (30/box)" },
+      {
+        id: "2",
+        name: "Flavored Sachet",
+        packSize: "Flavored Sachet (30/box)",
+      },
       // A blank form and text before the group — matched anywhere (D27, E22).
       { id: "3", name: "Tabs", packSize: "mg tab (30/box)" },
       { id: "4", name: "Bare", packSize: "(35/box)" },
@@ -110,9 +116,13 @@ describe("backfillPackSizeFields", () => {
     // The text is byte-identical: only the pair moved.
     for (const row of packRows(raw)) {
       expect(row.pack_size).toBe(
-        { "1": "(10/box)", "2": "Flavored Sachet (30/box)", "3": "mg tab (30/box)", "4": "(35/box)", "5": "(10/vial)" }[
-          row.id
-        ]
+        {
+          "1": "(10/box)",
+          "2": "Flavored Sachet (30/box)",
+          "3": "mg tab (30/box)",
+          "4": "(35/box)",
+          "5": "(10/vial)",
+        }[row.id]
       );
     }
   });
@@ -180,7 +190,9 @@ describe("backfillPackSizeFields", () => {
   });
 
   it("records the run-once flag and skips a later run without it", async () => {
-    const { db, raw } = openWith([{ id: "1", name: "Tabs", packSize: "(100/box)" }]);
+    const { db, raw } = openWith([
+      { id: "1", name: "Tabs", packSize: "(100/box)" },
+    ]);
 
     await backfillPackSizeFields(db, { force: true });
 
@@ -214,34 +226,37 @@ describe("backfillPackSizeFields", () => {
     expect(packRows(raw)).toEqual(first);
   });
 
-  it.skipIf(!HAS_WORKBOOK)("pins the reference workbook: 44 paired · 6 numbered · 15 unreadable · 20 blank", async () => {
-    const raw = new DatabaseSync(":memory:");
-    applyMigrations(raw);
-    const db = adapter(raw);
-    const csv = inventoryXlsxToCsv(new Uint8Array(readFileSync(WORKBOOK)));
-    await importInventoryCsv(csv as never, db as never, { month: MONTH });
+  it.skipIf(!HAS_WORKBOOK)(
+    "pins the reference workbook: 44 paired · 6 numbered · 15 unreadable · 20 blank",
+    async () => {
+      const raw = new DatabaseSync(":memory:");
+      applyMigrations(raw);
+      const db = adapter(raw);
+      const csv = inventoryXlsxToCsv(new Uint8Array(readFileSync(WORKBOOK)));
+      await importInventoryCsv(csv as never, db as never, { month: MONTH });
 
-    const before = packRows(raw);
+      const before = packRows(raw);
 
-    const report = await backfillPackSizeFields(db, { force: true });
+      const report = await backfillPackSizeFields(db, { force: true });
 
-    expect(report.paired).toBe(44);
-    expect(report.numbered).toHaveLength(6);
-    expect(report.unreadable).toHaveLength(15);
-    expect(report.blank).toBe(20);
+      expect(report.paired).toBe(44);
+      expect(report.numbered).toHaveLength(6);
+      expect(report.unreadable).toHaveLength(15);
+      expect(report.blank).toBe(20);
 
-    // Filling the pair changes no stored text, display name, SKU or identity.
-    const after = packRows(raw);
-    expect(after.map((row) => row.pack_size)).toEqual(
-      before.map((row) => row.pack_size)
-    );
-    expect(after.map((row) => row.display_name)).toEqual(
-      before.map((row) => row.display_name)
-    );
-    expect(after.map((row) => row.sku)).toEqual(before.map((row) => row.sku));
-    // Exactly the paired and numbered rows gained a number.
-    expect(after.filter((row) => row.pack_qty > 0)).toHaveLength(50);
+      // Filling the pair changes no stored text, display name, SKU or identity.
+      const after = packRows(raw);
+      expect(after.map((row) => row.pack_size)).toEqual(
+        before.map((row) => row.pack_size)
+      );
+      expect(after.map((row) => row.display_name)).toEqual(
+        before.map((row) => row.display_name)
+      );
+      expect(after.map((row) => row.sku)).toEqual(before.map((row) => row.sku));
+      // Exactly the paired and numbered rows gained a number.
+      expect(after.filter((row) => row.pack_qty > 0)).toHaveLength(50);
 
-    raw.close();
-  });
+      raw.close();
+    }
+  );
 });

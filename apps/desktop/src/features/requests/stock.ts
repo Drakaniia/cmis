@@ -24,7 +24,10 @@ import {
   MEDICINE_WHERE_SQL,
   medicineMatchParams,
 } from "@/features/inventory/domain/medicine-match";
-import { baseUnitFor, toBaseUnits } from "@/features/inventory/domain/pack-size";
+import {
+  baseUnitFor,
+  toBaseUnits,
+} from "@/features/inventory/domain/pack-size";
 import { getDb } from "@/lib/db";
 
 /**
@@ -57,15 +60,15 @@ export type StockState =
 
 export interface StockCheck {
   /**
-   * The item's base unit — the dose form (`sachet`, `tab`, …) every stock number
-   * is counted in (pack-size D5/D9). Empty when no item was resolved.
-   */
-  baseUnit: string;
-  /**
    * The requested quantity **converted to base units**, or `0` when the
    * conversion could not be made (`state: "pack-unknown"`).
    */
   baseQty: number;
+  /**
+   * The item's base unit — the dose form (`sachet`, `tab`, …) every stock number
+   * is counted in (pack-size D5/D9). Empty when no item was resolved.
+   */
+  baseUnit: string;
   /** Earliest-expiring single batch that covers the request outright, if any. */
   batch: BatchOption | null;
   /**
@@ -80,13 +83,13 @@ export interface StockCheck {
   onHand: number;
   /** FEFO order, expired and empty batches removed. */
   options: BatchOption[];
-  /** Quantity that would still be outstanding after taking `take`. */
-  remaining: number;
-  state: StockState;
   /** The item's pack multiple, for rendering `20 sachet (2 box)` (D11). */
   packQty: number;
   /** The item's pack container, e.g. `box`. Blank when no usable pack. */
   packUnit: string;
+  /** Quantity that would still be outstanding after taking `take`. */
+  remaining: number;
+  state: StockState;
   /** Quantity this hand-over would actually take (`min(qty, dispensable)`). */
   take: number;
   /** The item's low-stock threshold, for the standing a deduction leaves behind. */
@@ -190,8 +193,7 @@ export async function checkStockAsync(item: {
 }): Promise<StockCheck> {
   const db = await getDb();
   let inventoryItem: InventoryItemRow | null = null;
-  const columns =
-    "id, name, dosage, qty, threshold, form, pack_qty, pack_unit";
+  const columns = "id, name, dosage, qty, threshold, form, pack_qty, pack_unit";
   if (item.itemId) {
     const direct = await db.select<InventoryItemRow[]>(
       `SELECT ${columns} FROM inventory_items WHERE id = ? LIMIT 1`,

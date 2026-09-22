@@ -29,7 +29,8 @@
         "resizable": true,
         "fullscreen": false,
         "decorations": false,
-        "shadow": true
+        "shadow": true,
+        "backgroundColor": "#282828"
       }
     ],
     "security": {
