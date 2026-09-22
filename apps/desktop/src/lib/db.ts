@@ -45,6 +45,28 @@ export function resetDbForTesting(): void {
 }
 
 /**
+ * Close the SQL plugin connection before a whole-file restore swap
+ * (backup-restore spec F10.4). The plugin holds the live `cmis.db` open, so
+ * renaming over it with a live pool would fail or corrupt. Best-effort: a
+ * missing handle is already closed.
+ */
+export async function closeDb(): Promise<void> {
+  const pending = databasePromise;
+  databasePromise = null;
+  if (!pending) {
+    return;
+  }
+  try {
+    const db = await pending;
+    await (
+      db as unknown as { close?: (name?: string) => Promise<unknown> }
+    ).close?.();
+  } catch {
+    // already closed or never opened — the swap proceeds regardless
+  }
+}
+
+/**
  * Wipe order is FK-safe: children before parents.
  *
  * `requests` is the real table name: the previous `request_queue` was a label no
