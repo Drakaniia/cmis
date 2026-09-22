@@ -113,6 +113,10 @@ pub fn run() {
             commands::backup::create_backup,
             commands::backup::list_backups,
             commands::backup::prune_backups,
+            commands::backup::inspect_backup,
+            commands::backup::apply_restore,
+            commands::backup::stage_import_db,
+            commands::backup::consume_restore_journal,
             commands::reports::save_stock_report_workbook,
             commands::reports::generate_stock_report_pdf
         ])
@@ -124,6 +128,10 @@ pub fn run() {
                         .build(),
                 )?;
             }
+            // A killed backup leaves only a `.partial`, which must never look
+            // like a backup (backup-restore spec §7.5/F3). Sweep it before the
+            // window shows; best-effort, never fails the launch.
+            commands::backup::sweep_backup_partials(app.handle());
             #[cfg(target_os = "macos")]
             {
                 if let Err(e) = setup_native_menu(app.handle()) {
