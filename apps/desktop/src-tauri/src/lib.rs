@@ -111,6 +111,8 @@ pub fn run() {
             commands::backup::backup_default_dir,
             commands::backup::backup_live_db_path,
             commands::backup::create_backup,
+            commands::backup::list_backups,
+            commands::backup::prune_backups,
             commands::reports::save_stock_report_workbook,
             commands::reports::generate_stock_report_pdf
         ])
