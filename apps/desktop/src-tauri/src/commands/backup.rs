@@ -128,3 +128,76 @@ pub async fn create_backup(app: AppHandle, dest_path: String) -> Result<BackupFi
         .map_err(|error| format!("Could not publish {dest_path}: {error}"))?;
     file_info(&dest)
 }
+
+/// Every `cmis-*.db` in `dir`, newest first. `.partial` files, a hand-copied
+/// `cmis.db`, and anything not ending in `.db` are never listed.
+#[tauri::command]
+pub fn list_backups(dir: String) -> Result<Vec<BackupFileInfo>, String> {
+    let dir = std::path::PathBuf::from(&dir);
+    let entries =
+        std::fs::read_dir(&dir).map_err(|error| format!("Could not read {}: {error}", dir.display()))?;
+    let mut files = Vec::new();
+    for entry in entries {
+        let entry =
+            entry.map_err(|error| format!("Could not read {}: {error}", dir.display()))?;
+        let path = entry.path();
+        let name = path
+            .file_name()
+            .map(|name| name.to_string_lossy().to_string())
+            .unwrap_or_default();
+        if !name.starts_with("cmis-") || !name.ends_with(".db") {
+            continue;
+        }
+        if backup_kind(&name) == "other" {
+            continue;
+        }
+        files.push(file_info(&path)?);
+    }
+    files.sort_by(|a, b| b.name.cmp(&a.name));
+    Ok(files)
+}
+
+/// Delete `cmis-auto-*.db` files beyond the newest `keep`, then sweep stray
+/// `.partial` files. Only the app's own auto pattern is ever eligible;
+/// `cmis-manual-*.db` and foreign files are structurally invisible here.
+/// Best-effort: an undeletable file is skipped, never fatal. Returns the
+/// removed file names.
+#[tauri::command]
+pub fn prune_backups(dir: String, keep: u32) -> Result<Vec<String>, String> {
+    let dir = std::path::PathBuf::from(&dir);
+    let entries =
+        std::fs::read_dir(&dir).map_err(|error| format!("Could not read {}: {error}", dir.display()))?;
+    let mut auto: Vec<String> = Vec::new();
+    let mut partials: Vec<std::path::PathBuf> = Vec::new();
+    for entry in entries {
+        let entry =
+            entry.map_err(|error| format!("Could not read {}: {error}", dir.display()))?;
+        let path = entry.path();
+        let name = path
+            .file_name()
+            .map(|name| name.to_string_lossy().to_string())
+            .unwrap_or_default();
+        if name.ends_with(".partial") {
+            partials.push(path);
+        } else if backup_kind(&name) == "auto" {
+            auto.push(name);
+        }
+    }
+    auto.sort();
+    auto.reverse();
+    let keep = keep.max(1) as usize;
+    let mut removed = Vec::new();
+    for name in auto.into_iter().skip(keep) {
+        let path = dir.join(&name);
+        match std::fs::remove_file(&path) {
+            Ok(()) => removed.push(name),
+            Err(error) => log::warn!("Could not prune backup {name}: {error}"),
+        }
+    }
+    for path in partials {
+        if let Err(error) = std::fs::remove_file(&path) {
+            log::warn!("Could not sweep {}: {error}", path.display());
+        }
+    }
+    Ok(removed)
+}
