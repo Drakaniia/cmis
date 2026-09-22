@@ -110,6 +110,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::backup::backup_default_dir,
             commands::backup::backup_live_db_path,
+            commands::backup::create_backup,
             commands::reports::save_stock_report_workbook,
             commands::reports::generate_stock_report_pdf
         ])

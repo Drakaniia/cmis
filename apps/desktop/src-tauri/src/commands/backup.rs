@@ -74,3 +74,57 @@ pub fn backup_live_db_path(app: AppHandle) -> Result<String, String> {
         .map_err(|error| format!("Could not resolve the app data folder: {error}"))?;
     Ok(data.join("cmis.db").to_string_lossy().to_string())
 }
+
+/// Write a transactionally-consistent copy of the live database to `dest_path`.
+///
+/// The copy is produced by SQLite itself (`VACUUM INTO`), so it is valid even
+/// if a write was in flight — a plain file copy can capture a torn page set
+/// and miss the `-wal` sidecar. The copy goes to `<dest>.partial` first and is
+/// renamed into place only on success, so a killed process never leaves a file
+/// that looks like a backup. An existing `dest_path` is never overwritten.
+#[tauri::command]
+pub async fn create_backup(app: AppHandle, dest_path: String) -> Result<BackupFileInfo, String> {
+    use sqlx::sqlite::SqliteConnectOptions;
+    use std::str::FromStr;
+
+    let dest = std::path::PathBuf::from(&dest_path);
+    if dest.extension().is_none_or(|ext| ext != "db") {
+        return Err(format!(
+            "Refusing to write a backup to {dest_path}: not a .db path"
+        ));
+    }
+    if dest.exists() {
+        return Err(format!("Refusing to overwrite existing backup {dest_path}"));
+    }
+    if let Some(parent) = dest.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|error| format!("Could not create {}: {error}", parent.display()))?;
+    }
+    let live = std::path::PathBuf::from(backup_live_db_path(app)?);
+    if !live.exists() {
+        return Err(format!(
+            "Live database not found at {} — nothing to back up",
+            live.display()
+        ));
+    }
+    let partial = dest.with_extension("db.partial");
+    let _ = std::fs::remove_file(&partial);
+
+    let options =
+        SqliteConnectOptions::from_str(&format!("sqlite:{}?mode=rw", live.display()))
+            .map_err(|error| format!("Could not open the live database: {error}"))?
+            .busy_timeout(std::time::Duration::from_secs(10));
+    let pool = sqlx::SqlitePool::connect_with(options)
+        .await
+        .map_err(|error| format!("Could not open the live database: {error}"))?;
+    let target = partial.to_string_lossy().replace('\'', "''");
+    sqlx::query(&format!("VACUUM INTO '{target}'"))
+        .execute(&pool)
+        .await
+        .map_err(|error| format!("Consistent copy failed (nothing was written): {error}"))?;
+    pool.close().await;
+
+    std::fs::rename(&partial, &dest)
+        .map_err(|error| format!("Could not publish {dest_path}: {error}"))?;
+    file_info(&dest)
+}
