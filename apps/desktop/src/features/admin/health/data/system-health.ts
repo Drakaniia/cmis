@@ -104,7 +104,7 @@ export function buildBackupCard(backup?: BackupSummary): HealthCardData {
       statusLabel: "No backup yet",
     };
   }
-  const newest = backup.files[0];
+  const [newest] = backup.files;
   const totalBytes = backup.files.reduce((sum, file) => sum + file.size, 0);
   const date = new Date(newest.mtime * 1000).toLocaleDateString("en-US", {
     day: "numeric",
@@ -130,7 +130,7 @@ export function buildBackupCard(backup?: BackupSummary): HealthCardData {
 
 export async function loadSystemHealth(
   db: DbLike,
-  backup?: BackupSummary,
+  backup?: BackupSummary
 ): Promise<SystemHealth> {
   const since = `${dayKey(TREND_DAYS - 1)}T00:00:00.000Z`;
 

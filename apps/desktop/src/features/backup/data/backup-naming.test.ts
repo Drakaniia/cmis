@@ -20,7 +20,7 @@ describe("backup-naming", () => {
 
   it("names manual copies to the minute", () => {
     expect(manualBackupName(new Date(2026, 8, 22, 9, 14))).toBe(
-      "cmis-manual-2026-09-22-0914.db",
+      "cmis-manual-2026-09-22-0914.db"
     );
   });
 
@@ -28,8 +28,8 @@ describe("backup-naming", () => {
     expect(
       resolveCollision(
         ["cmis-manual-2026-09-22-0914.db"],
-        "cmis-manual-2026-09-22-0914.db",
-      ),
+        "cmis-manual-2026-09-22-0914.db"
+      )
     ).toBe("cmis-manual-2026-09-22-0914-2.db");
   });
 

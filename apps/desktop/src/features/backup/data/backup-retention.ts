@@ -4,7 +4,7 @@ import { isAutoBackupName } from "./backup-naming";
 export function selectPruneVictims(
   names: readonly string[],
   keep: number,
-  justWritten: string,
+  justWritten: string
 ): string[] {
   // `justWritten` counts toward the survivors (it is today's file, so it is
   // normally among the newest) but is never itself a victim: the filter runs

@@ -5,12 +5,16 @@ describe("backup-retention", () => {
   const names = (n: number) =>
     Array.from(
       { length: n },
-      (_, i) => `cmis-auto-2026-09-${String(i + 1).padStart(2, "0")}.db`,
+      (_, i) => `cmis-auto-2026-09-${String(i + 1).padStart(2, "0")}.db`
     );
 
   it("keeps the newest N automatic copies by name order", () => {
     expect(
-      selectPruneVictims([...names(12), "notes.db"], 10, "cmis-auto-2026-09-12.db"),
+      selectPruneVictims(
+        [...names(12), "notes.db"],
+        10,
+        "cmis-auto-2026-09-12.db"
+      )
     ).toEqual(["cmis-auto-2026-09-01.db", "cmis-auto-2026-09-02.db"]);
   });
 

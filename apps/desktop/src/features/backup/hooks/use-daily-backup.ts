@@ -1,5 +1,5 @@
-import { useCallback, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { useCallback, useEffect } from "react";
 import { recordAudit } from "@/features/admin/audit/write-audit";
 import { loadBackupStore, saveBackupStore } from "@/lib/backup-store";
 import { getDb } from "@/lib/db";
@@ -29,21 +29,21 @@ async function auditBackup(detail: string): Promise<void> {
         execute: (sql: string, params?: unknown[]) => Promise<unknown>;
       },
       { action: "settings", detail, targetKind: "settings" },
-      { bestEffort: true },
+      { bestEffort: true }
     );
   } catch {
     // best-effort: a backup that landed must not fail because its audit row did
   }
 }
 
-async function listToday(dir: string): Promise<BackupFileInfo[]> {
+function listToday(dir: string): Promise<BackupFileInfo[]> {
   return invoke<BackupFileInfo[]>("list_backups", { dir });
 }
 
 /** Adopt today's existing file (spec §7.4) or write it via `create_backup`. */
 async function ensureAutoBackup(
   dir: string,
-  today: string,
+  today: string
 ): Promise<BackupFileInfo> {
   const wanted = autoBackupName(today);
   const files = await listToday(dir);
@@ -82,7 +82,7 @@ export function useBackupActions() {
           lastBackupDate: store.lastBackupDate,
           today,
         });
-        if (!decision.run && !opts?.force) {
+        if (!(decision.run || opts?.force)) {
           return;
         }
         const dir = await invoke<string>("backup_default_dir");
@@ -101,7 +101,7 @@ export function useBackupActions() {
         const message = error instanceof Error ? error.message : String(error);
         try {
           const dir = await invoke<string>("backup_default_dir").catch(
-            () => "",
+            () => ""
           );
           await saveBackupStore({
             lastBackupError: `${message} (tried ${dir || "the backup folder"})`,
@@ -113,7 +113,7 @@ export function useBackupActions() {
         autoInFlight = false;
       }
     },
-    [queryClient],
+    [queryClient]
   );
 
   const runManualBackup = useCallback(async (): Promise<BackupFileInfo> => {
@@ -125,7 +125,7 @@ export function useBackupActions() {
       const files = await listToday(dir);
       const name = resolveCollision(
         files.map((file) => file.name),
-        manualBackupName(new Date()),
+        manualBackupName(new Date())
       );
       const info = await invoke<BackupFileInfo>("create_backup", {
         destPath: `${dir}/${name}`,
@@ -159,8 +159,12 @@ export function useDailyBackup() {
     if (!isTauriRuntime()) {
       return;
     }
-    const timer = window.setTimeout(() => void retry(), 0);
-    const interval = window.setInterval(() => void retry(), ROLLOVER_MS);
+    const timer = window.setTimeout(() => {
+      retry().catch(() => undefined);
+    }, 0);
+    const interval = window.setInterval(() => {
+      retry().catch(() => undefined);
+    }, ROLLOVER_MS);
     return () => {
       window.clearTimeout(timer);
       window.clearInterval(interval);

@@ -1,6 +1,6 @@
 import { Button } from "@cmis/ui/components/button";
-import { useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "@tanstack/react-router";
 import { useCallback } from "react";
 import { toast } from "sonner";
 
@@ -43,21 +43,29 @@ export function HealthPage() {
       // The backup action performs a real manual backup (backup-restore F5/F9)
       // and reports what actually happened — never a placeholder toast.
       if (action.id === "trigger-backup") {
-        void runManualBackup().then(
-          (info) => {
-            toast.success("Backup complete", { description: info.name });
-          },
-          (error: unknown) => {
-            const message =
-              error instanceof Error ? error.message : String(error);
-            toast.error("Backup failed", { description: message });
-          }
-        ).finally(() => {
-          void queryClient.invalidateQueries({
-            queryKey: [SYSTEM_HEALTH_KEY],
+        runManualBackup()
+          .then(
+            (info) => {
+              toast.success("Backup complete", { description: info.name });
+            },
+            (error: unknown) => {
+              const message =
+                error instanceof Error ? error.message : String(error);
+              toast.error("Backup failed", { description: message });
+            }
+          )
+          .finally(() => {
+            queryClient
+              .invalidateQueries({
+                queryKey: [SYSTEM_HEALTH_KEY],
+              })
+              .catch(() => undefined);
+            queryClient
+              .invalidateQueries({
+                queryKey: [BACKUP_FILES_KEY],
+              })
+              .catch(() => undefined);
           });
-          void queryClient.invalidateQueries({ queryKey: [BACKUP_FILES_KEY] });
-        });
         return;
       }
       const result = runAction(id, action.id);

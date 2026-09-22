@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import {
+  type BackupStoreState,
   DEFAULT_BACKUP_STORE,
   loadBackupStore,
   saveBackupStore,
-  type BackupStoreState,
 } from "@/lib/backup-store";
 import { isTauriRuntime } from "@/lib/open-external";
 
@@ -23,7 +23,7 @@ export function useBackupStatus() {
   }, []);
 
   useEffect(() => {
-    void reload();
+    reload().catch(() => undefined);
   }, [reload]);
 
   const setEnabled = useCallback(async (enabled: boolean) => {
