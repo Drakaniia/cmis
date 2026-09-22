@@ -13,10 +13,21 @@
  * broken hint (F5).
  */
 
-import { classifyExpiry, daysUntilExpiry, expiryLabel } from "@/features/inventory/domain/expiry";
+import {
+  classifyExpiry,
+  daysUntilExpiry,
+  expiryLabel,
+} from "@/features/inventory/domain/expiry";
 import { classifyLowStock } from "@/features/inventory/domain/low-stock";
-import { describeQuantity, hasPack, packItemOf } from "@/features/inventory/domain/pack-size";
-import { composeListLabel, strengthLabel } from "@/features/inventory/domain/strength";
+import {
+  describeQuantity,
+  hasPack,
+  packItemOf,
+} from "@/features/inventory/domain/pack-size";
+import {
+  composeListLabel,
+  strengthLabel,
+} from "@/features/inventory/domain/strength";
 import type { InventoryItem, LowStockStatus } from "@/features/inventory/types";
 import {
   EM_DASH,

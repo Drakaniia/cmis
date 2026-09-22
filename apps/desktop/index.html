@@ -3,10 +3,358 @@
   <head>
     <meta charset="UTF-8">
     <meta content="width=device-width, initial-scale=1.0" name="viewport">
+    <meta content="dark light" name="color-scheme">
     <title>cmis</title>
+    <!-- Theme sync — must run before first paint so #splash doesn't blink light→dark.
+         Mirrors next-themes (storageKey vite-ui-theme, default dark). -->
+    <script>
+      (function () {
+        try {
+          var key = "vite-ui-theme";
+          var stored = localStorage.getItem(key);
+          // next-themes stores plain string "dark" | "light" | "system"
+          var theme = stored ? stored.replace(/^"|"$/g, "") : null;
+          var prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+          var isDark =
+            theme === "dark" ||
+            (theme !== "light" && theme !== "system" && !theme && true) ||
+            (theme === "system" && prefersDark) ||
+            (!theme && prefersDark ? false : theme === "dark" ? true : !theme ? true : false);
+          // defaultTheme is "dark" when no stored value
+          if (!theme) isDark = true;
+          else if (theme === "system") isDark = prefersDark;
+          else isDark = theme === "dark";
+          var root = document.documentElement;
+          root.classList.toggle("dark", isDark);
+          root.style.colorScheme = isDark ? "dark" : "light";
+        } catch (_) {}
+      })();
+    </script>
+    <!-- Apple splash shell — 0ms first paint before JS/migrations.
+         Mirrors AppSplash so there is no flash between static HTML and React.
+         Keep inline + dependency-free so it blocks nothing. -->
+    <style>
+    html,
+    body {
+      margin: 0;
+      /* Solid fallback first (prevents black flash if oklch/color-mix unsupported in webview) */
+      background: #282828;
+      background: oklch(0.16 0 0);
+    }
+    @media (prefers-color-scheme: light) {
+      html,
+      body {
+        background: #f5f5f5;
+        background: oklch(0.965 0 0);
+      }
+    }
+    #splash {
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      display: flex;
+      flex-direction: column;
+      gap: 28px;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
+      color: oklch(0.985 0 0);
+      text-align: center;
+      /* Fallback solid before color-mix — critical for Tauri webview first paint */
+      background: #282828;
+      background: color-mix(in oklch, oklch(0.16 0 0) 92%, oklch(0.269 0 0));
+      transition: opacity 450ms cubic-bezier(0.22, 0.68, 0, 1);
+    }
+    @media (prefers-color-scheme: light) {
+      #splash {
+        color: oklch(0.145 0 0);
+        background: #f5f5f5;
+        background: color-mix(in oklch, oklch(0.965 0 0) 92%, oklch(0.95 0 0));
+      }
+    }
+    #splash[data-hide="true"] {
+      pointer-events: none;
+      opacity: 0;
+    }
+    #splash-icon {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 96px;
+      height: 96px;
+      padding: 12px;
+      background: var(--card, white);
+      border: 1px solid oklch(0 0 0 / 0.08);
+      border-radius: 22px;
+      overflow: hidden;
+      box-shadow:
+        0 1px 3px oklch(0 0 0 / 0.08),
+        0 12px 32px oklch(0 0 0 / 0.1);
+      animation: splash-logo-in 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
+    }
+    html.dark #splash-icon {
+      background: oklch(0.205 0 0);
+      border-color: oklch(1 0 0 / 0.08);
+    }
+    html:not(.dark) #splash-icon {
+      background: white;
+      border-color: oklch(0 0 0 / 0.06);
+    }
+    #splash-icon img {
+      width: 72px;
+      height: 72px;
+      object-fit: contain;
+      display: block;
+      border-radius: 0;
+    }
+    #splash-icon img:last-child {
+      display: none;
+    }
+    html:not(.dark) #splash-icon img:first-child {
+      display: block;
+    }
+    html:not(.dark) #splash-icon img:last-child {
+      display: none;
+    }
+    html.dark #splash-icon img:first-child {
+      display: none;
+    }
+    html.dark #splash-icon img:last-child {
+      display: block;
+    }
+    @media (prefers-color-scheme: light) {
+      #splash-icon img:first-child {
+        display: block;
+      }
+      #splash-icon img:last-child {
+        display: none;
+      }
+    }
+    @media (prefers-color-scheme: dark) {
+      #splash-icon img:first-child {
+        display: none;
+      }
+      #splash-icon img:last-child {
+        display: block;
+      }
+    }
+    @keyframes splash-logo-in {
+      from {
+        opacity: 0;
+        transform: scale(0.9);
+        filter: blur(8px);
+      }
+      to {
+        opacity: 1;
+        transform: scale(1);
+        filter: blur(0);
+      }
+    }
+    #splash h1 {
+      margin: 0;
+      font-size: clamp(1.9rem, 4vw, 2.4rem);
+      font-weight: 700;
+      line-height: 1.05;
+      letter-spacing: -0.02em;
+    }
+    #splash p {
+      max-width: 28ch;
+      margin: 6px 0 0;
+      font-size: 0.8125rem;
+      line-height: 1.45;
+      letter-spacing: 0.01em;
+      text-wrap: balance;
+      opacity: 0.62;
+    }
+    #splash-loader {
+      --helix-a: oklch(0.985 0 0);
+      --helix-b: oklch(0.708 0 0);
+      position: relative;
+      width: 52px;
+      height: 52px;
+    }
+    @media (prefers-color-scheme: light) {
+      #splash-loader {
+        --helix-a: oklch(0.145 0 0);
+        --helix-b: oklch(0.5 0 0);
+      }
+    }
+    /* Class-based theme (from vite-ui-theme localStorage) wins over media query — prevents light→dark blink */
+    html.dark,
+    html.dark body {
+      background: #282828;
+      background: oklch(0.16 0 0);
+    }
+    html:not(.dark),
+    html:not(.dark) body {
+      background: #f5f5f5;
+      background: oklch(0.965 0 0);
+    }
+    html.dark #splash {
+      color: oklch(0.985 0 0);
+      background: #282828;
+      background: color-mix(in oklch, oklch(0.16 0 0) 92%, oklch(0.269 0 0));
+    }
+    html:not(.dark) #splash {
+      color: oklch(0.145 0 0);
+      background: #f5f5f5;
+      background: color-mix(in oklch, oklch(0.965 0 0) 92%, oklch(0.95 0 0));
+    }
+    html.dark #splash-loader {
+      --helix-a: oklch(0.985 0 0);
+      --helix-b: oklch(0.708 0 0);
+    }
+    html:not(.dark) #splash-loader {
+      --helix-a: oklch(0.145 0 0);
+      --helix-b: oklch(0.5 0 0);
+    }
+    html.dark #splash-loader i {
+      box-shadow:
+        0 0 0 1px oklch(0.16 0 0),
+        0 1px 3px oklch(0 0 0 / 0.2);
+    }
+    html:not(.dark) #splash-loader i {
+      box-shadow:
+        0 0 0 1px white,
+        0 1px 3px oklch(0 0 0 / 0.15);
+    }
+    #splash-loader i {
+      position: absolute;
+      left: 50%;
+      width: 7px;
+      height: 7px;
+      margin-left: -3.5px;
+      border-radius: 999px;
+      box-shadow:
+        0 0 0 1px oklch(0.16 0 0),
+        0 1px 3px oklch(0 0 0 / 0.2);
+      opacity: 0.98;
+      animation: splash-helix-a 0.88s cubic-bezier(0.77, 0, 0.175, 1) infinite;
+    }
+    @media (prefers-color-scheme: light) {
+      #splash-loader i {
+        box-shadow:
+          0 0 0 1px white,
+          0 1px 3px oklch(0 0 0 / 0.15);
+      }
+    }
+    /* Back strand — muted grey, never matches bg */
+    #splash-loader i:nth-child(even) {
+      background: var(--helix-b);
+      animation-name: splash-helix-b;
+    }
+    #splash-loader i:nth-child(odd) {
+      background: var(--helix-a);
+    }
+    @keyframes splash-helix-a {
+      0%,
+      100% {
+        transform: translateX(15.5px) scale(1);
+        opacity: 1;
+      }
+      50% {
+        transform: translateX(-15.5px) scale(0.68);
+        opacity: 0.78;
+      }
+    }
+    @keyframes splash-helix-b {
+      0%,
+      100% {
+        transform: translateX(-15.5px) scale(0.68);
+        opacity: 0.78;
+      }
+      50% {
+        transform: translateX(15.5px) scale(1);
+        opacity: 1;
+      }
+    }
+    #splash-label {
+      margin-top: 10px;
+      font-size: 0.75rem;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      opacity: 0.62;
+    }
+    #splash-foot {
+      position: absolute;
+      right: 0;
+      bottom: max(20px, env(safe-area-inset-bottom, 0px));
+      left: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      align-items: center;
+      font-size: 0.6875rem;
+      letter-spacing: 0.04em;
+      opacity: 0.38;
+    }
+    #splash-foot::after {
+      width: 48px;
+      height: 1px;
+      content: "";
+      background: currentColor;
+      border-radius: 999px;
+      opacity: 0.35;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      #splash,
+      #splash-loader i {
+        transition: opacity 150ms ease !important;
+        animation: none !important;
+      }
+      #splash-loader i {
+        opacity: 0.55;
+      }
+    }
+    </style>
   </head>
 
   <body>
+    <!-- Static splash — replaced by React AppSplash on hydrate, then faded -->
+    <div aria-hidden="true" id="splash" role="presentation">
+      <div
+        style="
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 28px;
+        "
+      >
+        <div id="splash-icon">
+          <img
+            alt="CMIS"
+            height="72"
+            src="/cmis-dark-transparent.png"
+            width="72"
+          >
+          <img
+            alt="CMIS"
+            height="72"
+            src="/cmis-white-transparent.png"
+            width="72"
+          >
+        </div>
+        <div>
+          <h1>CMIS</h1>
+          <p>Clinic Medicine Inventory System</p>
+        </div>
+        <div style="display: flex; flex-direction: column; align-items: center">
+          <div aria-hidden="true" id="splash-loader">
+            <i style="top: 0px; animation-delay: 0s"></i>
+            <i style="top: 6px; animation-delay: 0.09s; opacity: 0.85"></i>
+            <i style="top: 12px; animation-delay: 0.18s"></i>
+            <i style="top: 18px; animation-delay: 0.27s"></i>
+            <i style="top: 24px; animation-delay: 0.36s"></i>
+            <i style="top: 30px; animation-delay: 0.45s"></i>
+            <i style="top: 36px; animation-delay: 0.54s"></i>
+          </div>
+          <div id="splash-label">Loading workspace</div>
+        </div>
+      </div>
+      <div id="splash-foot">Preparing database &amp; inventory</div>
+    </div>
     <div id="app"></div>
     <script src="/src/main.tsx" type="module"></script>
   </body>

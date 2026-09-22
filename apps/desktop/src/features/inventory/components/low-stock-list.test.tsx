@@ -135,7 +135,9 @@ describe("LowStockList quantities name their unit", () => {
   it("breaks a remainder into packs plus base units, never a fraction", () => {
     renderList({ rows: [packRow(13, 20)] });
 
-    expect(screen.getByText("13 sachet (1 box + 3 sachet)")).toBeInTheDocument();
+    expect(
+      screen.getByText("13 sachet (1 box + 3 sachet)")
+    ).toBeInTheDocument();
     expect(screen.queryByText(/1\.3/)).toBeNull();
     expect(screen.getByText("-7 sachet")).toBeInTheDocument(); // the gap
   });

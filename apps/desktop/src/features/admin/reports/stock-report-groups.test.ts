@@ -1,10 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { InventoryItem } from "@/features/inventory/types";
 import { buildStockLevelRows, filterStockLevelRows } from "./stock-level-rows";
-import {
-  buildGrandTotal,
-  groupByCategory,
-} from "./stock-report-groups";
+import { buildGrandTotal, groupByCategory } from "./stock-report-groups";
 import { buildStockSummary } from "./stock-report-summary";
 
 function item(overrides: Partial<InventoryItem> = {}): InventoryItem {
@@ -35,8 +32,20 @@ function item(overrides: Partial<InventoryItem> = {}): InventoryItem {
 const SORT = { dir: "asc", key: "status" } as const;
 
 const ITEMS = [
-  item({ category: "Supplement", id: "z", name: "Zinc", qty: 50, threshold: 10 }),
-  item({ category: "Analgesic", id: "a", name: "Aspirin", qty: 0, threshold: 10 }),
+  item({
+    category: "Supplement",
+    id: "z",
+    name: "Zinc",
+    qty: 50,
+    threshold: 10,
+  }),
+  item({
+    category: "Analgesic",
+    id: "a",
+    name: "Aspirin",
+    qty: 0,
+    threshold: 10,
+  }),
   item({
     category: "Analgesic",
     id: "b",

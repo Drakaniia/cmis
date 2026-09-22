@@ -67,7 +67,9 @@ export function buildStockSummary(items: InventoryItem[]): StockSummary {
   let expired = 0;
 
   for (const item of items) {
-    categories.add(item.category.trim() === "" ? "Uncategorized" : item.category);
+    categories.add(
+      item.category.trim() === "" ? "Uncategorized" : item.category
+    );
     unitsOnHand += item.qty;
 
     const status = classifyLowStock(item.qty, item.threshold);
@@ -107,9 +109,9 @@ export function buildStockSummary(items: InventoryItem[]): StockSummary {
 
   return {
     categories: categories.size,
+    expired,
     expiringLater,
     expiringSoon,
-    expired,
     low,
     medicines: items.length,
     out,

@@ -2,11 +2,7 @@ import {
   hasStrengthColumns,
   identityKeysOf as identityKeysForParts,
 } from "../domain/identity";
-import {
-  hasPack,
-  type PackParts,
-  packSizeText,
-} from "../domain/pack-size";
+import { hasPack, type PackParts, packSizeText } from "../domain/pack-size";
 import { composeDisplayName } from "../domain/strength";
 
 /**
@@ -168,7 +164,7 @@ export function packSizeTextOf(draft: {
   packUnit: string;
 }): string {
   const derived = packSizeText(packPartsOf(draft));
-  return derived !== "" ? derived : draft.packSize.trim();
+  return derived === "" ? draft.packSize.trim() : derived;
 }
 
 /** True when the draft records a usable pack multiple for arithmetic (F1). */
