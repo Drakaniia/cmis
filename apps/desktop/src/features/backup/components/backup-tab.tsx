@@ -9,7 +9,7 @@ import { invoke } from "@/lib/tauri";
 import { manualBackupName } from "../data/backup-naming";
 import { useBackupFiles, type BackupFileInfo } from "../hooks/use-backup-files";
 import { useBackupStatus } from "../hooks/use-backup-status";
-import { useDailyBackup } from "../hooks/use-daily-backup";
+import { useBackupActions } from "../hooks/use-daily-backup";
 import { SettingsCard } from "@/features/admin/settings/components/settings-card";
 
 function formatBytes(bytes: number): string {
@@ -63,7 +63,7 @@ function kindLabel(kind: string): string {
 export function BackupTab() {
   const { status, setEnabled, setKeep } = useBackupStatus();
   const { data, refetch } = useBackupFiles();
-  const { runManualBackup } = useDailyBackup();
+  const { runManualBackup } = useBackupActions();
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
 

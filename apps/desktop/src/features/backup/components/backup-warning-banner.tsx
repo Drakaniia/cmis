@@ -1,7 +1,7 @@
 import { Button } from "@cmis/ui/components/button";
 import { TriangleAlert } from "lucide-react";
 import { useBackupStatus } from "../hooks/use-backup-status";
-import { useDailyBackup } from "../hooks/use-daily-backup";
+import { useBackupActions } from "../hooks/use-daily-backup";
 
 /**
  * Persistent app-wide failure banner (spec F6): rendered at the shell level so
@@ -10,7 +10,7 @@ import { useDailyBackup } from "../hooks/use-daily-backup";
  */
 export function BackupWarningBanner() {
   const { ready, status } = useBackupStatus();
-  const { retry } = useDailyBackup();
+  const { retry } = useBackupActions();
 
   if (!ready || !status.lastBackupError) {
     return null;

@@ -58,14 +58,86 @@ interface CountRow {
   trash: number;
 }
 
-export async function loadSystemHealth(db: DbLike): Promise<SystemHealth> {
+export interface BackupSummaryFile {
+  kind: string;
+  mtime: number;
+  name: string;
+  size: number;
+}
+
+/** File-based backup facts (from `list_backups`), merged by the hook. */
+export interface BackupSummary {
+  dir: string;
+  error: string;
+  files: BackupSummaryFile[];
+}
+
+const BACKUP_NEXT = "next: the next time you open the app";
+
+/**
+ * The backup card, built from the files in `<Documents>/CMIS Backups` —
+ * never from the in-database rollback snapshots, which die with the database
+ * they live in (backup-restore spec B4/B5, F9).
+ */
+export function buildBackupCard(backup?: BackupSummary): HealthCardData {
+  const base = {
+    actions: [{ id: "trigger-backup", label: "Back up now" }],
+    id: "backup" as const,
+    title: "Backup",
+    trend: [],
+  };
+  if (!backup || backup.files.length === 0) {
+    if (backup?.error) {
+      return {
+        ...base,
+        caption: `${backup.error} · ${BACKUP_NEXT}`,
+        metric: "—",
+        status: "warn",
+        statusLabel: "Backup failed",
+      };
+    }
+    return {
+      ...base,
+      caption: `No backups yet · ${BACKUP_NEXT}`,
+      metric: "—",
+      status: "ok",
+      statusLabel: "No backup yet",
+    };
+  }
+  const newest = backup.files[0];
+  const totalBytes = backup.files.reduce((sum, file) => sum + file.size, 0);
+  const date = new Date(newest.mtime * 1000).toLocaleDateString("en-US", {
+    day: "numeric",
+    month: "short",
+  });
+  if (backup.error) {
+    return {
+      ...base,
+      caption: `${backup.error} · ${BACKUP_NEXT}`,
+      metric: date,
+      status: "warn",
+      statusLabel: "Backup failed",
+    };
+  }
+  return {
+    ...base,
+    caption: `Newest ${newest.name} · ${backup.files.length} copies · ${formatBytes(totalBytes)} · ${BACKUP_NEXT}`,
+    metric: date,
+    status: "ok",
+    statusLabel: "Backup current",
+  };
+}
+
+export async function loadSystemHealth(
+  db: DbLike,
+  backup?: BackupSummary,
+): Promise<SystemHealth> {
   const since = `${dayKey(TREND_DAYS - 1)}T00:00:00.000Z`;
 
   const [
     counts,
     pageCount,
     pageSize,
-    backupRows,
     expiredRows,
     dispensing,
     audit,
@@ -79,11 +151,6 @@ export async function loadSystemHealth(db: DbLike): Promise<SystemHealth> {
                 (SELECT COUNT(*) FROM trash_records) AS trash`),
     db.select<{ page_count: number }[]>("PRAGMA page_count"),
     db.select<{ page_size: number }[]>("PRAGMA page_size"),
-    db.select<{ name: string }[]>(
-      `SELECT name FROM sqlite_master
-          WHERE type = 'table' AND name LIKE '%\\_backup\\_%' ESCAPE '\\'
-          ORDER BY name DESC`
-    ),
     db.select<{ c: number }[]>(
       `SELECT COUNT(*) AS c FROM inventory_batches
           WHERE expiry IS NOT NULL AND expiry != ''
@@ -114,7 +181,6 @@ export async function loadSystemHealth(db: DbLike): Promise<SystemHealth> {
 
   const sizeBytes =
     (pageCount[0]?.page_count ?? 0) * (pageSize[0]?.page_size ?? 0);
-  const newestBackup = backupRows[0]?.name.split("_backup_")[1]?.slice(0, 10);
   const expired = expiredRows[0]?.c ?? 0;
 
   const dispensedTrend = toTrend(dispensing);
@@ -142,7 +208,7 @@ export async function loadSystemHealth(db: DbLike): Promise<SystemHealth> {
     },
     {
       actions: [{ id: "clear-cache", label: "Clear cache" }],
-      caption: `${formatBytes(sizeBytes)} used of ${formatBytes(STORAGE_CAPACITY_BYTES)} · ${backupRows.length} snapshots kept`,
+      caption: `${formatBytes(sizeBytes)} used of ${formatBytes(STORAGE_CAPACITY_BYTES)}`,
       id: "storage",
       metric: `${Math.max(1, Math.round((sizeBytes / STORAGE_CAPACITY_BYTES) * 100))}%`,
       status: "ok",
@@ -161,19 +227,7 @@ export async function loadSystemHealth(db: DbLike): Promise<SystemHealth> {
       title: "Sync",
       trend: requestTrend,
     },
-    {
-      actions: [{ id: "trigger-backup", label: "Run backup" }],
-      caption:
-        backupRows.length > 0
-          ? `Newest snapshot ${newestBackup ?? "unknown"} · next: daily 02:00`
-          : "No snapshot yet · next: daily 02:00",
-      id: "backup",
-      metric: backupRows.length > 0 ? `${backupRows.length}` : "—",
-      status: "ok",
-      statusLabel: backupRows.length > 0 ? "Backup current" : "No backup yet",
-      title: "Backup",
-      trend: [],
-    },
+    buildBackupCard(backup),
     {
       actions: [{ id: "view-audit", label: "View audit", to: "/admin/audit" }],
       caption: `${activeDays} active ${activeDays === 1 ? "day" : "days"} this week · ${auditRows} audit entries`,

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { recordAudit } from "@/features/admin/audit/write-audit";
 import { loadBackupStore, saveBackupStore } from "@/lib/backup-store";
@@ -15,6 +15,12 @@ import { shouldRunDailyBackup } from "../data/backup-policy";
 import { BACKUP_FILES_KEY, type BackupFileInfo } from "./use-backup-files";
 
 const ROLLOVER_MS = 60_000;
+
+// Module-level guards: the banner, the root runner, and the Health pages each
+// mount the hooks below, but there must still never be two copies of the same
+// day (the rollover check and the launch check race otherwise).
+let autoInFlight = false;
+let manualInFlight: Promise<BackupFileInfo> | null = null;
 
 async function auditBackup(detail: string): Promise<void> {
   try {
@@ -50,16 +56,20 @@ async function ensureAutoBackup(
   });
 }
 
-export function useDailyBackup() {
+/**
+ * Backup actions without the launch/rollover timer: the Health pages and the
+ * banner use these, while exactly one `useDailyBackup` (the app shell) owns
+ * the interval. Sharing the module guards keeps every instance to one copy.
+ */
+export function useBackupActions() {
   const queryClient = useQueryClient();
-  const inFlight = useRef(false);
 
   const runOnce = useCallback(
     async (opts?: { force?: boolean }) => {
-      if (!isTauriRuntime() || inFlight.current) {
+      if (!isTauriRuntime() || autoInFlight) {
         return;
       }
-      inFlight.current = true;
+      autoInFlight = true;
       try {
         const store = await loadBackupStore();
         if (!store.enabled) {
@@ -90,7 +100,9 @@ export function useDailyBackup() {
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         try {
-          const dir = await invoke<string>("backup_default_dir").catch(() => "");
+          const dir = await invoke<string>("backup_default_dir").catch(
+            () => "",
+          );
           await saveBackupStore({
             lastBackupError: `${message} (tried ${dir || "the backup folder"})`,
           });
@@ -98,44 +110,62 @@ export function useDailyBackup() {
           // the store itself is unavailable; the next launch retries
         }
       } finally {
-        inFlight.current = false;
+        autoInFlight = false;
       }
     },
     [queryClient],
   );
 
   const runManualBackup = useCallback(async (): Promise<BackupFileInfo> => {
-    const dir = await invoke<string>("backup_default_dir");
-    const files = await listToday(dir);
-    const name = resolveCollision(
-      files.map((file) => file.name),
-      manualBackupName(new Date()),
-    );
-    const info = await invoke<BackupFileInfo>("create_backup", {
-      destPath: `${dir}/${name}`,
-    });
-    await saveBackupStore({
-      lastBackupAt: new Date(info.mtime * 1000).toISOString(),
-      lastBackupError: "",
-      lastBackupPath: info.path,
-      lastManualAt: new Date().toISOString(),
-    });
-    await auditBackup(`Manual backup written — ${info.name}`);
-    await queryClient.invalidateQueries({ queryKey: [BACKUP_FILES_KEY] });
-    return info;
+    if (manualInFlight) {
+      return manualInFlight;
+    }
+    const run = (async () => {
+      const dir = await invoke<string>("backup_default_dir");
+      const files = await listToday(dir);
+      const name = resolveCollision(
+        files.map((file) => file.name),
+        manualBackupName(new Date()),
+      );
+      const info = await invoke<BackupFileInfo>("create_backup", {
+        destPath: `${dir}/${name}`,
+      });
+      await saveBackupStore({
+        lastBackupAt: new Date(info.mtime * 1000).toISOString(),
+        lastBackupError: "",
+        lastBackupPath: info.path,
+        lastManualAt: new Date().toISOString(),
+      });
+      await auditBackup(`Manual backup written — ${info.name}`);
+      await queryClient.invalidateQueries({ queryKey: [BACKUP_FILES_KEY] });
+      return info;
+    })();
+    manualInFlight = run;
+    try {
+      return await run;
+    } finally {
+      manualInFlight = null;
+    }
   }, [queryClient]);
+
+  return { retry: () => runOnce({ force: true }), runManualBackup } as const;
+}
+
+export function useDailyBackup() {
+  const actions = useBackupActions();
+  const { retry } = actions;
 
   useEffect(() => {
     if (!isTauriRuntime()) {
       return;
     }
-    const timer = window.setTimeout(() => void runOnce(), 0);
-    const interval = window.setInterval(() => void runOnce(), ROLLOVER_MS);
+    const timer = window.setTimeout(() => void retry(), 0);
+    const interval = window.setInterval(() => void retry(), ROLLOVER_MS);
     return () => {
       window.clearTimeout(timer);
       window.clearInterval(interval);
     };
-  }, [runOnce]);
+  }, [retry]);
 
-  return { retry: () => runOnce({ force: true }), runManualBackup } as const;
+  return actions;
 }

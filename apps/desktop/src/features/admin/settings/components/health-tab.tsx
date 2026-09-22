@@ -1,10 +1,16 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
 import { toast } from "sonner";
 
+import { BACKUP_FILES_KEY } from "@/features/backup/hooks/use-backup-files";
+import { useBackupActions } from "@/features/backup/hooks/use-daily-backup";
 import { relativeTime } from "../../format";
 import { HealthCard } from "../../health/components/health-card";
 import { useHealth } from "../../health/hooks/use-health";
-import { useSystemHealth } from "../../health/hooks/use-system-health";
+import {
+  SYSTEM_HEALTH_KEY,
+  useSystemHealth,
+} from "../../health/hooks/use-system-health";
 import type { HealthAction, HealthCardId } from "../../health/types";
 import { SettingsCard } from "./settings-card";
 
@@ -18,15 +24,35 @@ export function HealthTab() {
     health?.cards,
     health?.pendingSyncs
   );
+  const { runManualBackup } = useBackupActions();
+  const queryClient = useQueryClient();
 
   const handleAction = useCallback(
     (id: HealthCardId, action: HealthAction) => {
+      if (action.id === "trigger-backup") {
+        void runManualBackup().then(
+          (info) => {
+            toast.success("Backup complete", { description: info.name });
+          },
+          (error: unknown) => {
+            const message =
+              error instanceof Error ? error.message : String(error);
+            toast.error("Backup failed", { description: message });
+          }
+        ).finally(() => {
+          void queryClient.invalidateQueries({
+            queryKey: [SYSTEM_HEALTH_KEY],
+          });
+          void queryClient.invalidateQueries({ queryKey: [BACKUP_FILES_KEY] });
+        });
+        return;
+      }
       const result = runAction(id, action.id);
       if (result) {
         toast.success(result.message, { description: result.description });
       }
     },
-    [runAction]
+    [queryClient, runAction, runManualBackup]
   );
 
   return (
