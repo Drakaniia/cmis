@@ -110,22 +110,6 @@ export function useHealth(
           message: "Sync retried",
         };
       }
-      if (actionId === "trigger-backup") {
-        const today = new Date().toLocaleDateString("en-US", {
-          day: "numeric",
-          month: "short",
-        });
-        patchCard("backup", {
-          caption: "Next: daily 02:00",
-          metric: today,
-          status: "ok",
-          statusLabel: "Backup current",
-        });
-        return {
-          description: "Written to appData/backups",
-          message: "Backup complete",
-        };
-      }
       return null;
     },
     [patchCard, pendingSyncs.length]

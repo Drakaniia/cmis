@@ -1,11 +1,14 @@
 import { Button } from "@cmis/ui/components/button";
 import { useNavigate } from "@tanstack/react-router";
+import { useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
 import { toast } from "sonner";
 
+import { BACKUP_FILES_KEY } from "@/features/backup/hooks/use-backup-files";
+import { useBackupActions } from "@/features/backup/hooks/use-daily-backup";
 import { relativeTime } from "../../format";
 import { useHealth } from "../hooks/use-health";
-import { useSystemHealth } from "../hooks/use-system-health";
+import { SYSTEM_HEALTH_KEY, useSystemHealth } from "../hooks/use-system-health";
 import type { HealthAction, HealthCardId } from "../types";
 import { HealthCard } from "./health-card";
 
@@ -23,6 +26,8 @@ export function HealthPage() {
     health?.cards,
     health?.pendingSyncs
   );
+  const { runManualBackup } = useBackupActions();
+  const queryClient = useQueryClient();
 
   const handleAction = useCallback(
     (id: HealthCardId, action: HealthAction) => {
@@ -35,12 +40,32 @@ export function HealthPage() {
         });
         return;
       }
+      // The backup action performs a real manual backup (backup-restore F5/F9)
+      // and reports what actually happened — never a placeholder toast.
+      if (action.id === "trigger-backup") {
+        void runManualBackup().then(
+          (info) => {
+            toast.success("Backup complete", { description: info.name });
+          },
+          (error: unknown) => {
+            const message =
+              error instanceof Error ? error.message : String(error);
+            toast.error("Backup failed", { description: message });
+          }
+        ).finally(() => {
+          void queryClient.invalidateQueries({
+            queryKey: [SYSTEM_HEALTH_KEY],
+          });
+          void queryClient.invalidateQueries({ queryKey: [BACKUP_FILES_KEY] });
+        });
+        return;
+      }
       const result = runAction(id, action.id);
       if (result) {
         toast.success(result.message, { description: result.description });
       }
     },
-    [navigate, runAction]
+    [navigate, queryClient, runAction, runManualBackup]
   );
 
   const handleViewSyncErrors = useCallback(
