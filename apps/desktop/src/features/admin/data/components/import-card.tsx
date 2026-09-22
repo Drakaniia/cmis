@@ -10,7 +10,10 @@ import {
   useState,
 } from "react";
 import { toast } from "sonner";
-
+import {
+  RestoreDialog,
+  type RestoreSource,
+} from "@/features/backup/components/restore-dialog";
 import {
   allIdentityKeys,
   identityKeysOf,
@@ -25,6 +28,8 @@ import type {
   ParseResult,
 } from "@/features/inventory/import/types";
 import { dragSpring } from "@/lib/motion";
+import { isTauriRuntime } from "@/lib/open-external";
+import { invoke } from "@/lib/tauri";
 import { ConfirmModal } from "../../components/confirm-modal";
 import { SettingsCard } from "../../settings/components/settings-card";
 import { parseImportDiff } from "../import-diff";
@@ -212,11 +217,37 @@ export function ImportCard() {
   const [diff, setDiff] = useState<ImportDiff | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [progress, setProgress] = useState<number | null>(null);
+  const [restoreSource, setRestoreSource] = useState<RestoreSource | null>(
+    null
+  );
 
   const readFile = useCallback(async (file: File) => {
     // Nothing is staged until a file reads cleanly, and a file that cannot be
     // read reports itself in the preview instead of failing silently.
     window.__inventoryImportCsv = undefined;
+    // A .db is a database backup, not an import: in the desktop app it is
+    // staged to disk and routed to the real Restore flow (backup-restore
+    // spec F9) with the file pre-selected, instead of claiming to preview a
+    // restore. Only the browser preview — which has no restore flow — keeps
+    // the explanatory diff.
+    if (file.name.toLowerCase().endsWith(".db")) {
+      if (isTauriRuntime()) {
+        try {
+          const bytes = new Uint8Array(await readFileBytes(file));
+          const staged = await invoke<string>("stage_import_db", {
+            bytes: [...bytes],
+            name: file.name,
+          });
+          setDiff(null);
+          setRestoreSource({ name: file.name, path: staged });
+        } catch (err) {
+          setDiff(previewFailure(file.name, err));
+        }
+        return;
+      }
+      setDiff(parseImportDiff(file.name, ""));
+      return;
+    }
     try {
       // Excel workbooks: convert to CSV text once, then preview and stage the
       // exact text the confirm step commits — no re-serialization drift.
@@ -359,7 +390,8 @@ export function ImportCard() {
       }
     }
     // Everything else is a preview: `parseImportDiff` reads the file but no
-    // importer exists for .json/.db, so claiming success would be a lie.
+    // importer exists for .json — and a .db belongs to the Restore flow, so
+    // claiming success would be a lie.
     toast.warning("Nothing imported", {
       description: `${diff?.fileName ?? "This file"} is not an inventory workbook — no rows were written. Import an inventory .xlsx or .csv.`,
       id: IMPORT_TOAST_ID,
@@ -369,6 +401,7 @@ export function ImportCard() {
 
   const handleDiscard = useCallback(() => setDiff(null), []);
   const handleRequestConfirm = useCallback(() => setConfirmOpen(true), []);
+  const handleCloseRestore = useCallback(() => setRestoreSource(null), []);
 
   const totalChanges = diff
     ? diff.counts.inserts + diff.counts.updates + diff.counts.deletes
@@ -376,7 +409,7 @@ export function ImportCard() {
 
   return (
     <SettingsCard
-      description="Imports inventory .xlsx and .csv into the database. .json and .db files are previewed only. Nothing commits until you confirm."
+      description="Imports inventory .xlsx and .csv into the database. .json files are previewed only; .db backups open the restore flow. Nothing commits until you confirm."
       title="Import"
     >
       <motion.div
@@ -545,6 +578,7 @@ export function ImportCard() {
         title="Overwrite current data?"
         typeToConfirm="IMPORT"
       />
+      <RestoreDialog onClose={handleCloseRestore} source={restoreSource} />
     </SettingsCard>
   );
 }

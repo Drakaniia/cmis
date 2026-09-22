@@ -40,6 +40,9 @@ export function parseImportDiff(fileName: string, content: string): ImportDiff {
   if (kind === "db") {
     // A .db backup's contents cannot be counted without opening it, so the diff
     // reports no numbers at all rather than plausible-looking invented ones.
+    // In the desktop app a .db never previews here at all — it is staged and
+    // routed to the real Restore flow (Settings → Backup); this branch only
+    // serves engines without that flow (the browser preview).
     return {
       counts: { deletes: 0, inserts: 0, updates: 0 },
       fileName,
@@ -48,7 +51,7 @@ export function parseImportDiff(fileName: string, content: string): ImportDiff {
       warnings: [
         "Restoring a backup replaces the current database entirely.",
         "Any stock changes recorded since the backup will be lost.",
-        "This build previews .db backups only — nothing is written for them.",
+        "Confirming here writes nothing — restore it from Settings → Backup → Restore from a backup….",
       ],
     };
   }
