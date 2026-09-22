@@ -1,5 +1,12 @@
 import { Button } from "@cmis/ui/components/button";
-import { Check, Copy, DatabaseBackup, Save } from "lucide-react";
+import {
+  Check,
+  Copy,
+  DatabaseBackup,
+  FolderOpen,
+  History,
+  Save,
+} from "lucide-react";
 import { useCallback, useState } from "react";
 import { toast } from "sonner";
 import { recordAudit } from "@/features/admin/audit/write-audit";
@@ -11,6 +18,7 @@ import { manualBackupName } from "../data/backup-naming";
 import { type BackupFileInfo, useBackupFiles } from "../hooks/use-backup-files";
 import { useBackupStatus } from "../hooks/use-backup-status";
 import { useBackupActions } from "../hooks/use-daily-backup";
+import { RestoreDialog, type RestoreSource } from "./restore-dialog";
 
 function formatBytes(bytes: number): string {
   if (bytes >= 1_048_576) {
@@ -60,12 +68,58 @@ function kindLabel(kind: string): string {
   return kind === "manual" ? "Manual" : "Automatic";
 }
 
+/** Matches both Windows and POSIX separators in an absolute file path. */
+const PATH_SEPARATOR = /[/\\]/;
+
+function basename(path: string): string {
+  return path.split(PATH_SEPARATOR).pop() ?? path;
+}
+
+function BackupRow({
+  file,
+  onRestore,
+}: {
+  file: BackupFileInfo;
+  onRestore: (file: BackupFileInfo) => void;
+}) {
+  const handleRestore = useCallback(() => {
+    onRestore(file);
+  }, [file, onRestore]);
+  return (
+    <li className="flex items-center gap-3 py-2 text-sm">
+      <span className="min-w-0 flex-1 truncate font-medium">{file.name}</span>
+      <span className="shrink-0 rounded-full border border-border/60 px-2 py-0.5 text-caption text-muted-foreground">
+        {kindLabel(file.kind)}
+      </span>
+      <span className="hidden shrink-0 text-caption text-muted-foreground sm:inline">
+        {fileDateTime(file.mtime)}
+      </span>
+      <span className="shrink-0 text-caption text-muted-foreground">
+        {formatBytes(file.size)}
+      </span>
+      <Button
+        aria-label={`Restore ${file.name}`}
+        className="press-feedback shrink-0"
+        onClick={handleRestore}
+        size="sm"
+        variant="ghost"
+      >
+        <History aria-hidden className="size-3.5" />
+        Restore
+      </Button>
+    </li>
+  );
+}
+
 export function BackupTab() {
   const { status, setEnabled, setKeep } = useBackupStatus();
   const { data, refetch } = useBackupFiles();
   const { runManualBackup } = useBackupActions();
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [restoreSource, setRestoreSource] = useState<RestoreSource | null>(
+    null
+  );
 
   const { dir = "", files = [] } = data ?? {};
   const [newest] = files;
@@ -123,6 +177,33 @@ export function BackupTab() {
     }
   }, []);
 
+  const handleRestoreRow = useCallback((file: BackupFileInfo) => {
+    setRestoreSource({ name: file.name, path: file.path });
+  }, []);
+
+  const handleRestoreFromFile = useCallback(async () => {
+    try {
+      const { open } = await import("@tauri-apps/plugin-dialog");
+      const chosen = await open({
+        filters: [{ extensions: ["db"], name: "CMIS backup" }],
+        multiple: false,
+      });
+      const path = Array.isArray(chosen) ? chosen[0] : chosen;
+      if (!path) {
+        return;
+      }
+      const name = basename(path);
+      setRestoreSource({ name, path });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      toast.error("Could not open the file", { description: message });
+    }
+  }, []);
+
+  const handleCloseRestore = useCallback(() => {
+    setRestoreSource(null);
+  }, []);
+
   const handleCopyPath = useCallback(() => {
     if (!dir) {
       return Promise.resolve();
@@ -178,6 +259,16 @@ export function BackupTab() {
             >
               <Save aria-hidden className="size-3.5" />
               Save a copy…
+            </Button>
+            <Button
+              className="press-feedback"
+              disabled={busy}
+              onClick={handleRestoreFromFile}
+              size="sm"
+              variant="outline"
+            >
+              <FolderOpen aria-hidden className="size-3.5" />
+              Restore from a backup…
             </Button>
           </>
         }
@@ -276,27 +367,16 @@ export function BackupTab() {
         ) : (
           <ul className="divide-y divide-border/50">
             {files.map((file) => (
-              <li
-                className="flex items-center gap-3 py-2 text-sm"
+              <BackupRow
+                file={file}
                 key={file.path}
-              >
-                <span className="min-w-0 flex-1 truncate font-medium">
-                  {file.name}
-                </span>
-                <span className="shrink-0 rounded-full border border-border/60 px-2 py-0.5 text-caption text-muted-foreground">
-                  {kindLabel(file.kind)}
-                </span>
-                <span className="hidden shrink-0 text-caption text-muted-foreground sm:inline">
-                  {fileDateTime(file.mtime)}
-                </span>
-                <span className="shrink-0 text-caption text-muted-foreground">
-                  {formatBytes(file.size)}
-                </span>
-              </li>
+                onRestore={handleRestoreRow}
+              />
             ))}
           </ul>
         )}
       </SettingsCard>
+      <RestoreDialog onClose={handleCloseRestore} source={restoreSource} />
     </div>
   );
 }

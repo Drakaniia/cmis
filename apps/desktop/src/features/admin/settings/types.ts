@@ -63,7 +63,7 @@ export const SETTINGS_TABS: SettingsTabMeta[] = [
     label: "System Health",
   },
   {
-    description: "Schedule, location and restore",
+    description: "Automatic daily copies, location and restore",
     id: "backup",
     label: "Backup",
   },
