@@ -7,6 +7,7 @@ import {
   useActiveSection,
 } from "./docs-toc";
 import { AnalyticsSection } from "./sections/analytics";
+import { BackupSection } from "./sections/backup";
 import { DispensingSection } from "./sections/dispensing";
 import { ExpirySection } from "./sections/expiry";
 import { LowStockSection } from "./sections/low-stock";
@@ -50,6 +51,7 @@ export function DocsPage() {
           <DispensingSection />
           <StockReportSection />
           <AnalyticsSection />
+          <BackupSection />
           <StillStuckSection />
         </div>
       </article>
