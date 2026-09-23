@@ -21,11 +21,11 @@ import { DISPENSING_DATE_PRESETS, DISPENSING_STATUSES } from "../types";
 
 function Chip({ label, onRemove }: { label: string; onRemove: () => void }) {
   return (
-    <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-accent px-2.5 py-1 font-medium text-accent-foreground text-xs">
+    <span className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border border-border/60 bg-card px-2.5 py-1 font-medium text-[11px] tracking-[0.01em] text-foreground shadow-sm">
       {label}
       <button
         aria-label={`Remove ${label}`}
-        className="rounded-full p-0.5 hover:bg-black/10 dark:hover:bg-white/10"
+        className="rounded-full bg-muted p-0.5 hover:bg-foreground hover:text-background"
         onClick={onRemove}
         type="button"
       >
@@ -159,17 +159,20 @@ export function DispensingFilterBar({
   );
 
   return (
-    <div className="sticky top-0 z-10 shrink-0 border-border/50 border-b bg-card/95 backdrop-blur-[6px]">
-      <div className="flex flex-wrap items-center gap-2 px-3 py-2">
-        {/* Search */}
-        <div className="relative flex min-w-[200px] flex-1 items-center">
+    <div className="sticky top-0 z-10 shrink-0 border-border/40 border-b bg-card/80 backdrop-blur-[16px] backdrop-saturate-[180%]">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/40 to-transparent dark:via-white/10"
+      />
+      <div className="flex flex-wrap items-center gap-2 px-3 py-2.5">
+        <div className="relative flex min-w-[220px] flex-1 items-center">
           <Search
             aria-hidden
-            className="pointer-events-none absolute left-2 size-4 text-muted-foreground"
+            className="pointer-events-none absolute left-3 size-[15px] text-muted-foreground/70"
           />
           <input
             aria-label="Search dispensing records"
-            className="h-8 w-full rounded-md border border-input bg-background pr-8 pl-8 text-sm outline-none focus:border-ring focus:ring-1 focus:ring-ring"
+            className="h-9 w-full rounded-full border border-border/60 bg-muted/50 pr-9 pl-9 text-[13px] tracking-[0.01em] shadow-[inset_0_1px_2px_oklch(0_0_0/0.04)] outline-none placeholder:text-muted-foreground/60 focus:border-ring/60 focus:bg-card focus:ring-2 focus:ring-ring/20"
             onChange={handleSearchInput}
             onKeyDown={handleSearchKeyDown}
             placeholder="Search medicine, batch, staff…"
@@ -178,27 +181,26 @@ export function DispensingFilterBar({
           {filters.search ? (
             <button
               aria-label="Clear search"
-              className="absolute right-2 rounded p-1 text-muted-foreground hover:bg-muted"
+              className="absolute right-1.5 rounded-full bg-muted p-1.5 text-muted-foreground hover:bg-foreground hover:text-background"
               onClick={handleClearSearch}
               type="button"
             >
-              <X className="size-3.5" />
+              <X className="size-3" />
             </button>
           ) : null}
         </div>
 
-        {/* Date range preset */}
         <DropdownMenu>
           <DropdownMenuTrigger
             render={
               <button
-                className="press-feedback inline-flex h-8 items-center gap-1 rounded-md border border-input bg-background px-2.5 font-medium text-xs hover:bg-accent hover:text-accent-foreground"
+                className="press-feedback inline-flex h-9 items-center gap-1.5 rounded-full border border-border/60 bg-card px-3.5 font-medium text-[12px] tracking-[0.01em] shadow-sm hover:bg-accent hover:text-accent-foreground"
                 type="button"
               />
             }
           >
             {presetLabel}
-            <ChevronDown aria-hidden className="size-3" />
+            <ChevronDown aria-hidden className="size-3 text-muted-foreground" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="min-w-[170px]">
             {DISPENSING_DATE_PRESETS.map((preset) => (
@@ -212,19 +214,18 @@ export function DispensingFilterBar({
           </DropdownMenuContent>
         </DropdownMenu>
 
-        {/* Status segmented */}
         <DropdownMenu>
           <DropdownMenuTrigger
             render={
               <button
-                className="press-feedback inline-flex h-8 items-center gap-1 rounded-md border border-input bg-background px-2.5 font-medium text-xs hover:bg-accent hover:text-accent-foreground"
+                className="press-feedback inline-flex h-9 items-center gap-1.5 rounded-full border border-border/60 bg-card px-3.5 font-medium text-[12px] tracking-[0.01em] shadow-sm hover:bg-accent hover:text-accent-foreground"
                 type="button"
               />
             }
           >
-            <Filter aria-hidden className="size-3" />
+            <Filter aria-hidden className="size-3.5 text-muted-foreground" />
             {statusLabel}
-            <ChevronDown aria-hidden className="size-3" />
+            <ChevronDown aria-hidden className="size-3 text-muted-foreground" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="min-w-[150px]">
             <DropdownMenuGroup>
@@ -242,100 +243,68 @@ export function DispensingFilterBar({
           </DropdownMenuContent>
         </DropdownMenu>
 
-        {/* Staff */}
         <DropdownMenu>
           <DropdownMenuTrigger
             render={
               <button
-                className="press-feedback inline-flex h-8 items-center gap-1 rounded-md border border-input bg-background px-2.5 font-medium text-xs hover:bg-accent hover:text-accent-foreground"
+                className="press-feedback inline-flex h-9 items-center gap-1.5 rounded-full border border-border/60 bg-card px-3.5 font-medium text-[12px] tracking-[0.01em] shadow-sm hover:bg-accent hover:text-accent-foreground"
                 type="button"
               />
             }
           >
             {filters.staff === "All" ? "Staff" : filters.staff}
-            <ChevronDown aria-hidden className="size-3" />
+            <ChevronDown aria-hidden className="size-3 text-muted-foreground" />
           </DropdownMenuTrigger>
-          <DropdownMenuContent
-            align="start"
-            className="max-h-[280px] min-w-[170px]"
-          >
-            <ValueOption
-              label="All staff"
-              onSelect={onStaffChange}
-              value="All"
-            />
+          <DropdownMenuContent align="start" className="max-h-[280px] min-w-[170px]">
+            <ValueOption label="All staff" onSelect={onStaffChange} value="All" />
             {staffList.map((name) => (
-              <ValueOption
-                key={name}
-                label={name}
-                onSelect={onStaffChange}
-                value={name}
-              />
+              <ValueOption key={name} label={name} onSelect={onStaffChange} value={name} />
             ))}
           </DropdownMenuContent>
         </DropdownMenu>
 
-        {/* Medicine */}
         <DropdownMenu>
           <DropdownMenuTrigger
             render={
               <button
-                className="press-feedback inline-flex h-8 items-center gap-1 rounded-md border border-input bg-background px-2.5 font-medium text-xs hover:bg-accent hover:text-accent-foreground"
+                className="press-feedback inline-flex h-9 items-center gap-1.5 rounded-full border border-border/60 bg-card px-3.5 font-medium text-[12px] tracking-[0.01em] shadow-sm hover:bg-accent hover:text-accent-foreground"
                 type="button"
               />
             }
           >
             {filters.medicine === "All" ? "Medicine" : filters.medicine}
-            <ChevronDown aria-hidden className="size-3" />
+            <ChevronDown aria-hidden className="size-3 text-muted-foreground" />
           </DropdownMenuTrigger>
-          <DropdownMenuContent
-            align="start"
-            className="max-h-[280px] min-w-[200px]"
-          >
-            <ValueOption
-              label="All medicines"
-              onSelect={onMedicineChange}
-              value="All"
-            />
+          <DropdownMenuContent align="start" className="max-h-[280px] min-w-[200px]">
+            <ValueOption label="All medicines" onSelect={onMedicineChange} value="All" />
             {medicines.map((name) => (
-              <ValueOption
-                key={name}
-                label={name}
-                onSelect={onMedicineChange}
-                value={name}
-              />
+              <ValueOption key={name} label={name} onSelect={onMedicineChange} value={name} />
             ))}
           </DropdownMenuContent>
         </DropdownMenu>
 
-        {/* Branch */}
         <DropdownMenu>
           <DropdownMenuTrigger
             render={
               <button
-                className="press-feedback inline-flex h-8 items-center gap-1 rounded-md border border-input bg-background px-2.5 font-medium text-xs hover:bg-accent hover:text-accent-foreground"
+                className="press-feedback inline-flex h-9 items-center gap-1.5 rounded-full border border-border/60 bg-card px-3.5 font-medium text-[12px] tracking-[0.01em] shadow-sm hover:bg-accent hover:text-accent-foreground"
                 type="button"
               />
             }
           >
             {filters.branch === "All" ? "Location" : filters.branch}
-            <ChevronDown aria-hidden className="size-3" />
+            <ChevronDown aria-hidden className="size-3 text-muted-foreground" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="min-w-[170px]">
             <ValueOption label="All" onSelect={onBranchChange} value="All" />
             {branches.map((branch) => (
-              <ValueOption
-                key={branch}
-                label={branch}
-                onSelect={onBranchChange}
-                value={branch}
-              />
+              <ValueOption key={branch} label={branch} onSelect={onBranchChange} value={branch} />
             ))}
           </DropdownMenuContent>
         </DropdownMenu>
 
         <Button
-          className="press-feedback"
+          className="press-feedback rounded-full border-border/60 shadow-sm hover:shadow-md"
           onClick={onExport}
           size="sm"
           variant="outline"
@@ -344,14 +313,13 @@ export function DispensingFilterBar({
           Export CSV
         </Button>
 
-        <span className="text-caption text-muted-foreground">
+        <span className="rounded-full bg-muted px-2.5 py-1 text-[11px] font-medium tracking-[0.02em] text-muted-foreground tabular-nums">
           {resultCount} records
         </span>
       </div>
 
-      {/* Active chips */}
       {activeChips.length > 0 ? (
-        <div className="flex flex-wrap items-center gap-1.5 px-3 pb-2">
+        <div className="flex flex-wrap items-center gap-1.5 border-border/20 border-t bg-muted/20 px-3 py-2">
           {activeChips.map((chip) => (
             <ChipItem
               chipKey={chip.key}
@@ -361,7 +329,7 @@ export function DispensingFilterBar({
             />
           ))}
           <button
-            className="whitespace-nowrap text-caption text-primary hover:underline"
+            className="rounded-full border border-border/60 bg-card px-2.5 py-1 font-medium text-[11px] tracking-[0.01em] text-primary shadow-sm hover:bg-accent"
             onClick={onClearFilters}
             type="button"
           >

@@ -57,11 +57,11 @@ function ChipItem({
     [chipKey, onRemoveChip]
   );
   return (
-    <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-accent px-2.5 py-1 font-medium text-accent-foreground text-xs">
+    <span className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border border-border/60 bg-card px-2.5 py-1 font-medium text-[11px] tracking-[0.01em] text-foreground shadow-sm">
       {label}
       <button
         aria-label={`Remove ${label}`}
-        className="rounded-full p-0.5 hover:bg-black/10 dark:hover:bg-white/10"
+        className="rounded-full bg-muted p-0.5 hover:bg-foreground hover:text-background"
         onClick={handleRemove}
         type="button"
       >
@@ -148,16 +148,20 @@ export function RequestsFilterBar({
     Boolean(filters.from) && Boolean(filters.to) && filters.from > filters.to;
 
   return (
-    <div className="sticky top-0 z-10 shrink-0 border-border/50 border-b bg-card/95 backdrop-blur-[6px]">
-      <div className="flex flex-wrap items-center gap-2 px-3 py-2">
-        <div className="relative flex min-w-[200px] flex-1 items-center">
+    <div className="sticky top-0 z-10 shrink-0 border-border/40 border-b bg-card/80 backdrop-blur-[16px] backdrop-saturate-[180%]">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/40 to-transparent dark:via-white/10"
+      />
+      <div className="flex flex-wrap items-center gap-2 px-3 py-2.5">
+        <div className="relative flex min-w-[220px] flex-1 items-center">
           <Search
             aria-hidden
-            className="pointer-events-none absolute left-2 size-4 text-muted-foreground"
+            className="pointer-events-none absolute left-3 size-[15px] text-muted-foreground/70"
           />
           <input
             aria-label="Search requestor, ID or medicine"
-            className="h-8 w-full rounded-md border border-input bg-background pr-8 pl-8 text-sm outline-none focus:border-ring focus:ring-1 focus:ring-ring"
+            className="h-9 w-full rounded-full border border-border/60 bg-muted/50 pr-9 pl-9 text-[13px] tracking-[0.01em] shadow-[inset_0_1px_2px_oklch(0_0_0/0.04)] outline-none placeholder:text-muted-foreground/60 focus:border-ring/60 focus:bg-card focus:ring-2 focus:ring-ring/20"
             onChange={handleSearchInput}
             onKeyDown={handleSearchKeyDown}
             placeholder="Search name, ID, medicine…"
@@ -166,28 +170,34 @@ export function RequestsFilterBar({
           {filters.search ? (
             <button
               aria-label="Clear search"
-              className="absolute right-2 rounded p-1 text-muted-foreground hover:bg-muted"
+              className="absolute right-1.5 rounded-full bg-muted p-1.5 text-muted-foreground hover:bg-foreground hover:text-background"
               onClick={handleClearSearch}
               type="button"
             >
-              <X className="size-3.5" />
+              <X className="size-3" />
             </button>
           ) : null}
         </div>
 
-        <input
-          aria-label="Filter by requestor"
-          className="h-8 w-[180px] rounded-md border border-input bg-background px-2.5 text-sm outline-none focus:border-ring focus:ring-1 focus:ring-ring"
-          onChange={handleRequestorInput}
-          placeholder="Requestor name or ID"
-          value={filters.requestor}
-        />
+        <div className="relative flex items-center">
+          <Search
+            aria-hidden
+            className="pointer-events-none absolute left-2.5 size-3.5 text-muted-foreground/60"
+          />
+          <input
+            aria-label="Filter by requestor"
+            className="h-9 w-[180px] rounded-full border border-border/60 bg-muted/50 pr-3 pl-8 text-[13px] tracking-[0.01em] shadow-[inset_0_1px_2px_oklch(0_0_0/0.04)] outline-none placeholder:text-muted-foreground/60 focus:border-ring/60 focus:bg-card focus:ring-2 focus:ring-ring/20"
+            onChange={handleRequestorInput}
+            placeholder="Requestor…"
+            value={filters.requestor}
+          />
+        </div>
 
         <DropdownMenu>
-          <DropdownMenuTrigger className="press-feedback inline-flex h-8 items-center gap-1 rounded-md border border-input bg-background px-2.5 font-medium text-xs hover:bg-accent hover:text-accent-foreground">
-            <CalendarRange aria-hidden className="size-3" />
+          <DropdownMenuTrigger className="press-feedback inline-flex h-9 items-center gap-1.5 rounded-full border border-border/60 bg-card px-3.5 font-medium text-[12px] tracking-[0.01em] shadow-sm hover:bg-accent hover:text-accent-foreground">
+            <CalendarRange aria-hidden className="size-3.5 text-muted-foreground" />
             {dateLabel}
-            <ChevronDown className="size-3" />
+            <ChevronDown className="size-3 text-muted-foreground" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="min-w-[180px]">
             <DropdownMenuGroup>
@@ -206,9 +216,9 @@ export function RequestsFilterBar({
         </DropdownMenu>
 
         <DropdownMenu>
-          <DropdownMenuTrigger className="press-feedback inline-flex h-8 items-center gap-1 rounded-md border border-input bg-background px-2.5 font-medium text-xs hover:bg-accent hover:text-accent-foreground">
+          <DropdownMenuTrigger className="press-feedback inline-flex h-9 items-center gap-1.5 rounded-full border border-border/60 bg-card px-3.5 font-medium text-[12px] tracking-[0.01em] shadow-sm hover:bg-accent hover:text-accent-foreground">
             {filters.category === "All" ? "Category" : filters.category}
-            <ChevronDown className="size-3" />
+            <ChevronDown className="size-3 text-muted-foreground" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="min-w-[180px]">
             <DropdownMenuGroup>
@@ -234,7 +244,7 @@ export function RequestsFilterBar({
 
         {onNewRequest ? (
           <Button
-            className="press-feedback ml-auto"
+            className="press-feedback ml-auto rounded-full shadow-[0_1px_3px_oklch(0_0_0/0.08)] hover:shadow-[0_2px_8px_oklch(0_0_0/0.12)]"
             onClick={onNewRequest}
             size="sm"
           >
@@ -245,21 +255,21 @@ export function RequestsFilterBar({
       </div>
 
       {filters.datePreset === "custom" ? (
-        <div className="flex flex-wrap items-center gap-2 px-3 pb-2">
-          <label className="flex items-center gap-1.5 text-caption text-muted-foreground">
+        <div className="flex flex-wrap items-center gap-2 border-border/20 border-t bg-muted/20 px-3 py-2.5">
+          <label className="flex items-center gap-2 text-[12px] tracking-[0.01em] text-muted-foreground">
             From
             <AppleDatePicker
-              className="h-7 w-[124px]"
+              className="h-8 w-[132px] rounded-full"
               max={filters.to || undefined}
               onChange={handleFromChange}
               placeholder="YYYY-MM-DD"
               value={filters.from}
             />
           </label>
-          <label className="flex items-center gap-1.5 text-caption text-muted-foreground">
+          <label className="flex items-center gap-2 text-[12px] tracking-[0.01em] text-muted-foreground">
             To
             <AppleDatePicker
-              className="h-7 w-[124px]"
+              className="h-8 w-[132px] rounded-full"
               min={filters.from || undefined}
               onChange={handleToChange}
               placeholder="YYYY-MM-DD"
@@ -267,15 +277,15 @@ export function RequestsFilterBar({
             />
           </label>
           {invalidRange ? (
-            <span className="text-caption text-destructive">
-              From must be on or before To.
+            <span className="rounded-full bg-destructive/10 px-2.5 py-1 font-medium text-[11px] text-destructive">
+              From must be on or before To
             </span>
           ) : null}
         </div>
       ) : null}
 
       {activeChips.length > 0 ? (
-        <div className="scrollbar-thin flex items-center gap-1.5 overflow-x-auto px-3 pb-2">
+        <div className="flex flex-wrap items-center gap-1.5 border-border/20 border-t bg-muted/20 px-3 py-2">
           {activeChips.map((chip) => (
             <ChipItem
               chipKey={chip.key}
@@ -285,14 +295,15 @@ export function RequestsFilterBar({
             />
           ))}
           <button
-            className="whitespace-nowrap text-caption text-primary hover:underline"
+            className="rounded-full border border-border/60 bg-card px-2.5 py-1 font-medium text-[11px] tracking-[0.01em] text-primary shadow-sm hover:bg-accent"
             onClick={onClearFilters}
             type="button"
           >
             Clear all
           </button>
-          <span className="ml-auto shrink-0 text-caption text-muted-foreground">
-            Ctrl/⌘+A selects the visible cards
+          <span className="ml-auto hidden shrink-0 items-center gap-1.5 rounded-full bg-muted/60 px-2.5 py-1 font-medium text-[11px] tracking-[0.01em] text-muted-foreground sm:inline-flex">
+            <span className="rounded bg-card px-1 py-0.5 font-mono text-[10px] shadow-sm">⌘A</span>
+            select visible
           </span>
         </div>
       ) : null}

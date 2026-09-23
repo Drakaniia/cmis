@@ -73,15 +73,28 @@ export async function closeDb(): Promise<void> {
  * migration ever created, so that statement was a silent no-op and Wipe All Data
  * never actually cleared the queue.
  *
- * `trash_records` is cleared with the operational data (a restorable Trash would
- * contradict a deliberate clean slate) while `audit_log` is deliberately absent:
- * the log is the record *that* the wipe happened, so destroying it would erase
- * the only account of a destructive action.
+ * All operational tables are cleared so Analytics returns to an empty state:
+ * - `dispensing_events` + `audit_log` (stock-in `after_json.received`) drive
+ *   Stock Movement (`useStockMovement`)
+ * - `inventory_items` + `dispensing_events` drive Low-Stock Trend
+ *   (`useLowStockTrend` / `reconstructLowStock`)
+ * - `inventory_batches` drives Expiry Timeline
+ * Leaving any of them (and `audit_log` in particular) makes the charts show
+ * pre-wipe history after a destructive reset.
+ *
+ * `audit_log` is cleared here and then a single "Wiped all data" entry is
+ * re-inserted after the loop, so the destructive action remains auditable
+ * without preserving its historical `stock-in` rows.
  */
 export const WIPE_STATEMENTS = [
+  "DELETE FROM dispensing_records",
+  "DELETE FROM request_notes",
+  "DELETE FROM request_history",
   "DELETE FROM dispensing_events",
   "DELETE FROM requests",
+  "DELETE FROM inventory_batches",
   "DELETE FROM trash_records",
+  "DELETE FROM audit_log",
   "DELETE FROM inventory_items",
   "VACUUM",
 ] as const;
@@ -158,8 +171,10 @@ export async function wipeAllData(opts?: {
   for (const k of CMIS_KEYS) {
     localStorage.removeItem(k);
   }
-  // Written after the tables are empty, so the log explains the empty database
-  // failing here would report a data loss that did not occur.
+  // Written after the tables are empty, so the log explains the empty database.
+  // The preceding `DELETE FROM audit_log` ensures analytics sources
+  // (`stock-in` rows) do not survive a wipe; this single entry is the
+  // remaining audit trail. Failing here would report a data loss that did not occur.
   const { recordAudit } = await import("@/features/admin/audit/write-audit");
   await recordAudit(
     db as unknown as {
@@ -168,7 +183,7 @@ export async function wipeAllData(opts?: {
     {
       action: "settings",
       detail:
-        "Wiped all data — inventory, requests, dispensing and Trash cleared; audit log preserved",
+        "Wiped all data — inventory, batches, requests, dispensing and Trash cleared; audit log reset",
       targetKind: "settings",
     },
     { bestEffort: true }

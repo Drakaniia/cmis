@@ -31,9 +31,14 @@ describe("wipeAllData", () => {
     const { WIPE_STATEMENTS, wipeAllData } = await import("./db");
 
     expect(WIPE_STATEMENTS).toEqual([
+      "DELETE FROM dispensing_records",
+      "DELETE FROM request_notes",
+      "DELETE FROM request_history",
       "DELETE FROM dispensing_events",
       "DELETE FROM requests",
+      "DELETE FROM inventory_batches",
       "DELETE FROM trash_records",
+      "DELETE FROM audit_log",
       "DELETE FROM inventory_items",
       "VACUUM",
     ]);
@@ -42,18 +47,31 @@ describe("wipeAllData", () => {
 
     expect(mockExec).toHaveBeenNthCalledWith(
       1,
+      "DELETE FROM dispensing_records"
+    );
+    expect(mockExec).toHaveBeenNthCalledWith(2, "DELETE FROM request_notes");
+    expect(mockExec).toHaveBeenNthCalledWith(3, "DELETE FROM request_history");
+    expect(mockExec).toHaveBeenNthCalledWith(
+      4,
       "DELETE FROM dispensing_events"
     );
-    expect(mockExec).toHaveBeenNthCalledWith(2, "DELETE FROM requests");
-    expect(mockExec).toHaveBeenNthCalledWith(3, "DELETE FROM trash_records");
-    expect(mockExec).toHaveBeenNthCalledWith(4, "DELETE FROM inventory_items");
-    expect(mockExec).toHaveBeenNthCalledWith(5, "VACUUM");
+    expect(mockExec).toHaveBeenNthCalledWith(5, "DELETE FROM requests");
+    expect(mockExec).toHaveBeenNthCalledWith(
+      6,
+      "DELETE FROM inventory_batches"
+    );
+    expect(mockExec).toHaveBeenNthCalledWith(7, "DELETE FROM trash_records");
+    expect(mockExec).toHaveBeenNthCalledWith(8, "DELETE FROM audit_log");
+    expect(mockExec).toHaveBeenNthCalledWith(9, "DELETE FROM inventory_items");
+    expect(mockExec).toHaveBeenNthCalledWith(10, "VACUUM");
   });
 
-  it("keeps the audit log and writes exactly one entry explaining the wipe", async () => {
+  it("clears the audit log then writes exactly one wipe entry so analytics goes empty", async () => {
     const { WIPE_STATEMENTS, wipeAllData } = await import("./db");
 
-    expect(WIPE_STATEMENTS).not.toContain("DELETE FROM audit_log");
+    expect(WIPE_STATEMENTS).toContain("DELETE FROM audit_log");
+    expect(WIPE_STATEMENTS).toContain("DELETE FROM inventory_batches");
+    expect(WIPE_STATEMENTS).toContain("DELETE FROM dispensing_records");
 
     await wipeAllData({ resetSettings: false });
 

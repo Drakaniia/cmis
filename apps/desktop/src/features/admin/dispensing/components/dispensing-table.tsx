@@ -182,43 +182,44 @@ function DispensingTableRow({
       <tr
         aria-expanded={expanded}
         className={cn(
-          "grid cursor-pointer items-center gap-2 border-border/50 border-b px-3 py-2 text-sm transition-colors hover:bg-muted/50",
+          "group/row grid cursor-pointer items-center gap-2 border-border/40 border-b px-3 py-2.5 text-sm transition-all duration-150 hover:bg-card hover:shadow-[inset_0_1px_0_oklch(1_0_0/0.4)]",
           GRID,
-          expanded && "bg-muted/40",
-          isDenied && "bg-destructive/5 hover:bg-destructive/8"
+          expanded && "bg-card shadow-[inset_0_1px_0_oklch(1_0_0/0.5)]",
+          isDenied && "bg-destructive/[0.04] hover:bg-destructive/[0.06]"
         )}
         onClick={handleRowClick}
         onKeyDown={handleRowKeyDown}
         tabIndex={0}
       >
-        <td className="whitespace-nowrap font-mono text-caption">
+        <td className="whitespace-nowrap font-mono text-[11px] tracking-[0.02em] text-muted-foreground tabular-nums">
           {auditTimestamp(row.dispensedAt)}
         </td>
 
         <td className="min-w-0">
           <span
             className={cn(
-              "block truncate font-medium",
+              "block truncate font-semibold text-[13px] tracking-[-0.01em] text-foreground",
               isDenied && "text-destructive/80"
             )}
           >
             {row.medicine}
           </span>
-          <span className="block text-caption text-muted-foreground">
-            {row.medicineSku}
+          <span className="mt-0.5 flex flex-wrap items-center gap-1">
+            <span className="font-mono text-[11px] tracking-[0.02em] text-muted-foreground tabular-nums">
+              {row.medicineSku}
+            </span>
             {isDenied ? (
-              <span className="ml-1.5 rounded-full bg-destructive/12 px-1.5 py-0.5 text-[10px] text-destructive">
+              <span className="inline-flex items-center gap-1 rounded-full border border-destructive/20 bg-destructive/10 px-2 py-0.5 text-[10px] font-medium tracking-[0.02em] text-destructive">
+                <span className="size-1 rounded-full bg-destructive" />
                 Denied
               </span>
             ) : null}
-            {/* Both a quick deduction and an anonymous queued request read
-                "Walk-in", so the exception is the one worth marking here; the
-                expanded detail names the source for every row. */}
             {row.source === "quick-deduct" ? (
               <span
-                className="ml-1.5 rounded-full bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground"
+                className="inline-flex items-center gap-1 rounded-full border border-amber-500/20 bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium tracking-[0.02em] text-amber-700 dark:text-amber-300"
                 title={DISPENSING_SOURCE_DETAIL["quick-deduct"]}
               >
+                <span className="size-1 rounded-full bg-amber-500" />
                 {DISPENSING_SOURCE_LABELS["quick-deduct"]}
               </span>
             ) : null}
@@ -226,12 +227,9 @@ function DispensingTableRow({
         </td>
 
         <td className="min-w-0">
-          {/* A batch-less deduction records an empty batch rather than
-              inventing one, and an empty cell reads as missing data — say what
-              happened instead, and offer no copy button for nothing. */}
           {hasBatch(row) ? (
             <button
-              className="group/batch inline-flex items-center gap-1 rounded px-1 py-0.5 font-mono text-caption hover:bg-muted"
+              className="group/batch inline-flex items-center gap-1 rounded-full border border-border/60 bg-card px-2 py-1 font-mono text-[11px] tracking-[0.02em] shadow-sm hover:bg-accent hover:text-foreground tabular-nums"
               onClick={handleCopyBatch}
               title="Click to copy"
               type="button"
@@ -239,33 +237,39 @@ function DispensingTableRow({
               {row.batch}
               <Copy
                 aria-hidden
-                className="size-3 opacity-0 transition-opacity group-hover/batch:opacity-100"
+                className="size-3 text-muted-foreground opacity-0 transition-opacity group-hover/batch:opacity-100"
               />
             </button>
           ) : (
-            <span className="text-caption text-muted-foreground italic">
+            <span className="rounded-full bg-muted px-2 py-1 text-[11px] tracking-[0.01em] text-muted-foreground italic">
               {NO_BATCH_LABEL}
             </span>
           )}
         </td>
 
-        <td className="text-right tabular-nums">{row.qty}</td>
+        <td className="text-right">
+          <span className="inline-flex min-w-[36px] justify-center rounded-full bg-foreground px-2 py-1 font-semibold text-[11px] tracking-[0.02em] text-background tabular-nums">
+            {row.qty}
+          </span>
+        </td>
 
         <td className="min-w-0">
-          <span className="block truncate">{row.requestor}</span>
-          <span className="block text-caption text-muted-foreground">
+          <span className="block truncate font-medium text-[12px] tracking-[-0.01em] text-foreground">
+            {row.requestor}
+          </span>
+          <span className="block font-mono text-[11px] tracking-[0.02em] text-muted-foreground tabular-nums">
             {row.requestorId}
           </span>
         </td>
 
-        <td className="truncate text-caption text-muted-foreground">
+        <td className="truncate text-[12px] tracking-[0.01em] text-muted-foreground">
           {row.staff}
         </td>
 
         <td className="min-w-0">
           {requestLink ? (
             <button
-              className="press-feedback truncate font-medium text-primary text-xs hover:underline"
+              className="press-feedback inline-flex items-center gap-1 rounded-full border border-primary/15 bg-primary/8 px-2.5 py-1 font-medium text-[11px] tracking-[0.01em] text-primary hover:bg-primary hover:text-primary-foreground"
               onClick={handleRequest}
               type="button"
             >
@@ -364,27 +368,20 @@ export function DispensingTable({
 }) {
   if (loading) {
     return (
-      <div className="flex h-full flex-col overflow-hidden">
+      <div className="flex h-full flex-col overflow-hidden rounded-xl border border-border/40 bg-card/40">
         <div
           className={cn(
-            "sticky top-0 z-[1] grid shrink-0 items-center gap-2 border-border/50 border-b bg-card/95 px-3 py-1.5 backdrop-blur-[6px]",
+            "sticky top-0 z-[1] grid shrink-0 items-center gap-2 border-border/40 border-b bg-card/80 px-3 py-2 backdrop-blur-[12px]",
             GRID
           )}
         >
           {SKELETON_COLUMNS.map((column) => (
-            <Skeleton
-              className="h-3.5 w-full max-w-[80px] rounded"
-              key={column}
-            />
+            <Skeleton className="h-3.5 w-full max-w-[80px] rounded-full" key={column} />
           ))}
         </div>
-        <div className="flex-1 space-y-1 p-3">
+        <div className="flex-1 space-y-2 p-3">
           {SKELETON_ROWS.map((row) => (
-            <Skeleton
-              className="w-full rounded-md"
-              key={row}
-              style={{ height: 48 }}
-            />
+            <Skeleton className="w-full rounded-xl" key={row} style={{ height: 56 }} />
           ))}
         </div>
       </div>
@@ -421,12 +418,12 @@ export function DispensingTable({
   }
 
   return (
-    <div className="overflow-hidden">
+    <div className="overflow-hidden rounded-xl border border-border/40 bg-card/40 shadow-sm backdrop-blur-sm">
       <table className="block w-full border-collapse">
         <thead className="block">
           <tr
             className={cn(
-              "sticky top-0 z-[1] grid items-center gap-2 border-border/50 border-b bg-card/95 px-3 py-1.5 font-medium text-caption text-muted-foreground backdrop-blur-[6px]",
+              "sticky top-0 z-[1] grid items-center gap-2 border-border/40 border-b bg-card/80 px-3 py-2 font-medium text-[11px] tracking-[0.04em] text-muted-foreground uppercase backdrop-blur-[12px] backdrop-saturate-[160%]",
               GRID
             )}
           >

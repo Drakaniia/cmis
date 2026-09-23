@@ -53,8 +53,12 @@ function ColumnHeader({
   return (
     <motion.header
       animate={shaking ? { x: [0, -4, 4, -4, 0] } : { x: 0 }}
-      className="flex shrink-0 items-center gap-2 rounded-t-xl border-border/50 border-b px-2 py-1.5"
+      className="flex shrink-0 items-center gap-2 rounded-t-[14px] border-b border-border/40 bg-card/70 px-3 py-2.5 backdrop-blur-[12px] backdrop-saturate-[160%]"
       id={headerId}
+      style={{
+        borderTop: "1px solid color-mix(in oklch, var(--card) 60%, transparent)",
+        boxShadow: "inset 0 1px 0 oklch(1 0 0 / 0.35)",
+      }}
       transition={
         shaking
           ? { bounce: 0.4, duration: 0.35, type: "spring" }
@@ -63,26 +67,32 @@ function ColumnHeader({
     >
       <span
         aria-hidden
-        className={cn("size-2 shrink-0 rounded-full", column.accent)}
+        className={cn(
+          "size-2.5 shrink-0 rounded-full shadow-[0_0_6px_currentColor] ring-1 ring-white/20",
+          column.accent
+        )}
+        style={{ color: "inherit" }}
       />
-      <h2 className="min-w-0 truncate font-semibold text-xs">{column.label}</h2>
+      <h2 className="min-w-0 truncate font-semibold text-[12px] tracking-[-0.01em] text-foreground">
+        {column.label}
+      </h2>
       <span
         className={cn(
-          "shrink-0 rounded-full border px-1.5 py-px font-semibold text-[10px] leading-none",
+          "shrink-0 rounded-full border px-2 py-0.5 font-semibold text-[10px] leading-none tracking-[0.02em] tabular-nums",
           column.badgeClass
         )}
       >
         {countLabel}
       </span>
       {refuseChip ? (
-        <span className="shrink-0 truncate rounded-sm border border-border bg-muted px-1 text-caption text-muted-foreground">
+        <span className="shrink-0 truncate rounded-full border border-amber-500/20 bg-amber-500/10 px-2 py-0.5 font-medium text-[10px] tracking-[0.01em] text-amber-700 dark:text-amber-300">
           Can&apos;t place here
         </span>
       ) : null}
       {onClearClaimed ? (
         <button
           aria-label={`Clear ${total} claimed cards`}
-          className="press-feedback ml-auto shrink-0 rounded px-1 text-caption text-muted-foreground hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+          className="press-feedback ml-auto inline-flex shrink-0 items-center rounded-full border border-border/60 bg-card px-2.5 py-1 font-medium text-[11px] tracking-[0.01em] text-muted-foreground shadow-sm hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
           disabled={total === 0}
           onClick={onClearClaimed}
           type="button"
@@ -94,7 +104,7 @@ function ColumnHeader({
         <button
           aria-expanded
           aria-label={`Collapse ${column.label} column`}
-          className="press-feedback ml-auto rounded px-1 text-caption text-muted-foreground hover:bg-muted hover:text-foreground"
+          className="press-feedback ml-auto inline-flex shrink-0 items-center rounded-full border border-border/60 bg-card px-2 py-1 font-medium text-[11px] text-muted-foreground shadow-sm hover:bg-accent hover:text-foreground"
           onClick={onToggleCollapsed}
           type="button"
         >
@@ -208,27 +218,32 @@ export function RequestColumn({
       <section
         aria-label={`${column.label} column, collapsed`}
         className={cn(
-          "flex h-full w-12 shrink-0 snap-start flex-col items-center rounded-xl border border-border/50 bg-muted/20 py-2 transition-all duration-200 ease-out",
-          highlight && "border-[var(--ring)] border-dashed bg-primary/10",
-          dimmed && "opacity-45"
+          "flex h-full w-12 shrink-0 snap-start flex-col items-center rounded-[14px] border py-2 backdrop-blur-[10px] transition-all duration-200 ease-out",
+          highlight
+            ? "border-[var(--ring)] border-dashed bg-primary/10 shadow-[0_0_0_1px_var(--ring)]"
+            : "border-border/40 bg-card/60",
+          dimmed && "opacity-40 saturate-50"
         )}
         ref={columnRef}
       >
         <button
           aria-expanded={false}
           aria-label={`Expand ${column.label} column — ${total} requests`}
-          className="press-feedback flex flex-1 flex-col items-center gap-2 rounded-lg px-1.5 hover:bg-muted"
+          className="press-feedback flex flex-1 flex-col items-center gap-2 rounded-xl px-1.5 py-1 hover:bg-accent/60"
           onClick={onToggleCollapsed}
           type="button"
         >
           <span
             aria-hidden
-            className={cn("size-2 rounded-full", column.accent)}
+            className={cn(
+              "size-2.5 rounded-full shadow-[0_0_6px_currentColor]",
+              column.accent
+            )}
           />
-          <span className="font-medium text-caption text-muted-foreground [writing-mode:vertical-rl]">
+          <span className="font-semibold text-[11px] tracking-[0.02em] text-muted-foreground [writing-mode:vertical-rl]">
             {column.label}
           </span>
-          <span className="rounded-full border border-border bg-card px-1.5 py-0.5 font-semibold text-[10px] leading-none">
+          <span className="rounded-full border border-border bg-card px-1.5 py-0.5 font-semibold text-[10px] leading-none tabular-nums">
             {total}
           </span>
         </button>
@@ -242,13 +257,12 @@ export function RequestColumn({
     <section
       aria-labelledby={headerId}
       className={cn(
-        "flex h-full min-h-0 shrink-0 snap-start flex-col rounded-xl border bg-muted/20 transition-all duration-200 ease-out",
-        // CMIS-UI-05 §2 — 260px at ≥1200, 220px at 800–1199 (48px when collapsed)
-        "w-[220px] min-[1200px]:w-[260px]",
+        "flex h-full min-h-0 shrink-0 snap-start flex-col rounded-[14px] border backdrop-blur-[8px] transition-all duration-300 ease-out",
+        "w-[228px] min-[1200px]:w-[268px]",
         highlight
-          ? "border-[var(--ring)] border-dashed bg-primary/10"
-          : "border-border/50",
-        dimmed && "opacity-45"
+          ? "border-[var(--ring)] border-dashed bg-primary/[0.06] shadow-[0_0_0_1px_var(--ring),0_8px_24px_oklch(0_0_0/0.06)]"
+          : "border-border/40 bg-card/55 shadow-[0_1px_3px_oklch(0_0_0/0.04),0_8px_24px_oklch(0_0_0/0.03)]",
+        dimmed && "opacity-40 saturate-50 blur-[0.2px]"
       )}
       ref={columnRef}
       title={column.description}
@@ -266,20 +280,15 @@ export function RequestColumn({
       />
 
       <div className="relative min-h-0 flex-1">
-        {/*
-         * `flex flex-col gap-2` (rather than `space-y-2`) is what lets the
-         * cards FLIP: a layout-animated element measures its own box, and gap
-         * spacing is geometric where margins are not (CMIS-UI-05 §4.1).
-         */}
         <ul
-          className="flex h-full list-none flex-col gap-2 overflow-y-auto p-1.5"
+          className="flex h-full list-none flex-col gap-2.5 overflow-y-auto p-2"
           data-lane-scroll={column.status}
           onScroll={handleScroll}
           ref={bodyRef}
         >
           {items.length === 0 ? (
             <li className="shrink-0 list-none">
-              <p className="rounded-lg border border-border/70 border-dashed px-2 py-6 text-center text-caption text-muted-foreground">
+              <p className="rounded-xl border border-border/40 border-dashed bg-card/40 px-3 py-8 text-center text-[12px] leading-[1.4] tracking-[0.01em] text-muted-foreground backdrop-blur-sm">
                 {total === 0
                   ? `No ${column.label.toLowerCase()} requests`
                   : "No matches for filters"}
@@ -308,7 +317,7 @@ export function RequestColumn({
         {showFade ? (
           <div
             aria-hidden
-            className="pointer-events-none absolute inset-x-0 bottom-0 h-6 rounded-b-xl bg-gradient-to-b from-transparent to-muted/60"
+            className="pointer-events-none absolute inset-x-0 bottom-0 h-8 rounded-b-[14px] bg-gradient-to-b from-transparent via-card/40 to-card/80 backdrop-blur-[1px]"
           />
         ) : null}
       </div>

@@ -105,7 +105,7 @@ export function RequestBoard({
   // under the card's home lane mid-gesture (Apple §3: don't fight the user).
   const className = useMemo(
     () =>
-      `h-full overflow-x-auto overflow-y-hidden px-3 pb-3 ${
+      `h-full overflow-x-auto overflow-y-hidden bg-gradient-to-b from-background/50 to-muted/20 px-3 pt-3 pb-4 ${
         snapSuspended ? "snap-none" : "snap-x snap-mandatory"
       }`,
     [snapSuspended]
@@ -142,7 +142,7 @@ export function RequestBoard({
       className={className}
       ref={boardRef}
     >
-      <div className="flex h-full min-h-0 gap-2">
+      <div className="flex h-full min-h-0 gap-3">
         {previewGroups.map((group) => (
           <RequestColumn
             anySelected={selectedIds.size > 0}

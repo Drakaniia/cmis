@@ -79,7 +79,7 @@ export function DragOverlayLayer({
       }}
       {...handlers}
     >
-      <div className="kanban-card h-full rounded-xl border border-ring/60 bg-card opacity-[0.82] shadow-2xl">
+      <div className="kanban-card h-full rounded-[14px] border border-ring/30 bg-card opacity-[0.88] shadow-[0_8px_32px_oklch(0_0_0/0.16),0_2px_8px_oklch(0_0_0/0.12),inset_0_1px_0_oklch(1_0_0/0.7)] backdrop-blur-[1px]">
         <RequestCardContent item={overlay.item} lifted now={now} />
       </div>
     </motion.div>,

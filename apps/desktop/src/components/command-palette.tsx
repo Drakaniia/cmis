@@ -179,9 +179,15 @@ export function CommandPalette() {
 
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
-      if (e.key === "k" && (e.metaKey || e.ctrlKey)) {
+      if (e.key.toLowerCase() === "k" && (e.metaKey || e.ctrlKey)) {
+        // Allow Ctrl/Cmd+K even while typing; ignore Alt-combos (e.g. Ctrl+Alt+K)
+        if (e.altKey) {
+          return;
+        }
         e.preventDefault();
+        e.stopPropagation();
         setOpen((prev) => !prev);
+        return;
       }
       if (e.key === "Escape" && open) {
         e.preventDefault();
@@ -189,8 +195,10 @@ export function CommandPalette() {
       }
     };
 
-    document.addEventListener("keydown", down);
-    return () => document.removeEventListener("keydown", down);
+    // Use window + capture so we beat the browser's own Ctrl+K (focus address bar)
+    // which can fire before a bubbling document listener.
+    window.addEventListener("keydown", down, true);
+    return () => window.removeEventListener("keydown", down, true);
   }, [open]);
 
   // Focus the input when the dialog opens — Apple §1: instant response.

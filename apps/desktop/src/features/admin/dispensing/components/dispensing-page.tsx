@@ -156,7 +156,7 @@ export function DispensingPage({
         staffList={staffList}
       />
 
-      <div className="min-h-0 flex-1 overflow-auto pb-6">
+      <div className="min-h-0 flex-1 overflow-auto bg-gradient-to-b from-background/30 to-muted/15 p-3 pb-6">
         <DispensingTable
           expandedId={expandedId}
           hasError={hasError}

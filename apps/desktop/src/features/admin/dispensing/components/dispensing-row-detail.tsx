@@ -25,19 +25,25 @@ export function DispensingRowDetail({
   );
 
   return (
-    <div className="border-border/50 border-t bg-muted/30 px-4 py-3 text-caption">
+    <div className="border-border/40 border-t bg-muted/20 px-4 py-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-foreground text-sm">{row.medicine}</p>
-          <p className="mt-0.5 text-muted-foreground">
-            {row.id} · {row.requestor} ({row.requestorId}) ·{" "}
+          <p className="font-semibold text-[14px] tracking-[-0.01em] text-foreground">
+            {row.medicine}
+          </p>
+          <p className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] tracking-[0.01em] text-muted-foreground">
+            <span className="rounded-full bg-card px-2 py-0.5 font-mono tracking-[0.02em] tabular-nums">
+              {row.id}
+            </span>
+            <span className="rounded-full bg-card px-2 py-0.5">{row.requestor}</span>
+            <span className="font-mono tabular-nums">({row.requestorId})</span>·{" "}
             {absoluteDateTime(row.dispensedAt)}
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
           {row.requestLink ? (
             <Button
-              className="press-feedback"
+              className="press-feedback rounded-full"
               onClick={handleRequest}
               size="xs"
               variant="outline"
@@ -49,7 +55,7 @@ export function DispensingRowDetail({
         </div>
       </div>
 
-      <dl className="mt-3 overflow-hidden rounded-md border border-border/60 bg-card">
+      <dl className="mt-3 overflow-hidden rounded-xl border border-border/40 bg-card shadow-sm">
         <DetailRow
           label="Medicine"
           value={`${row.medicine} (${row.medicineSku})`}
@@ -86,9 +92,9 @@ export function DispensingRowDetail({
       </dl>
 
       {isDenied ? (
-        <p className="mt-3 rounded-md border border-destructive/20 bg-destructive/5 px-2.5 py-1.5 text-foreground">
-          <span className="font-medium">Denied:</span> This request was not
-          fulfilled. The record is retained for audit completeness.
+        <p className="mt-3 rounded-xl border border-destructive/20 bg-destructive/5 px-3 py-2.5 text-[12px] leading-[1.5] tracking-[0.01em] text-foreground">
+          <span className="font-semibold">Denied:</span> This request was not fulfilled. The record is
+          retained for audit completeness.
         </p>
       ) : null}
     </div>
@@ -103,9 +109,13 @@ function DetailRow({
   value: React.ReactNode;
 }) {
   return (
-    <div className="grid grid-cols-[0.4fr_1fr] items-center gap-2 border-border/40 border-b px-2.5 py-1.5 last:border-b-0">
-      <dt className="truncate font-medium text-foreground">{label}</dt>
-      <dd className="truncate font-mono text-muted-foreground">{value}</dd>
+    <div className="grid grid-cols-[0.38fr_1fr] items-center gap-2 border-border/30 border-b px-3 py-2.5 last:border-b-0">
+      <dt className="truncate text-[11px] font-semibold tracking-[0.04em] text-muted-foreground uppercase">
+        {label}
+      </dt>
+      <dd className="truncate font-mono text-[12px] tracking-[0.01em] text-foreground tabular-nums">
+        {value}
+      </dd>
     </div>
   );
 }
