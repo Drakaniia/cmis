@@ -32,7 +32,12 @@ export function validateStockDetailSearch(
   };
 }
 
-const ITEM_GONE = "That item is no longer available";
+/**
+ * The wording for a link that no longer resolves. Exported because the
+ * palette-opened detail host has the same failure mode (F5.5) and must say the
+ * same sentence rather than a second, drifting copy.
+ */
+export const ITEM_GONE = "That item is no longer available";
 const BATCH_GONE = "That batch is no longer available";
 
 /**

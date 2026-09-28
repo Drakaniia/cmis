@@ -2,7 +2,13 @@ import { Button } from "@cmis/ui/components/button";
 import { cn } from "@cmis/ui/lib/utils";
 import { ArrowLeft, Clock, Package, Trash2, X } from "lucide-react";
 import { motion, useReducedMotion } from "motion/react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  type RefObject,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { daysUntilExpiry, expiryLabel } from "../domain/expiry";
 import type { InventoryItem } from "../types";
 import { ItemEditPanel } from "./item-edit-panel";
@@ -94,6 +100,49 @@ function BatchDeleteAction({
 }
 
 /**
+ * §8 — the stock movement pair, rendered only when the surface can actually
+ * move stock (D9). Module-level so the panel's own branching stays under the
+ * complexity limit, and the ref keeps working for `autoFocus`.
+ */
+function StockMovementButtons({
+  onStockIn,
+  onStockOut,
+  stockInRef,
+}: {
+  onStockIn?: () => void;
+  onStockOut?: () => void;
+  stockInRef: RefObject<HTMLButtonElement | null>;
+}) {
+  return (
+    <>
+      {/* §8 — Primary CTA: confirm variant (solid, confident) */}
+      {onStockIn ? (
+        <Button
+          className="press-feedback"
+          onClick={onStockIn}
+          ref={stockInRef}
+          size="sm"
+          variant="confirm"
+        >
+          Stock In
+        </Button>
+      ) : null}
+      {/* §8 — Secondary: outline (visible but not dominant) */}
+      {onStockOut ? (
+        <Button
+          className="press-feedback"
+          onClick={onStockOut}
+          size="sm"
+          variant="outline"
+        >
+          Stock Out
+        </Button>
+      ) : null}
+    </>
+  );
+}
+
+/**
  * Apple Design §12 — Action bar is a translucent material layer between
  * the header and scrolling content. Content scrolls underneath (§12).
  * §1 — Each button has instant press feedback (scale 0.97).
@@ -115,8 +164,12 @@ export function InventoryDetailContent({
   onItemUpdated,
 }: {
   item: InventoryItem | null;
-  onStockIn: () => void;
-  onStockOut: () => void;
+  /**
+   * Optional so a read-only surface (the palette-opened detail, D9) can omit
+   * them and have the pair disappear, rather than rendering dead buttons.
+   */
+  onStockIn?: () => void;
+  onStockOut?: () => void;
   onClose?: () => void;
   /**
    * Opens the edit form. When a surface has no view state of its own, leaving
@@ -319,25 +372,13 @@ export function InventoryDetailContent({
         initial={reduceMotion ? { opacity: 1 } : { opacity: 0 }}
         transition={reduceMotion ? { duration: 0 } : { duration: 0.2 }}
       >
-        {/* §8 — Primary CTA: confirm variant (solid, confident) */}
-        <Button
-          className="press-feedback"
-          onClick={onStockIn}
-          ref={stockInRef}
-          size="sm"
-          variant="confirm"
-        >
-          Stock In
-        </Button>
-        {/* §8 — Secondary: outline (visible but not dominant) */}
-        <Button
-          className="press-feedback"
-          onClick={onStockOut}
-          size="sm"
-          variant="outline"
-        >
-          Stock Out
-        </Button>
+        {/* §8 — the movement pair, present only when the surface can move
+         * stock (D9). */}
+        <StockMovementButtons
+          onStockIn={onStockIn}
+          onStockOut={onStockOut}
+          stockInRef={stockInRef}
+        />
         {/* §8 — Tertiary: ghost (subtle, same weight as text) */}
         <Button
           className="press-feedback"

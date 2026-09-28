@@ -33,6 +33,7 @@ import {
   type ThresholdBackfillReport,
 } from "@/features/inventory/data/threshold-backfill";
 import { QuickDeductDialogProvider } from "@/features/inventory/quick-deduct-dialog-context";
+import { StockItemDetailDialogProvider } from "@/features/inventory/stock-item-detail-dialog-context";
 import { NewRequestDialogProvider } from "@/features/requests/new-request-dialog-context";
 import { UpdaterProvider } from "@/features/updater/use-updater";
 
@@ -264,34 +265,38 @@ function RootComponent() {
                 app-wide, so their dialogs are mounted once here rather than
                 owned by a route. */}
             <QuickDeductDialogProvider>
-              <NewRequestDialogProvider>
-                {isDocsRoute ? (
-                  <div className="flex h-svh flex-col overflow-hidden overflow-x-hidden">
-                    <TitleBar onToggleSidebar={handleToggle} />
-                    <DocsHeader />
-                    <main className="page-canvas flex-1 overflow-y-auto">
-                      <Outlet />
-                    </main>
-                  </div>
-                ) : (
-                  <div className="flex h-svh flex-col overflow-hidden overflow-x-hidden">
-                    <TitleBar onToggleSidebar={handleToggle} />
-                    <BackupWarningBanner />
-                    <div className="flex flex-1 overflow-hidden overflow-x-hidden">
-                      <AppSidebar
-                        collapsed={sidebarCollapsed}
-                        onToggle={handleToggle}
-                      />
-                      <div className="flex min-w-0 flex-1 flex-col">
-                        <Header />
-                        <main className="page-canvas flex-1 overflow-y-auto">
-                          <Outlet />
-                        </main>
+              {/* The palette's stock detail is app-wide too (D22), so its host
+                  sits beside Quick Deduct rather than inside the palette. */}
+              <StockItemDetailDialogProvider>
+                <NewRequestDialogProvider>
+                  {isDocsRoute ? (
+                    <div className="flex h-svh flex-col overflow-hidden overflow-x-hidden">
+                      <TitleBar onToggleSidebar={handleToggle} />
+                      <DocsHeader />
+                      <main className="page-canvas flex-1 overflow-y-auto">
+                        <Outlet />
+                      </main>
+                    </div>
+                  ) : (
+                    <div className="flex h-svh flex-col overflow-hidden overflow-x-hidden">
+                      <TitleBar onToggleSidebar={handleToggle} />
+                      <BackupWarningBanner />
+                      <div className="flex flex-1 overflow-hidden overflow-x-hidden">
+                        <AppSidebar
+                          collapsed={sidebarCollapsed}
+                          onToggle={handleToggle}
+                        />
+                        <div className="flex min-w-0 flex-1 flex-col">
+                          <Header />
+                          <main className="page-canvas flex-1 overflow-y-auto">
+                            <Outlet />
+                          </main>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                )}
-              </NewRequestDialogProvider>
+                  )}
+                </NewRequestDialogProvider>
+              </StockItemDetailDialogProvider>
             </QuickDeductDialogProvider>
             <StrengthBackfillNotice />
             <PackBackfillNotice />

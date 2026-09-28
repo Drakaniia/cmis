@@ -103,8 +103,16 @@ function mapRowToItem(row: InventoryRow, batches: BatchRow[]): InventoryItem {
   };
 }
 
-export function useInventoryItems() {
+/**
+ * The live inventory, shared with every inventory page.
+ *
+ * `enabled` lets the command palette load it lazily on first open while sharing
+ * the `["inventory_items"]` cache with the pages (F4/D13). Every existing call
+ * site keeps its behaviour because the option is optional.
+ */
+export function useInventoryItems(options?: { enabled?: boolean }) {
   return useQuery({
+    enabled: options?.enabled ?? true,
     gcTime: 5 * 60 * 1000,
     placeholderData: (previousData) => previousData,
     queryFn: async (): Promise<InventoryItem[]> => {

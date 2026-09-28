@@ -103,8 +103,12 @@ export function StockDetailModal({
   onExtend?: () => void;
   onReorder?: () => void;
   onAdjustThreshold?: () => void;
-  onStockIn: () => void;
-  onStockOut: () => void;
+  /**
+   * Stock movement is page-scoped: a host that offers none (the palette-opened
+   * detail, D9) leaves both out and the pair is not rendered.
+   */
+  onStockIn?: () => void;
+  onStockOut?: () => void;
   /** Fired after a successful Edit save so the page can refresh. */
   onItemUpdated?: () => void;
   items?: InventoryItem[];
