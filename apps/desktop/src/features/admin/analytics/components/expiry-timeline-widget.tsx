@@ -11,6 +11,7 @@ import { Grid } from "@/components/charts/grid";
 import { transitionWithDelay } from "@/components/charts/motion-utils";
 import { ChartTooltip } from "@/components/charts/tooltip/chart-tooltip";
 import { chartNumber } from "@/lib/chart-number";
+import { analyticsChartRevealMs } from "@/lib/motion";
 import type { ExpiryBucket } from "../types";
 import { EmptyWidget, WidgetCard } from "./widget-card";
 
@@ -226,12 +227,12 @@ export function ExpiryTimelineWidget({ buckets }: { buckets: ExpiryBucket[] }) {
 
   return (
     <WidgetCard
-      subtitle="Click a bar to review that month in Expiry Alerts — bLKit horizontal"
+      subtitle="Batches by expiry month — select a bar to review"
       title="Expiry Timeline"
     >
       <div className="relative overflow-hidden rounded-md border bg-card">
         <BarChart
-          animationDuration={1100}
+          animationDuration={analyticsChartRevealMs}
           aspectRatio="2.2 / 1"
           barGap={0.28}
           className="h-[180px] w-full"
@@ -247,7 +248,7 @@ export function ExpiryTimelineWidget({ buckets }: { buckets: ExpiryBucket[] }) {
           <ChartTooltip rows={expiryTooltipRows} showCrosshair={false} />
         </BarChart>
       </div>
-      <div className="mt-3 flex gap-2 text-[10px] text-muted-foreground leading-none">
+      <div className="mt-3 flex gap-2 text-[11px] text-muted-foreground tabular-nums leading-relaxed tracking-[0.01em]">
         <span className="inline-flex items-center gap-1">
           <span className="size-2 rounded-full bg-destructive" />{" "}
           {urgencyLabel.danger}

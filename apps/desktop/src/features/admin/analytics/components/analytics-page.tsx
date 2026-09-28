@@ -65,18 +65,18 @@ export function AnalyticsPage() {
       />
 
       {/* Grid — density-aware breakpoints per spec §6: 2 cols ≥900 Compact, ≥1200 Comfortable */}
-      <div className="min-h-0 flex-1 overflow-auto p-3 pb-6 sm:p-4 sm:pb-8">
+      <div className="min-h-0 flex-1 overflow-auto overscroll-contain p-3 pb-6 sm:p-4 sm:pb-8">
         {isEmptyDb ? (
           <div className="mx-auto max-w-md py-16 text-center">
-            <h3 className="font-semibold text-lg">
+            <h3 className="text-balance font-semibold text-lg leading-tight tracking-[-0.015em]">
               No activity to analyse yet
             </h3>
-            <p className="mt-2 text-muted-foreground text-sm">
+            <p className="mt-2 text-balance text-muted-foreground text-sm leading-relaxed">
               Once medicines are dispensed and deliveries recorded, these cards
               will fill with movement, expiry and usage trends.
             </p>
             <a
-              className="mt-4 inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 font-medium text-primary-foreground text-sm"
+              className="press-feedback mt-4 inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 font-medium text-primary-foreground text-sm focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2"
               href="/admin/inventory"
             >
               Go to Stock Management
@@ -102,7 +102,7 @@ export function AnalyticsPage() {
               <TopDispensedTable rows={top} />
             </motion.div>
 
-            <p className="mt-4 text-center text-[11px] text-muted-foreground leading-relaxed">
+            <p className="mt-4 text-center text-[11px] text-muted-foreground tabular-nums leading-relaxed tracking-[0.01em]">
               Generated {new Date().toLocaleString()} · Filters:{" "}
               {filters.preset.toUpperCase()} · {filters.category}
             </p>

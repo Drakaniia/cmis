@@ -36,7 +36,7 @@ function PresetButton({
     <button
       aria-pressed={active}
       className={cn(
-        "press-feedback relative z-10 rounded-full border px-3 py-1 font-medium text-xs transition-colors",
+        "press-feedback relative z-10 rounded-full border px-3 py-1 font-medium text-xs tracking-[0.005em] transition-colors focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2",
         active
           ? "border-primary text-primary-foreground"
           : "border-border bg-card text-muted-foreground hover:bg-accent hover:text-accent-foreground"
@@ -77,10 +77,16 @@ export function AnalyticsFilterBar({
     <div
       className={cn(
         "sticky top-0 z-10",
-        /* §12 Heavy translucent material — structural layer */
-        "border-border/50 border-b",
-        "bg-background/60 backdrop-blur-[16px] backdrop-saturate-[180%]",
-        "supports-[backdrop-filter]:bg-background/50"
+        /* §12 Heavy translucent material — structural layer. Hairline + soft
+           shadow separates without a hard divider; solid + bordered fallback
+           for reduced-transparency / high-contrast (§14). */
+        "border-border/40 border-b",
+        "bg-background/60 shadow-[0_8px_24px_-16px_rgb(0_0_0/0.25)] backdrop-blur-[16px] backdrop-saturate-[180%]",
+        "supports-[backdrop-filter]:bg-background/50",
+        "[@media(prefers-reduced-transparency:reduce)]:bg-background",
+        "[@media(prefers-reduced-transparency:reduce)]:backdrop-blur-none",
+        "[@media(prefers-contrast:more)]:border-border",
+        "[@media(prefers-contrast:more)]:bg-background"
       )}
       style={
         {

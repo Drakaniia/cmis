@@ -37,7 +37,7 @@ function UsageLegendItem({
   return (
     // biome-ignore lint/a11y/noNoninteractiveElementInteractions: legend row hover syncs highlight with ring chart
     <li
-      className={`flex items-center gap-2 rounded-md px-1.5 py-1 text-xs transition-colors ${
+      className={`flex items-center gap-2 rounded-md px-1.5 py-1 text-xs tracking-[0.005em] transition-colors motion-reduce:transition-none ${
         hovered ? "bg-muted" : "bg-transparent"
       }`}
       onMouseEnter={handleMouseEnter}
@@ -112,10 +112,7 @@ function UsageRingChart({
   })();
 
   return (
-    <WidgetCard
-      subtitle="Concentric rings — share of total dispensing"
-      title="Usage by Category"
-    >
+    <WidgetCard subtitle="Share of total dispensing" title="Usage by Category">
       <div className="flex items-center gap-4">
         {/* Chart — fixed size keeps layout stable across filter changes */}
         <div className="relative flex size-[160px] shrink-0 items-center justify-center sm:size-[172px]">

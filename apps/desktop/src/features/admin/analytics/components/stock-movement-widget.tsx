@@ -1,6 +1,6 @@
 "use client";
 
-import { motion } from "motion/react";
+import { motion, useReducedMotion } from "motion/react";
 import { useEffect, useRef } from "react";
 import { Area } from "@/components/charts/area/area";
 import { AreaChart } from "@/components/charts/area/area-chart";
@@ -9,6 +9,7 @@ import { useChart } from "@/components/charts/chart-context";
 import { Grid } from "@/components/charts/grid";
 import { ChartTooltip } from "@/components/charts/tooltip/chart-tooltip";
 import { chartNumber } from "@/lib/chart-number";
+import { analyticsChartRevealMs, densitySpring } from "@/lib/motion";
 import type { StockMovementPoint } from "../types";
 import { EmptyWidget, WidgetCard } from "./widget-card";
 
@@ -68,6 +69,7 @@ export function StockMovementWidget({
   data: StockMovementPoint[];
   onHover?: (point: StockMovementPoint | null) => void;
 }) {
+  const reduceMotion = useReducedMotion();
   if (data.length === 0) {
     return (
       <WidgetCard subtitle="Inbound vs outbound" title="Stock Movement">
@@ -79,11 +81,8 @@ export function StockMovementWidget({
   const chartData = data as unknown as Record<string, unknown>[];
 
   return (
-    <WidgetCard
-      subtitle="Inbound vs outbound — shared time axis"
-      title="Stock Movement"
-    >
-      <div className="mb-2 flex items-center gap-3 text-[11px]">
+    <WidgetCard subtitle="Inbound vs outbound" title="Stock Movement">
+      <div className="mb-2 flex items-center gap-3 text-[11px] tracking-[0.01em]">
         <span className="inline-flex items-center gap-1.5">
           <span
             aria-hidden
@@ -108,10 +107,10 @@ export function StockMovementWidget({
         className="relative overflow-hidden rounded-md border bg-card"
         initial={{ opacity: 0.6 }}
         key={`${data[0]?.date}-${data.length}`}
-        transition={{ duration: 0.18 }}
+        transition={reduceMotion ? { duration: 0 } : densitySpring}
       >
         <AreaChart
-          animationDuration={1100}
+          animationDuration={analyticsChartRevealMs}
           aspectRatio="2.2 / 1"
           className="h-[168px] w-full"
           data={chartData}
@@ -145,7 +144,7 @@ export function StockMovementWidget({
         </AreaChart>
       </motion.div>
 
-      <div className="mt-2 flex justify-between text-[10px] text-muted-foreground leading-none">
+      <div className="mt-2 flex justify-between text-[11px] text-muted-foreground tabular-nums leading-relaxed tracking-[0.01em]">
         <span>{data[0]?.label}</span>
         <span>{data.at(-1)?.label}</span>
       </div>

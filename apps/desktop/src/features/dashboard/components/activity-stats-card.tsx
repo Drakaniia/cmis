@@ -85,7 +85,16 @@ function ActivityStatsCard({
   };
 
   return (
-    <Card className={cn("h-full overflow-hidden", className)} {...props}>
+    <Card
+      className={cn(
+        /* §12 Soft material to match sibling canvas-cards — rounded-xl with
+           a hairline border + shallow shadow instead of the sharp-edged
+           default Card. twMerge lets rounded-xl win over rounded-none. */
+        "h-full overflow-hidden rounded-xl border-border/40 shadow-[0_1px_3px_oklch(0_0_0/0.04),0_4px_12px_oklch(0_0_0/0.02)]",
+        className
+      )}
+      {...props}
+    >
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
         <div className="flex items-center gap-2">
           <span className="text-muted-foreground">{icon}</span>
@@ -96,7 +105,7 @@ function ActivityStatsCard({
         {onActionClick ? (
           <button
             aria-label="View details"
-            className="flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            className="press-feedback flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2"
             onClick={onActionClick}
             type="button"
           >

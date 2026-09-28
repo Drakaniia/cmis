@@ -209,6 +209,15 @@ export const materializeEnter = {
 export const paletteSpring = sheetSpring;
 
 /**
+ * Analytics chart clip-reveal — Apple §1 Response.
+ * The chart engine's default is 1100ms; analytics widgets override to this
+ * snappier value so filter changes settle quickly. Stagger logic stays
+ * proportional (×0.4 spread in bar charts). Reduced-motion paths in the
+ * chart hooks bypass duration entirely.
+ */
+export const analyticsChartRevealMs = 600;
+
+/**
  * §14 Reduced motion — materializeEnter without spring/blur/scale.
  * When prefers-reduced-motion is active, surfaces appear instantly
  * at full opacity without the frosted-scale entrance.

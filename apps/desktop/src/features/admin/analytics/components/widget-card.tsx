@@ -13,7 +13,9 @@ import { densitySpring } from "@/lib/motion";
 
 /**
  * Apple §12 — Reports widgets are card materials, not just bordered boxes.
- * Density-aware padding; reduced-motion handled via CSS.
+ * Enter materializes (blur + scale + opacity on a critically-damped spring)
+ * so the surface reads as arriving, not just fading in. Density-aware
+ * padding; reduced-motion handled via instant opacity (§14).
  */
 export function WidgetCard({
   action,
@@ -31,19 +33,19 @@ export function WidgetCard({
   const reduceMotion = useReducedMotion();
   return (
     <motion.div
-      animate={{ opacity: 1, y: 0 }}
+      animate={{ filter: "blur(0px)", opacity: 1, scale: 1 }}
       className={cn("min-w-0", className)}
-      initial={{ opacity: 0, y: reduceMotion ? 0 : 8 }}
+      initial={{ filter: "blur(4px)", opacity: 0, scale: 0.98 }}
       transition={reduceMotion ? { duration: 0 } : densitySpring}
     >
-      <Card className="flex h-full flex-col overflow-hidden">
+      <Card className="flex h-full flex-col overflow-hidden rounded-xl border-border/40 shadow-[0_1px_3px_oklch(0_0_0/0.04),0_4px_12px_oklch(0_0_0/0.02)]">
         <CardHeader className="flex flex-row items-start justify-between gap-2 space-y-0 pb-2">
           <div className="min-w-0">
-            <CardTitle className="truncate font-semibold text-[13px] tracking-[-0.01em]">
+            <CardTitle className="truncate font-semibold text-[13px] leading-tight tracking-[-0.015em]">
               {title}
             </CardTitle>
             {subtitle ? (
-              <p className="mt-0.5 line-clamp-1 text-[11.5px] text-muted-foreground leading-[1.4]">
+              <p className="mt-0.5 line-clamp-1 text-balance text-[11.5px] text-muted-foreground leading-[1.45] tracking-[0.005em]">
                 {subtitle}
               </p>
             ) : null}
@@ -60,7 +62,10 @@ export function WidgetCard({
 
 export function ChartSkeleton() {
   return (
-    <div className="flex h-[160px] animate-pulse items-end gap-1.5">
+    <div
+      aria-hidden
+      className="flex h-[160px] animate-pulse items-end gap-1.5 motion-reduce:animate-none"
+    >
       <div className="h-[40%] w-full rounded-sm bg-muted" />
       <div className="h-[70%] w-full rounded-sm bg-muted" />
       <div className="h-[55%] w-full rounded-sm bg-muted" />
@@ -73,7 +78,7 @@ export function ChartSkeleton() {
 export function EmptyWidget({ message }: { message: string }) {
   return (
     <div className="flex flex-1 items-center justify-center rounded-md border border-dashed bg-muted/30 px-4 py-10 text-center">
-      <p className="max-w-[22ch] text-muted-foreground text-sm leading-relaxed">
+      <p className="max-w-[22ch] text-balance text-muted-foreground text-sm leading-relaxed">
         {message}
       </p>
     </div>
