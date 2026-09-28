@@ -1,7 +1,13 @@
 import { Button } from "@cmis/ui/components/button";
 import { cn } from "@cmis/ui/lib/utils";
+import { ScanLine } from "lucide-react";
 import { motion } from "motion/react";
-import { type ChangeEvent, type KeyboardEvent, useCallback } from "react";
+import {
+  type ChangeEvent,
+  type KeyboardEvent,
+  useCallback,
+  useRef,
+} from "react";
 
 import { FIELD_CLASS, shakeVariants } from "../constants";
 import { ValidationMessage } from "./validation-message";
@@ -12,20 +18,27 @@ export function StepIdentify({
   isNewItem,
   showErrors,
   reduceMotion,
+  placeholder,
+  hasResolvedItem = false,
   onCodeChange,
   onLookup,
   onCreateNew,
+  onScanButtonClick,
 }: {
   code: string;
   foundName: string | null;
   isNewItem: boolean;
   showErrors: boolean;
   reduceMotion: boolean;
+  placeholder?: string;
+  hasResolvedItem?: boolean;
   onCodeChange: (value: string) => void;
   onLookup: () => void;
   onCreateNew: () => void;
+  onScanButtonClick?: () => void;
 }) {
-  const missing = showErrors && code.trim().length === 0;
+  const missing = showErrors && code.trim().length === 0 && !hasResolvedItem;
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const handleChange = useCallback(
     (event: ChangeEvent<HTMLInputElement>) => onCodeChange(event.target.value),
@@ -39,6 +52,11 @@ export function StepIdentify({
     },
     [onLookup]
   );
+  const handleScanButtonClick = useCallback(() => {
+    inputRef.current?.focus();
+    inputRef.current?.select();
+    onScanButtonClick?.();
+  }, [onScanButtonClick]);
 
   return (
     <div className="space-y-3">
@@ -54,14 +72,30 @@ export function StepIdentify({
           animate={missing && !reduceMotion ? "shake" : "idle"}
           variants={shakeVariants}
         >
-          <input
-            autoFocus
-            className={cn(FIELD_CLASS, missing && "border-destructive")}
-            onChange={handleChange}
-            onKeyDown={handleKeyDown}
-            placeholder="Scan barcode or type SKU"
-            value={code}
-          />
+          <div className="relative">
+            <input
+              autoFocus
+              className={cn(
+                FIELD_CLASS,
+                "pr-10",
+                missing && "border-destructive"
+              )}
+              onChange={handleChange}
+              onKeyDown={handleKeyDown}
+              placeholder={placeholder ?? "Scan barcode or type SKU"}
+              ref={inputRef}
+              value={code}
+            />
+            <button
+              aria-label="Focus barcode input for scanner"
+              className="press-feedback absolute top-1/2 right-1.5 -translate-y-1/2 rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              onClick={handleScanButtonClick}
+              title="Focus barcode input for scanner"
+              type="button"
+            >
+              <ScanLine aria-hidden className="size-4" />
+            </button>
+          </div>
         </motion.div>
         {missing ? (
           <ValidationMessage message="Identifier is required." />

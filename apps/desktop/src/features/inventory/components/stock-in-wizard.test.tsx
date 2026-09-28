@@ -532,3 +532,140 @@ describe("StockInWizard — pack pair and pack-to-base conversion", () => {
     ).toBe("");
   });
 });
+
+/**
+ * Stock-In Step 1 identity: barcode scan button, placeholder SKU,
+ * non-blocking Next with fallback (stock-in-step-identity-barcode).
+ * Seam: StockInWizard public interface (render + onConfirm).
+ */
+describe("StockInWizard — Step 1 identity barcode", () => {
+  it("shows SKU as grey placeholder, not value, when opened on an item", async () => {
+    render(
+      <StockInWizard
+        initialItemId="item-1"
+        items={[item()]}
+        onConfirm={vi.fn()}
+        onOpenChange={noop}
+        open
+      />
+    );
+    const input = (await screen.findByLabelText(
+      /Barcode \/ SKU/i
+    )) as HTMLInputElement;
+    expect(input.value).toBe("");
+    expect(input.placeholder).toBe("SKU-ACET");
+  });
+
+  it("Next is enabled with empty input when an item is resolved", async () => {
+    const user = userEvent.setup();
+    render(
+      <StockInWizard
+        initialItemId="item-1"
+        items={[item()]}
+        onConfirm={vi.fn()}
+        onOpenChange={noop}
+        open
+      />
+    );
+    const nextBtn = screen.getByRole("button", { name: /Next/i });
+    await waitFor(() => expect(nextBtn).toBeEnabled());
+    await user.click(nextBtn);
+    expect(
+      await screen.findByText(/Step 2 — Item Details/i)
+    ).toBeInTheDocument();
+  });
+
+  it("scan button focuses the input", async () => {
+    const user = userEvent.setup();
+    render(
+      <StockInWizard items={[]} onConfirm={vi.fn()} onOpenChange={noop} open />
+    );
+    const scanBtn = await screen.findByRole("button", {
+      name: /Focus barcode input for scanner/i,
+    });
+    // Button lives inside the field wrapper, right-aligned.
+    expect(scanBtn.closest("div.relative")).not.toBeNull();
+    await user.click(scanBtn);
+    expect(screen.getByLabelText(/Barcode \/ SKU/i)).toHaveFocus();
+  });
+
+  it("empty input falls back to foundItem sku on confirm", async () => {
+    const onConfirm = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <StockInWizard
+        initialItemId="item-1"
+        items={[item()]}
+        onConfirm={onConfirm}
+        onOpenChange={noop}
+        open
+      />
+    );
+    await user.click(screen.getByRole("button", { name: /Next/i }));
+    await screen.findByText(/Step 2 — Item Details/i);
+    await user.click(screen.getByRole("button", { name: /Next/i }));
+    await screen.findByText(/Step 3 — Batch Info/i);
+    await user.type(screen.getByPlaceholderText("B-2026-04"), "BATCH-FALLBACK");
+    await user.type(screen.getByLabelText(/Expiry date/i), futureIso(10));
+    await user.type(screen.getByPlaceholderText("0"), "4");
+    await user.click(screen.getByRole("button", { name: /Next/i }));
+    await screen.findByText(/Step 4 — Review/i);
+    await user.click(screen.getByRole("button", { name: /Confirm Stock In/i }));
+    expect(onConfirm).toHaveBeenCalledWith(
+      expect.objectContaining({ identifier: "SKU-ACET", itemId: "item-1" })
+    );
+  });
+
+  it("empty input falls back to barcode when sku is blank", async () => {
+    const barcoded = item({ barcode: "BC-ONLY-1", id: "item-bc", sku: "" });
+    render(
+      <StockInWizard
+        initialItemId="item-bc"
+        items={[barcoded]}
+        onConfirm={vi.fn()}
+        onOpenChange={noop}
+        open
+      />
+    );
+    const input = (await screen.findByLabelText(
+      /Barcode \/ SKU/i
+    )) as HTMLInputElement;
+    expect(input.value).toBe("");
+    expect(input.placeholder).toBe("BC-ONLY-1");
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: /Next/i })).toBeEnabled()
+    );
+  });
+
+  it("typed input wins over fallback sku", async () => {
+    const onConfirm = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <StockInWizard
+        initialItemId="item-1"
+        items={[item()]}
+        onConfirm={onConfirm}
+        onOpenChange={noop}
+        open
+      />
+    );
+    const input = await screen.findByLabelText(/Barcode \/ SKU/i);
+    await user.type(input, "SKU-TYPED");
+    await user.click(screen.getByRole("button", { name: /Lookup/i }));
+    // Unknown typed code goes down the isNew path, not the fallback item.
+    expect(
+      await screen.findByText(/Item not found — Create new\?/i)
+    ).toBeInTheDocument();
+  });
+
+  it("still blocks Next when truly empty and no item is resolved", async () => {
+    render(
+      <StockInWizard items={[]} onConfirm={vi.fn()} onOpenChange={noop} open />
+    );
+    expect(screen.getByRole("button", { name: /Next/i })).toBeDisabled();
+    const input = (await screen.findByLabelText(
+      /Barcode \/ SKU/i
+    )) as HTMLInputElement;
+    expect(input.placeholder).toBe("Scan barcode or type SKU");
+  });
+});

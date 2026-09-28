@@ -92,7 +92,9 @@ export function StockInWizard({
         : null;
       setFoundItem(found);
       setIsNew(false);
-      setIdentifier(found ? found.sku : "");
+      // Identity text is never prefilled: the SKU/barcode shows as a greyed
+      // placeholder (F1) so the field reads empty but Next can fall back to it.
+      setIdentifier("");
       const details = found ? detailsFromItem(found) : EMPTY_DETAILS;
       setCategory(details.category);
       setForm(details.form);
@@ -138,13 +140,31 @@ export function StockInWizard({
     [baseUnit, conversionLabel, packAvailable, packItem.packUnit, selectedUnit]
   );
 
+  // Step 1 fallback identity (F4): typed text wins, otherwise the opened
+  // item's SKU/barcode is what Next/draft/payload use. Placeholder-only, never
+  // submitted as a value.
+  const effectiveIdentifier = useMemo(
+    () =>
+      identifier.trim() ||
+      foundItem?.sku?.trim() ||
+      foundItem?.barcode?.trim() ||
+      "",
+    [identifier, foundItem]
+  );
+  const canAdvanceStep1 = effectiveIdentifier.length > 0;
+  const identifyPlaceholder = foundItem
+    ? foundItem.sku?.trim() ||
+      foundItem.barcode?.trim() ||
+      "Scan barcode or type SKU"
+    : "Scan barcode or type SKU";
+
   const draft = useMemo<StockInDraft>(
     () => ({
       batch: batch.trim(),
       category,
       expiry,
       form: packItem.form,
-      identifier,
+      identifier: effectiveIdentifier,
       isNew,
       itemId: foundItem?.id ?? null,
       name: name.trim(),
@@ -163,9 +183,9 @@ export function StockInWizard({
       baseQty,
       batch,
       category,
+      effectiveIdentifier,
       expiry,
       foundItem,
-      identifier,
       isNew,
       name,
       notes,
@@ -217,18 +237,24 @@ export function StockInWizard({
         : { ...draft, batch: autoBatchCode() };
       onConfirm(finalDraft);
       toast.success(
-        `Logged: ${name || identifier} +${describeQuantity(finalDraft.qty, packItem)}`
+        `Logged: ${name || effectiveIdentifier} +${describeQuantity(finalDraft.qty, packItem)}`
       );
       onOpenChange(false);
     },
-    [draft, identifier, name, onConfirm, onOpenChange, packItem, step]
+    [draft, effectiveIdentifier, name, onConfirm, onOpenChange, packItem, step]
   );
 
   const lookup = useCallback(() => {
-    const q = identifier.trim().toLowerCase();
-    if (!q) {
+    const typed = identifier.trim();
+    // Empty + resolved item means "use the fallback" — advance to Step 2
+    // without a redundant Found toast (F6/F7). Typed text always looks up.
+    if (!typed) {
+      if (foundItem) {
+        goNext();
+      }
       return;
     }
+    const q = typed.toLowerCase();
     // The display label is matched as well as the bare name: `name` is now the
     // bare medication, so "Paracetamol 500 mg" — what the operator reads on the
     // shelf — would otherwise stop resolving.
@@ -271,7 +297,7 @@ export function StockInWizard({
         description: `No match for "${identifier}". Fill details to create.`,
       });
     }
-  }, [goNext, identifier, items]);
+  }, [foundItem, goNext, identifier, items]);
 
   const goBack = useCallback(() => {
     if (step > 1) {
@@ -290,8 +316,15 @@ export function StockInWizard({
   const handleNext = useCallback(() => goNext(), [goNext]);
 
   const dirty = Boolean(identifier || name || batch || qty || notes || packQty);
-  // Step 3 soft: never hard-block Next; warnings only
-  const stepValid = step === 3 ? true : validateStep(step, draft);
+  // Step 1 is fallback-aware (F4 Option A): validator stays pure, the call
+  // site allows empty input when an item is resolved. Step 3 soft as before.
+  let stepValid = validateStep(step, draft);
+  if (step === 1) {
+    stepValid = canAdvanceStep1;
+  }
+  if (step === 3) {
+    stepValid = true;
+  }
 
   return (
     <WizardShell
@@ -315,10 +348,12 @@ export function StockInWizard({
         <StepIdentify
           code={identifier}
           foundName={foundItem?.name ?? null}
+          hasResolvedItem={foundItem !== null}
           isNewItem={isNew}
           onCodeChange={setIdentifier}
           onCreateNew={handleCreateNew}
           onLookup={lookup}
+          placeholder={identifyPlaceholder}
           reduceMotion={reduceMotion ?? false}
           showErrors={attemptedNext}
         />
