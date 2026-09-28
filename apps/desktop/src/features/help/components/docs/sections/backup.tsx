@@ -22,10 +22,12 @@ export function BackupSection() {
       <DocsSubHeading>Where the copies live</DocsSubHeading>
       <DocsP>
         Every daily copy is named for its date, and a copy you make by hand
-        carries the time too. The newest ten daily copies are kept; anything you
-        made by hand is never deleted by the app. If a backup ever fails, a
-        banner stays on every page until one succeeds — success itself is
-        silent.
+        carries the time too. Automatic copies age out on their own and you
+        choose how many to keep (ten by default); anything you made by hand is
+        never deleted by the app. You can also turn automatic copies off in{" "}
+        <DocsRoute to="/admin/settings">Settings → Backup</DocsRoute>. If a
+        backup ever fails, a banner stays on every page until one succeeds —
+        success itself is silent.
       </DocsP>
 
       <DocsSubHeading>Making a copy by hand</DocsSubHeading>
@@ -61,6 +63,14 @@ export function BackupSection() {
         Wipe All Data always writes a safety backup before deleting anything. If
         that backup fails, the wipe does not run.
       </DocsCallout>
+
+      <DocsP>
+        Opening the app with an empty database offers to restore a copy right
+        away. A `.db` file dropped on{" "}
+        <DocsRoute to="/admin/data">Data → Import</DocsRoute> opens this same
+        Restore flow with that file pre-selected instead of previewing it as an
+        import.
+      </DocsP>
     </DocsSection>
   );
 }
