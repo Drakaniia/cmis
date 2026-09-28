@@ -25,7 +25,9 @@ export function WelcomeSection() {
         <li className="text-[13px] text-muted-foreground leading-relaxed">
           <span className="font-medium text-foreground">The search box</span> —
           press <DocsKey>Ctrl</DocsKey> <DocsKey>K</DocsKey> and type a page
-          name, then <DocsKey>Enter</DocsKey>.
+          name, then <DocsKey>Enter</DocsKey>. It also finds medicines: type a
+          name, SKU or barcode and choose the item to open its details without
+          leaving the screen you are on.
         </li>
         <li className="text-[13px] text-muted-foreground leading-relaxed">
           <span className="font-medium text-foreground">This guide</span> —

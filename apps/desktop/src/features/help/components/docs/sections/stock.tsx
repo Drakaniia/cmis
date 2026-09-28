@@ -99,8 +99,12 @@ export function StockSection() {
 
       <DocsSubHeading>Fix a mistake, or remove a batch</DocsSubHeading>
       <DocsP>
-        Open an item in the list to see its batches and history. From a batch
-        row you can:
+        Open an item in the list to see its batches and history. You can also
+        reach the same detail panel from anywhere with <DocsKey>Ctrl</DocsKey>{" "}
+        <DocsKey>K</DocsKey>: type the medicine's name, SKU or barcode and press{" "}
+        <DocsKey>Enter</DocsKey>. That copy is read-only — it shows the detail,
+        history and Edit, but stock only moves from the pages above. From a
+        batch row you can:
       </DocsP>
       <ul className="space-y-1.5">
         <li className="text-[13px] text-muted-foreground leading-relaxed">
