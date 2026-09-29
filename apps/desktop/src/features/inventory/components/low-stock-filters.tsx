@@ -5,15 +5,19 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@cmis/ui/components/dropdown-menu";
-import { cn } from "@cmis/ui/lib/utils";
-import { ChevronDown, Search, ShoppingCart, X } from "lucide-react";
-import { motion } from "motion/react";
-import { type ChangeEvent, type KeyboardEvent, useCallback } from "react";
-
-import { densitySpring } from "@/lib/motion";
+import { ChevronDown, ShoppingCart } from "lucide-react";
+import { useCallback } from "react";
 
 import type { LowStockFilters as LowStockFiltersType } from "../types";
 import { CategoryPicker } from "./category-picker";
+import {
+  ActiveFilterChips,
+  FilterBar,
+  FilterBulkAction,
+  FilterControlsRow,
+  FilterSearchField,
+  SegmentedControl,
+} from "./filter-bar";
 
 const STATUS_OPTIONS: {
   label: string;
@@ -24,44 +28,6 @@ const STATUS_OPTIONS: {
   { label: "Low", value: "low-stock" },
   { label: "In Stock", value: "in-stock" },
 ];
-
-/** Segmented pill inside a filter fieldset. */
-function SegmentedOption({
-  active,
-  label,
-  value,
-  onSelect,
-}: {
-  active: boolean;
-  label: string;
-  value: LowStockFiltersType["status"];
-  onSelect: (value: LowStockFiltersType["status"]) => void;
-}) {
-  const handleSelect = useCallback(() => onSelect(value), [onSelect, value]);
-  return (
-    <button
-      aria-pressed={active}
-      className={cn(
-        "relative z-10 rounded-full px-2.5 py-1 font-medium text-xs transition-colors",
-        active
-          ? "text-primary-foreground"
-          : "text-muted-foreground hover:text-foreground"
-      )}
-      onClick={handleSelect}
-      type="button"
-    >
-      {active ? (
-        <motion.span
-          aria-hidden
-          className="absolute inset-0 rounded-full bg-primary shadow-sm"
-          layoutId="lowstock-status-pill"
-          transition={densitySpring}
-        />
-      ) : null}
-      <span className="relative">{label}</span>
-    </button>
-  );
-}
 
 /** A dropdown item that reports the value it represents. */
 function ValueOption({
@@ -77,37 +43,10 @@ function ValueOption({
   return <DropdownMenuItem onClick={handleSelect}>{label}</DropdownMenuItem>;
 }
 
-function ChipItem({
-  chipKey,
-  label,
-  onRemoveChip,
-}: {
-  chipKey: string;
-  label: string;
-  onRemoveChip: (key: string) => void;
-}) {
-  const handleRemove = useCallback(
-    () => onRemoveChip(chipKey),
-    [chipKey, onRemoveChip]
-  );
-  return (
-    <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-accent px-2.5 py-1 font-medium text-accent-foreground text-xs">
-      {label}
-      <button
-        aria-label={`Remove ${label}`}
-        className="rounded-full p-0.5 hover:bg-black/10 dark:hover:bg-white/10"
-        onClick={handleRemove}
-        type="button"
-      >
-        <X className="size-3" />
-      </button>
-    </span>
-  );
-}
-
 /**
  * CMIS-UI-04 §3.3 — Low-Stock Filters Bar
- * Mirrors expiry filters bar placement (Familiarity: same pattern as §03).
+ * Mirrors the expiry bar (Familiarity §16: same pattern, same place) because
+ * both are the shared filter chrome.
  * Segmented status default: "all" (Low+Out — actionable items).
  * Dropdowns: Supplier, Category.
  */
@@ -138,74 +77,24 @@ export function LowStockFiltersBar({
   onSupplierChange: (v: string) => void;
   selectedCount?: number;
 }) {
-  const handleSearchInput = useCallback(
-    (event: ChangeEvent<HTMLInputElement>) =>
-      onSearchChange(event.target.value),
-    [onSearchChange]
-  );
-
-  const handleSearchKeyDown = useCallback(
-    (event: KeyboardEvent<HTMLInputElement>) => {
-      if (event.key === "Escape" && filters.search) {
-        onSearchChange("");
-      }
-    },
-    [filters.search, onSearchChange]
-  );
-
-  const handleClearSearch = useCallback(
-    () => onSearchChange(""),
-    [onSearchChange]
-  );
-
   return (
-    <div className="sticky top-0 z-10 border-border/50 border-b bg-card/95 backdrop-blur-[6px]">
-      {/* Search row */}
-      <div className="flex items-center gap-2 px-3 py-2">
-        <div className="relative flex flex-1 items-center">
-          <Search
-            aria-hidden
-            className="pointer-events-none absolute left-2 size-4 text-muted-foreground"
-          />
-          <input
-            aria-label="Search medicine, SKU, supplier"
-            className={cn(
-              "w-full rounded-md border border-input bg-background pr-8 pl-8 text-sm outline-none focus:border-ring focus:ring-1 focus:ring-ring",
-              density === "compact" ? "h-8" : "h-9"
-            )}
-            onChange={handleSearchInput}
-            onKeyDown={handleSearchKeyDown}
-            placeholder="Search medicine, SKU, supplier…"
-            value={filters.search}
-          />
-          {filters.search ? (
-            <button
-              aria-label="Clear search"
-              className="absolute right-2 rounded p-1 text-muted-foreground hover:bg-muted"
-              onClick={handleClearSearch}
-              type="button"
-            >
-              <X className="size-3.5" />
-            </button>
-          ) : null}
-        </div>
-      </div>
+    <FilterBar>
+      <FilterSearchField
+        density={density}
+        label="Search medicine, SKU, supplier"
+        onChange={onSearchChange}
+        placeholder="Search medicine, SKU, supplier…"
+        value={filters.search}
+      />
 
-      {/* Filter controls + active chips — single inline row, CMIS-UI-04 §3.3 */}
-      <div className="scrollbar-thin flex flex-wrap items-center gap-2 overflow-x-auto px-3 pb-2">
-        {/* Status segmented */}
-        <fieldset className="m-0 inline-flex min-w-0 shrink-0 items-center rounded-full border border-input bg-muted p-0.5">
-          <legend className="sr-only">Stock status filter</legend>
-          {STATUS_OPTIONS.map((opt) => (
-            <SegmentedOption
-              active={filters.status === opt.value}
-              key={opt.value}
-              label={opt.label}
-              onSelect={onStatusChange}
-              value={opt.value}
-            />
-          ))}
-        </fieldset>
+      <FilterControlsRow>
+        <SegmentedControl
+          layoutId="lowstock-status-pill"
+          legend="Stock status filter"
+          onChange={onStatusChange}
+          options={STATUS_OPTIONS}
+          value={filters.status}
+        />
 
         {/* Supplier dropdown — CMIS-UI-04 §3.3 */}
         <DropdownMenu>
@@ -241,29 +130,16 @@ export function LowStockFiltersBar({
           variant="filter"
         />
 
-        {/* Active filter chips — inline, not a separate row */}
-        {activeChips.map((chip) => (
-          <ChipItem
-            chipKey={chip.key}
-            key={`${chip.key}-${chip.value}`}
-            label={chip.label}
-            onRemoveChip={onRemoveChip}
-          />
-        ))}
-        {activeChips.length > 0 ? (
-          <button
-            className="shrink-0 whitespace-nowrap text-caption text-primary hover:underline"
-            onClick={onClearFilters}
-            type="button"
-          >
-            Clear all
-          </button>
-        ) : null}
+        <ActiveFilterChips
+          chips={activeChips}
+          onClearAll={onClearFilters}
+          onRemove={onRemoveChip}
+        />
 
         {/* Bulk reorder — right-aligned inline, CMIS-UI-04 §3.1 */}
-        {selectedCount > 0 ? (
+        <FilterBulkAction open={selectedCount > 0}>
           <Button
-            className="press-feedback ml-auto shrink-0"
+            className="press-feedback"
             onClick={onBulkReorder}
             size="sm"
             variant="confirm"
@@ -271,8 +147,8 @@ export function LowStockFiltersBar({
             <ShoppingCart aria-hidden className="size-3.5" />
             Reorder selected ({selectedCount})
           </Button>
-        ) : null}
-      </div>
-    </div>
+        </FilterBulkAction>
+      </FilterControlsRow>
+    </FilterBar>
   );
 }

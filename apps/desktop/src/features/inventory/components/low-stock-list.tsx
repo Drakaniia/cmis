@@ -124,6 +124,7 @@ function SortHeaderButton({
       aria-sort={ariaSortFor(activeKey, columnKey, dir)}
       className="flex items-center gap-1 text-left hover:text-foreground"
       onClick={handleSort}
+      role="columnheader"
       type="button"
     >
       {label}
@@ -156,7 +157,7 @@ function StatusBadge({ row }: { row: LowStockRow }) {
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 font-medium text-[10px]",
+        "inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 font-medium text-[10px] tracking-wide",
         config.badgeClass
       )}
     >
@@ -325,7 +326,9 @@ function LowStockRowItem({
     <div
       aria-label={ariaLabel}
       className={cn(
-        "group grid h-full cursor-pointer items-center gap-2 border-border/50 border-b px-2 transition-colors",
+        // §1 — the row is a control: it answers on hover and on pointer-down.
+        "group grid h-full cursor-pointer items-center gap-2 border-border/50 border-b pr-4 pl-2 transition-colors",
+        "hover:bg-muted/50 active:bg-muted/70",
         "outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
         gridCols,
         row.lowStockStatus === "out-of-stock" && "bg-destructive/5"
@@ -334,7 +337,6 @@ function LowStockRowItem({
       onKeyDown={onKeyDown}
       ref={rowRef}
       role="row"
-      style={{ paddingRight: 16 }}
       tabIndex={tabIndex}
     >
       {/* Checkbox */}
@@ -348,7 +350,7 @@ function LowStockRowItem({
 
       {/* Item name + 4px status edge bar — CMIS-UI-04 §2. §6.2 — no nested
        * control: the row itself is the activator. */}
-      <span className="flex min-w-0 items-center gap-2 text-left">
+      <span className="flex min-w-0 items-center gap-2 text-left" role="cell">
         <span
           aria-hidden
           className="h-8 w-1 shrink-0 rounded-full"
@@ -392,7 +394,11 @@ function LowStockRowItem({
       {showSupplier ? <SupplierCell row={row} /> : null}
 
       {/* Actions — always visible, and always swallowing the row click */}
-      <div className="flex items-center justify-end gap-1" data-row-control>
+      <div
+        className="flex items-center justify-end gap-1"
+        data-row-control
+        role="cell"
+      >
         {/* Reorder — CMIS-UI-04 §3.1 primary action */}
         <Button
           aria-label={`Reorder ${row.item.displayName}`}
@@ -550,12 +556,11 @@ export function LowStockList({
     return (
       <div className="flex h-full flex-col overflow-hidden">
         <div
+          aria-hidden
           className={cn(
-            "grid shrink-0 items-center gap-2 border-border/50 border-b bg-muted/60 px-2 py-1",
+            "grid shrink-0 items-center gap-2 border-border/50 border-b bg-muted/60 py-1 pr-4 pl-2",
             gridCols
           )}
-          role="row"
-          style={{ paddingRight: 16 }}
         >
           {[
             "Item",
@@ -635,18 +640,24 @@ export function LowStockList({
   }
 
   return (
-    <div className="flex h-full flex-col overflow-hidden">
-      {/* Header — CMIS-UI-04 §2 table columns */}
+    <div
+      aria-label="Low-stock alerts list"
+      className="h-full overflow-auto"
+      ref={parentRef}
+      role="table"
+    >
+      {/* Header — CMIS-UI-04 §2 table columns. Inside the scroller, so the
+       * labels belong to the table they name (§16 wayfinding) and the sticky
+       * offset actually applies. */}
       <div
         className={cn(
-          "sticky top-0 z-[1] grid shrink-0 items-center gap-2 border-border/50 border-b bg-card/95 px-2 py-1 font-medium text-caption backdrop-blur-[6px]",
+          "sticky top-0 z-[1] grid shrink-0 items-center gap-2 border-border/50 border-b bg-card/95 py-1 pr-4 pl-2 font-medium text-caption backdrop-blur-[6px]",
           gridCols
         )}
         role="row"
-        style={{ paddingRight: 16 }}
       >
         {/* Bulk select checkbox */}
-        <div className="flex items-center justify-center">
+        <div className="flex items-center justify-center" role="columnheader">
           <SelectAllCheckbox
             allSelected={allSelected}
             onToggleAll={onToggleAll}
@@ -678,63 +689,57 @@ export function LowStockList({
             onSort={onSort}
           />
         ))}
-        <span className="text-right">Actions</span>
+        <span className="text-right" role="columnheader">
+          Actions
+        </span>
       </div>
 
       {/* Virtual rows */}
       <div
-        aria-label="Low-stock alerts list"
-        className="flex-1 overflow-auto"
-        ref={parentRef}
-        role="table"
+        role="rowgroup"
+        style={{
+          height: `${virtualizer.getTotalSize()}px`,
+          position: "relative",
+          width: "100%",
+        }}
       >
-        <div
-          style={{
-            height: `${virtualizer.getTotalSize()}px`,
-            position: "relative",
-            width: "100%",
-          }}
-        >
-          {virtualizer.getVirtualItems().map((virtualRow) => {
-            const row = rows[virtualRow.index];
+        {virtualizer.getVirtualItems().map((virtualRow) => {
+          const row = rows[virtualRow.index];
 
-            return (
-              <div
-                data-index={virtualRow.index}
-                key={row.item.id}
-                ref={virtualizer.measureElement}
-                style={{
-                  height: rowHeight,
-                  left: 0,
-                  position: "absolute",
-                  top: 0,
-                  transform: `translateY(${virtualRow.start}px)`,
-                  width: "100%",
-                }}
-              >
-                <LowStockRowItem
-                  ariaLabel={labels[virtualRow.index] ?? ""}
-                  gridCols={gridCols}
-                  isSelected={selectedIds.has(row.item.id)}
-                  onActivate={onView}
-                  onAdjustThreshold={onAdjustThreshold}
-                  onKeyDown={(event) =>
-                    handleRowKeyDown(event, virtualRow.index)
-                  }
-                  onOpenInStockManagement={onOpenInStockManagement}
-                  onReorder={onReorder}
-                  onToggleItem={onToggleItem}
-                  onView={onView}
-                  row={row}
-                  rowRef={(element) => registerRow(row.item.id, element)}
-                  showSku={showSku}
-                  showSupplier={showSupplier}
-                  tabIndex={virtualRow.index === activeIndex ? 0 : -1}
-                />
-              </div>
-            );
-          })}
-        </div>
+          return (
+            <div
+              data-index={virtualRow.index}
+              key={row.item.id}
+              ref={virtualizer.measureElement}
+              style={{
+                height: rowHeight,
+                left: 0,
+                position: "absolute",
+                top: 0,
+                transform: `translateY(${virtualRow.start}px)`,
+                width: "100%",
+              }}
+            >
+              <LowStockRowItem
+                ariaLabel={labels[virtualRow.index] ?? ""}
+                gridCols={gridCols}
+                isSelected={selectedIds.has(row.item.id)}
+                onActivate={onView}
+                onAdjustThreshold={onAdjustThreshold}
+                onKeyDown={(event) => handleRowKeyDown(event, virtualRow.index)}
+                onOpenInStockManagement={onOpenInStockManagement}
+                onReorder={onReorder}
+                onToggleItem={onToggleItem}
+                onView={onView}
+                row={row}
+                rowRef={(element) => registerRow(row.item.id, element)}
+                showSku={showSku}
+                showSupplier={showSupplier}
+                tabIndex={virtualRow.index === activeIndex ? 0 : -1}
+              />
+            </div>
+          );
+        })}
       </div>
     </div>
   );

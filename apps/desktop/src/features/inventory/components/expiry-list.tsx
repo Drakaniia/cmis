@@ -20,7 +20,6 @@ import {
   Clock,
   Trash2,
 } from "lucide-react";
-import { motion } from "motion/react";
 import {
   type KeyboardEvent,
   type MouseEvent,
@@ -30,7 +29,6 @@ import {
   useRef,
   useState,
 } from "react";
-import { densitySpring } from "@/lib/motion";
 import {
   EXPIRY_STATUS_CONFIG,
   expiryLabel,
@@ -65,13 +63,26 @@ function rowKeyOf(row: ExpiryRow): string {
   return `${row.item.id}-${row.batch.batch}`;
 }
 
-function rowBackgroundColor(status: ExpiryRow["expiryStatus"]): string {
-  if (status === "expired") {
-    return "oklch(0.58 0.22 27 / 0.05)";
-  }
-  // A fully transparent *colour*, not the `transparent` keyword: motion cannot
-  // interpolate to the keyword and warns on every row it animates.
-  return "oklch(0 0 0 / 0)";
+/**
+ * The urgency bar's colour, with the `transparent` keyword swapped for a
+ * zero-alpha colour: the keyword is not interpolable, so a row that loses its
+ * urgency would warn (and then jump) instead of fading (Apple §11 — the frames
+ * a transition is made of are part of the motion).
+ */
+function barColorOf(status: ExpiryRow["expiryStatus"]): string {
+  const color = EXPIRY_STATUS_CONFIG[status].barColor;
+  return color === "transparent" ? "oklch(0 0 0 / 0)" : color;
+}
+
+/**
+ * The row tint is a class, not an animated background colour: a virtualiser
+ * legitimately mounts hundreds of rows, and Apple §11 restricts motion to
+ * compositor-only properties — a spring per row on `background-color` is paint
+ * work the user never asked to see. Matches the low-stock row exactly (§16 —
+ * the two alert tables are the same table).
+ */
+function rowTintClass(status: ExpiryRow["expiryStatus"]): string | false {
+  return status === "expired" && "bg-destructive/5";
 }
 
 /** §6.4 — announce item, batch, expiry, status and qty, not just the name. */
@@ -128,6 +139,7 @@ function SortHeaderButton({
       aria-sort={ariaSortFor(activeKey, columnKey, dir)}
       className="flex items-center gap-1 text-left hover:text-foreground"
       onClick={handleSort}
+      role="columnheader"
       type="button"
     >
       {label}
@@ -186,7 +198,6 @@ function ExpiryRowItem({
   showSku: boolean;
   tabIndex: number;
 }) {
-  const config = EXPIRY_STATUS_CONFIG[row.expiryStatus];
   const batchKey = rowKeyOf(row);
 
   const handleToggle = useCallback(
@@ -227,20 +238,22 @@ function ExpiryRowItem({
   );
 
   return (
-    <motion.div
-      animate={{ backgroundColor: rowBackgroundColor(row.expiryStatus) }}
+    <div
       aria-label={ariaLabel}
       className={cn(
         "group grid h-full cursor-pointer items-center gap-2 border-border/50 border-b px-2",
+        // §1 — the row is a control, so it answers on pointer-down and says so
+        // on hover; without this the whole table reads as static text.
+        "transition-colors hover:bg-muted/50 active:bg-muted/70",
         "outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
-        gridCols
+        gridCols,
+        rowTintClass(row.expiryStatus)
       )}
       onClick={handleActivate}
       onKeyDown={onKeyDown}
       ref={rowRef}
       role="row"
       tabIndex={tabIndex}
-      transition={{ ...densitySpring, duration: 0.2 }}
     >
       {/* Checkbox — a control, so it swallows the row click */}
       <div className="flex items-center justify-center" data-row-control>
@@ -253,13 +266,12 @@ function ExpiryRowItem({
 
       {/* Item name + SKU on narrow. §6.2 — no nested control: the row is the
        * control now, and a button inside a clickable row is invalid markup. */}
-      <span className="flex min-w-0 items-center gap-2 text-left">
-        {/* 4px status bar — CMIS-UI-03 §2.1 — animated color on filter change */}
-        <motion.span
-          animate={{ backgroundColor: config.barColor }}
+      <span className="flex min-w-0 items-center gap-2 text-left" role="cell">
+        {/* 4px status bar — CMIS-UI-03 §2.1 — colour fades when urgency changes */}
+        <span
           aria-hidden
-          className="h-8 w-1 shrink-0 rounded-full"
-          transition={{ duration: 0.3 }}
+          className="h-8 w-1 shrink-0 rounded-full transition-colors duration-300"
+          style={{ backgroundColor: barColorOf(row.expiryStatus) }}
         />
         {/* §8.1 — same short label as Stock Management: name + strength. */}
         <span className="min-w-0 truncate font-medium text-sm">
@@ -298,7 +310,11 @@ function ExpiryRowItem({
       </span>
 
       {/* Actions — always visible, and always swallowing the row click */}
-      <div className="flex items-center justify-end gap-1" data-row-control>
+      <div
+        className="flex items-center justify-end gap-1"
+        data-row-control
+        role="cell"
+      >
         <Button
           aria-label="Dispose"
           className="press-feedback"
@@ -329,16 +345,22 @@ function ExpiryRowItem({
           sku={row.item.sku}
         />
       </div>
-    </motion.div>
+    </div>
   );
 }
 
+/**
+ * §6 — the badge states the status and nothing else. The relative time already
+ * has a home in the Expiry column two cells away; printing it twice in one row
+ * ("Expired expired 12d ago") is repetition, not context. Tracking is opened up
+ * because this is the smallest type on the page (§15).
+ */
 function StatusBadge({ row }: { row: ExpiryRow }) {
   const config = EXPIRY_STATUS_CONFIG[row.expiryStatus];
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 font-medium text-[10px]",
+        "inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 font-medium text-[10px] tracking-wide",
         config.badgeClass
       )}
     >
@@ -349,14 +371,6 @@ function StatusBadge({ row }: { row: ExpiryRow }) {
         <Clock aria-hidden className="size-3" />
       ) : null}
       {config.label}
-      {row.expiryStatus === "expired" ? (
-        <span className="opacity-70">{relativeExpiryText(row.daysUntil)}</span>
-      ) : null}
-      {row.expiryStatus !== "expired" && row.expiryStatus !== "safe" ? (
-        <span className="opacity-70">
-          ({relativeExpiryText(row.daysUntil)})
-        </span>
-      ) : null}
     </span>
   );
 }
@@ -487,11 +501,11 @@ export function ExpiryList({
     return (
       <div className="flex h-full flex-col overflow-hidden">
         <div
+          aria-hidden
           className={cn(
             "grid shrink-0 items-center gap-2 border-border/50 border-b bg-muted/60 px-2 py-1",
             gridCols
           )}
-          role="row"
         >
           {[
             "Item",
@@ -570,8 +584,15 @@ export function ExpiryList({
   }
 
   return (
-    <div className="flex h-full flex-col overflow-hidden">
-      {/* Header — CMIS-UI-03 §2 table columns */}
+    <div
+      aria-label="Expiry alerts list"
+      className="h-full overflow-auto"
+      ref={parentRef}
+      role="table"
+    >
+      {/* Header — CMIS-UI-03 §2 table columns. Inside the scroller, so the
+       * labels belong to the table they name (§16 wayfinding) and the sticky
+       * offset actually applies instead of being dead CSS. */}
       <div
         className={cn(
           "sticky top-0 z-[1] grid shrink-0 items-center gap-2 border-border/50 border-b bg-card/95 px-2 py-1 font-medium text-caption backdrop-blur-[6px]",
@@ -580,7 +601,7 @@ export function ExpiryList({
         role="row"
       >
         {/* Bulk select checkbox */}
-        <div className="flex items-center justify-center">
+        <div className="flex items-center justify-center" role="columnheader">
           <SelectAllCheckbox
             allSelected={allSelected}
             onToggleAll={onToggleAll}
@@ -607,63 +628,57 @@ export function ExpiryList({
             onSort={onSort}
           />
         ))}
-        <span className="text-right">Actions</span>
+        <span className="text-right" role="columnheader">
+          Actions
+        </span>
       </div>
       {/* Virtual rows */}
       <div
-        aria-label="Expiry alerts list"
-        className="flex-1 overflow-auto"
-        ref={parentRef}
-        role="table"
+        role="rowgroup"
+        style={{
+          height: `${virtualizer.getTotalSize()}px`,
+          position: "relative",
+          width: "100%",
+        }}
       >
-        <div
-          style={{
-            height: `${virtualizer.getTotalSize()}px`,
-            position: "relative",
-            width: "100%",
-          }}
-        >
-          {virtualizer.getVirtualItems().map((virtualRow) => {
-            const row = rows[virtualRow.index];
-            const batchKey = rowKeyOf(row);
+        {virtualizer.getVirtualItems().map((virtualRow) => {
+          const row = rows[virtualRow.index];
+          const batchKey = rowKeyOf(row);
 
-            return (
-              <div
-                data-index={virtualRow.index}
-                key={batchKey}
-                ref={virtualizer.measureElement}
-                style={{
-                  height: rowHeight,
-                  left: 0,
-                  position: "absolute",
-                  top: 0,
-                  transform: `translateY(${virtualRow.start}px)`,
-                  width: "100%",
-                }}
-              >
-                <ExpiryRowItem
-                  ariaLabel={labels[virtualRow.index] ?? ""}
-                  gridCols={gridCols}
-                  isSelected={selectedBatchKeys.has(batchKey)}
-                  onActivate={onView}
-                  onDeleteBatch={onDelete}
-                  onDispose={onDispose}
-                  onExtend={onExtend}
-                  onKeyDown={(event) =>
-                    handleRowKeyDown(event, virtualRow.index)
-                  }
-                  onOpenInStockManagement={onOpenInStockManagement}
-                  onToggleBatch={onToggleBatch}
-                  onView={onView}
-                  row={row}
-                  rowRef={(element) => registerRow(batchKey, element)}
-                  showSku={showSku}
-                  tabIndex={virtualRow.index === activeIndex ? 0 : -1}
-                />
-              </div>
-            );
-          })}
-        </div>
+          return (
+            <div
+              data-index={virtualRow.index}
+              key={batchKey}
+              ref={virtualizer.measureElement}
+              style={{
+                height: rowHeight,
+                left: 0,
+                position: "absolute",
+                top: 0,
+                transform: `translateY(${virtualRow.start}px)`,
+                width: "100%",
+              }}
+            >
+              <ExpiryRowItem
+                ariaLabel={labels[virtualRow.index] ?? ""}
+                gridCols={gridCols}
+                isSelected={selectedBatchKeys.has(batchKey)}
+                onActivate={onView}
+                onDeleteBatch={onDelete}
+                onDispose={onDispose}
+                onExtend={onExtend}
+                onKeyDown={(event) => handleRowKeyDown(event, virtualRow.index)}
+                onOpenInStockManagement={onOpenInStockManagement}
+                onToggleBatch={onToggleBatch}
+                onView={onView}
+                row={row}
+                rowRef={(element) => registerRow(batchKey, element)}
+                showSku={showSku}
+                tabIndex={virtualRow.index === activeIndex ? 0 : -1}
+              />
+            </div>
+          );
+        })}
       </div>
     </div>
   );
