@@ -8,10 +8,17 @@ import {
   useState,
 } from "react";
 import { toast } from "sonner";
+import { writeSafetyBackupFile } from "@/features/backup/data/write-safety-backup";
+import {
+  detectOs,
+  readPlatformContext,
+} from "@/features/help/lib/platform-info";
+import { isTauriRuntime } from "@/lib/open-external";
 import {
   getBlockingModalCount,
   subscribeBlockingModal,
 } from "./blocking-modal-gate";
+import { isAppIdle, startIdleTracking, subscribeIdle } from "./idle-gate";
 import {
   DEFAULT_UPDATER_SETTINGS,
   UPDATER_TOAST_ID,
@@ -25,17 +32,26 @@ import {
   showCheckingToast,
   showDownloadingToast,
   showErrorToast,
+  showInstallFailedToast,
   showReadyToast,
   showUpToDateToast,
 } from "./update-toasts";
 import { loadUpdaterSettings, saveUpdaterSettings } from "./updater-settings";
 
+/**
+ * The subset of the plugin's `Update` this app uses.
+ *
+ * `download` and `install` are deliberately separate. `downloadAndInstall` on
+ * Windows exits the app the moment the installer launches — there is no prompt
+ * in between — so the update has to stop at `download` and wait for a decision.
+ */
 interface TauriUpdate {
   body?: string | null;
   date?: string | null;
-  downloadAndInstall: (
-    onEvent?: (e: { event: string; data: unknown }) => void
+  download: (
+    onEvent?: (e: { data?: unknown; event: string }) => void
   ) => Promise<void>;
+  install: (opts?: { restartAfterInstall?: boolean }) => Promise<void>;
   version: string;
 }
 
@@ -45,6 +61,17 @@ try {
     (import.meta as unknown as { env?: { DEV?: boolean } }).env?.DEV === true;
 } catch {
   devGuard = false;
+}
+
+/**
+ * Forces the Tauri code path in tests.
+ *
+ * The browser-preview branch above is chosen from `import.meta.env.DEV`, which
+ * no test-time env stub can change — so the tests that mock the updater plugin
+ * need a seam, the same way `updater-settings` exposes a store reset.
+ */
+export function __setDevGuardForTests(next: boolean | undefined): void {
+  devGuard = next ?? devGuard;
 }
 
 const UPDATER_ENDPOINT =
@@ -107,6 +134,8 @@ export function UpdaterProvider({ children }: { children: React.ReactNode }) {
   const deferredReadyRef = useRef(false);
   const notesRef = useRef<string | null>(null);
   const versionRef = useRef<string | null>(null);
+  const availableVersionRef = useRef<string | null>(null);
+  const downloadInFlightRef = useRef(false);
 
   // Load current version + settings on mount
   useEffect(() => {
@@ -162,17 +191,67 @@ export function UpdaterProvider({ children }: { children: React.ReactNode }) {
     dismissUpdaterToast();
   }, []);
 
+  /**
+   * The only path that ever runs the installer.
+   *
+   * A safety copy of the database goes in first: the update itself does not
+   * touch user data, but the migration the new build runs on first launch does
+   * run against it, and a copy that exists is the difference between a
+   * recoverable surprise and a lost clinic's stock records. If the copy fails
+   * the update is not installed.
+   */
   const restartNow = useCallback(async () => {
-    try {
-      const { relaunch } = await import("@tauri-apps/plugin-process");
-      await relaunch();
-    } catch (e) {
+    const update = pendingUpdateRef.current;
+    // biome-ignore lint/suspicious/noUnnecessaryConditions: Biome infers `current` from useRef's initial value; this ref holds the update checkNow stored
+    if (!update) {
       showErrorToast(
-        "Couldn't restart",
-        e instanceof Error ? e.message : String(e)
+        "No update is ready to install",
+        "Check for updates again."
       );
+      return;
+    }
+    setState((s) => ({ ...s, error: null, status: "installing" }));
+    try {
+      if (isTauriRuntime()) {
+        await writeSafetyBackupFile();
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setState((s) => ({ ...s, error: msg, status: "ready" }));
+      showInstallFailedToast(`The safety backup failed: ${msg}`);
+      return;
+    }
+    try {
+      await update.install();
+      // Windows exits the process inside `install`; the installer relaunches
+      // the app itself. macOS and Linux swap the bundle underneath the running
+      // process, so the relaunch has to be requested explicitly.
+      if (detectOs(readPlatformContext().userAgent) !== "windows") {
+        const { relaunch } = await import("@tauri-apps/plugin-process");
+        await relaunch();
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setState((s) => ({ ...s, error: msg, status: "ready" }));
+      showInstallFailedToast(msg);
     }
   }, []);
+
+  /** The "it is ready, what now?" card, wherever the download happened to land. */
+  const presentReady = useCallback(() => {
+    showReadyToast({
+      notes: notesRef.current,
+      onRestart: () => {
+        restartNow().catch(() => undefined);
+      },
+      // "Use Current Version" is the same shape as dismissing: the staged
+      // installer is dropped and this session stops asking.
+      onUseCurrent: () => {
+        dismiss();
+      },
+      version: availableVersionRef.current ?? "",
+    });
+  }, [dismiss, restartNow]);
 
   const doDownload = useCallback(async () => {
     const update = pendingUpdateRef.current;
@@ -180,6 +259,13 @@ export function UpdaterProvider({ children }: { children: React.ReactNode }) {
     if (!update) {
       return;
     }
+    // An idle transition and a click on "Download now" can land together, and
+    // two concurrent downloads would fight over the same installer.
+    // biome-ignore lint/suspicious/noUnnecessaryConditions: Biome infers `current` from useRef's initial value; this ref flips while a download runs
+    if (downloadInFlightRef.current) {
+      return;
+    }
+    downloadInFlightRef.current = true;
     setState((s) => ({
       ...s,
       error: null,
@@ -191,8 +277,8 @@ export function UpdaterProvider({ children }: { children: React.ReactNode }) {
     let downloaded = 0;
 
     // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: updater event funnel
-    const handleEvent = (evt: { event: string; data: unknown }) => {
-      const d = evt.data as Record<string, unknown>;
+    const handleEvent = (evt: { data?: unknown; event: string }) => {
+      const d = (evt.data ?? {}) as Record<string, unknown>;
       if (evt.event === "Started") {
         totalBytes =
           typeof d.contentLength === "number"
@@ -218,28 +304,23 @@ export function UpdaterProvider({ children }: { children: React.ReactNode }) {
           // keep toast dismissed until modal closes — effect below will show it
           return;
         }
+        // Downloaded, not installed. The app keeps running on the current
+        // version until the user picks one of the two answers.
         setState((s) => ({ ...s, progress: 100, status: "ready" }));
-        showReadyToast({
-          onLater: () => {
-            deferredReadyRef.current = false;
-            dismissUpdaterToast();
-            setState((s) => ({ ...s, progress: null, status: "idle" }));
-          },
-          onRestart: () => {
-            restartNow().catch(() => undefined);
-          },
-        });
+        presentReady();
       }
     };
 
     try {
-      await update.downloadAndInstall(handleEvent);
+      await update.download(handleEvent);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       setState((s) => ({ ...s, error: msg, status: "error" }));
       showErrorToast("Download failed", msg);
+    } finally {
+      downloadInFlightRef.current = false;
     }
-  }, [restartNow]);
+  }, [presentReady]);
 
   const downloadNow = useCallback(async () => {
     await doDownload();
@@ -319,6 +400,7 @@ export function UpdaterProvider({ children }: { children: React.ReactNode }) {
 
           // Update available (dev preview — can't download installer from browser)
           notesRef.current = data.notes ?? null;
+          availableVersionRef.current = latest;
           setState((s) => ({
             ...s,
             availableVersion: latest,
@@ -462,6 +544,7 @@ export function UpdaterProvider({ children }: { children: React.ReactNode }) {
 
       pendingUpdateRef.current = update;
       notesRef.current = (update.body as string | null) ?? null;
+      availableVersionRef.current = update.version;
       setState((s) => ({
         ...s,
         availableVersion: update.version,
@@ -471,28 +554,20 @@ export function UpdaterProvider({ children }: { children: React.ReactNode }) {
         status: "available",
       }));
 
-      if (nextSettings.autoDownload) {
-        await doDownload();
-      } else if (silent) {
-        // silent launch with autoDownload OFF: show non-blocking "Version X available" toast
-        showAvailableToast(update.version, {
-          onDownload: () => {
-            doDownload().catch(() => undefined);
-          },
-          onViewNotes: () => {
-            // handled by Updates tab
-          },
-        });
-      } else {
-        showAvailableToast(update.version, {
-          onDownload: () => {
-            doDownload().catch(() => undefined);
-          },
-          onViewNotes: () => {
-            // notes modal is handled by Updates tab; keep toast open
-          },
-        });
+      if (silent && nextSettings.autoDownload) {
+        // Auto-download stays silent AND stays put. The idle effect below starts
+        // the download the moment the user stops working — a background check
+        // must never turn into a download under someone's hands.
+        return;
       }
+      showAvailableToast(update.version, {
+        onDownload: () => {
+          doDownload().catch(() => undefined);
+        },
+        onViewNotes: () => {
+          // notes modal is handled by Updates tab; keep toast open
+        },
+      });
     },
     [doDownload, state.currentVersion, state.status]
   );
@@ -508,19 +583,35 @@ export function UpdaterProvider({ children }: { children: React.ReactNode }) {
           state.status === "ready"
         ) {
           deferredReadyRef.current = false;
-          showReadyToast({
-            onLater: () => {
-              dismissUpdaterToast();
-              setState((s) => ({ ...s, progress: null, status: "idle" }));
-            },
-            onRestart: () => {
-              restartNow().catch(() => undefined);
-            },
-          });
+          presentReady();
         }
       }),
-    [state.status, restartNow]
+    [state.status, presentReady]
   );
+
+  // Idle tracking only runs while an automatic download is actually possible.
+  useEffect(() => {
+    if (!settings.autoDownload) {
+      return;
+    }
+    return startIdleTracking();
+  }, [settings.autoDownload]);
+
+  // An automatic download waits for the app to go quiet. Re-checks on every
+  // idle transition, and on mount for the case where the app was already idle
+  // before an update was found.
+  useEffect(() => {
+    if (!settings.autoDownload) {
+      return;
+    }
+    const downloadIfIdle = () => {
+      if (isAppIdle()) {
+        doDownload().catch(() => undefined);
+      }
+    };
+    downloadIfIdle();
+    return subscribeIdle(downloadIfIdle);
+  }, [doDownload, settings.autoDownload]);
 
   // Launch check 5s after mount (spec §3.1)
   // biome-ignore lint/correctness/useExhaustiveDependencies: runs once after version/settings become available; checkNow intentionally not a dep to avoid loop

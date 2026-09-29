@@ -29,6 +29,7 @@ export function UpdatesTab() {
   const checking = updater.status === "checking";
   const downloading = updater.status === "downloading";
   const ready = updater.status === "ready";
+  const installing = updater.status === "installing";
   const available = updater.status === "available";
 
   const handleCheck = useCallback(() => {
@@ -43,7 +44,7 @@ export function UpdatesTab() {
     updater.restartNow().catch(() => undefined);
   }, [updater]);
 
-  const handleDismissReady = useCallback(() => {
+  const handleUseCurrent = useCallback(() => {
     updater.dismiss();
   }, [updater]);
 
@@ -86,7 +87,7 @@ export function UpdatesTab() {
             {checking ? "Checking…" : "Check for updates"}
           </Button>
         }
-        description="Checks GitHub Releases for a newer version. Restart is required to apply an update."
+        description="Checks GitHub Releases for a newer version. Downloading is automatic once you stop using the app; installing is always your choice, and your data is kept."
         title="Version"
       >
         <dl className="grid gap-3 sm:grid-cols-2">
@@ -131,23 +132,25 @@ export function UpdatesTab() {
               </div>
             </div>
           ) : null}
-          {ready ? (
+          {ready || installing ? (
             <div className="flex flex-wrap gap-2 sm:col-span-2">
               <Button
                 className="press-feedback"
+                disabled={installing}
                 onClick={handleRestart}
                 size="sm"
                 variant="confirm"
               >
-                Restart now
+                {installing ? "Installing…" : "Restart Now"}
               </Button>
               <Button
                 className="press-feedback"
-                onClick={handleDismissReady}
+                disabled={installing}
+                onClick={handleUseCurrent}
                 size="sm"
                 variant="outline"
               >
-                Later
+                Use Current Version
               </Button>
             </div>
           ) : null}
@@ -216,6 +219,10 @@ export function UpdatesTab() {
               type="checkbox"
             />
           </label>
+          <p className="text-muted-foreground text-xs">
+            Automatic downloads only start after five minutes without any mouse
+            or keyboard activity, and never install on their own.
+          </p>
         </div>
       </SettingsCard>
 

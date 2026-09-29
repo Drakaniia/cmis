@@ -4,6 +4,7 @@ export type UpdaterStatus =
   | "available"
   | "downloading"
   | "ready"
+  | "installing"
   | "error"
   | "up-to-date";
 
@@ -36,4 +37,10 @@ export interface UpdaterState {
 }
 
 export const UPDATER_TOAST_ID = "cmis-updater";
+/**
+ * Failures that follow the ready card get their own id. Pointing a plain
+ * `toast.error` at `UPDATER_TOAST_ID` would restyle the custom card without
+ * replacing its content, so the message would never be readable.
+ */
+export const UPDATER_ERROR_TOAST_ID = "cmis-updater-error";
 export const UPDATER_STORE_FILE = "updater.json";
