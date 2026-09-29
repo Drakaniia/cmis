@@ -1,6 +1,7 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { useCallback, useState } from "react";
+import { type ReactNode, useCallback, useState } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useItemHistory } from "../hooks/use-item-history";
 import type { InventoryBatch, InventoryItem } from "../types";
@@ -87,18 +88,29 @@ function batch(overrides: Partial<InventoryBatch> = {}): InventoryBatch {
   };
 }
 
+// The edit view invalidates the inventory query on save, so it needs a client
+// in context even though the mutation itself is mocked.
+function QueryWrapper({ children }: { children: ReactNode }) {
+  const client = new QueryClient({
+    defaultOptions: { mutations: { retry: false }, queries: { retry: false } },
+  });
+  return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+}
+
 function renderModal(
   props: Partial<Parameters<typeof StockDetailModal>[0]> = {}
 ) {
   return render(
-    <StockDetailModal
-      item={item()}
-      onOpenChange={vi.fn()}
-      onStockIn={vi.fn()}
-      onStockOut={vi.fn()}
-      open
-      {...props}
-    />
+    <QueryWrapper>
+      <StockDetailModal
+        item={item()}
+        onOpenChange={vi.fn()}
+        onStockIn={vi.fn()}
+        onStockOut={vi.fn()}
+        open
+        {...props}
+      />
+    </QueryWrapper>
   );
 }
 

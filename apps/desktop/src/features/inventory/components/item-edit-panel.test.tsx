@@ -1,11 +1,23 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { InventoryItem } from "../types";
 import { ItemEditPanel } from "./item-edit-panel";
 
 const mutate = vi.fn();
-const useItemUpdateMutation = vi.fn(() => ({ isPending: false, mutate }));
+// The panel awaits `mutateAsync` before it reports the save back, so the mock
+// records the payload through the same spy and resolves.
+const mutateAsync = vi.fn((values: unknown) => {
+  mutate(values);
+  return Promise.resolve(values);
+});
+const useItemUpdateMutation = vi.fn(() => ({
+  isPending: false,
+  mutate,
+  mutateAsync,
+}));
 
 vi.mock("../hooks/use-item-update", () => ({
   useItemUpdateMutation: () => useItemUpdateMutation(),
@@ -49,23 +61,35 @@ function item(overrides: Partial<InventoryItem> = {}): InventoryItem {
 
 const OTHER = item({ id: "item-2", name: "Amoxicillin", sku: "SKU-2" });
 
+// The panel invalidates the inventory query on save, so it needs a client in
+// context even though the mutation itself is mocked.
+function QueryWrapper({ children }: { children: ReactNode }) {
+  const client = new QueryClient({
+    defaultOptions: { mutations: { retry: false }, queries: { retry: false } },
+  });
+  return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+}
+
 function renderPanel(props: Partial<Parameters<typeof ItemEditPanel>[0]> = {}) {
   const onCancel = vi.fn();
   const onSaved = vi.fn();
   render(
-    <ItemEditPanel
-      item={item()}
-      items={[item(), OTHER]}
-      onCancel={onCancel}
-      onSaved={onSaved}
-      {...props}
-    />
+    <QueryWrapper>
+      <ItemEditPanel
+        item={item()}
+        items={[item(), OTHER]}
+        onCancel={onCancel}
+        onSaved={onSaved}
+        {...props}
+      />
+    </QueryWrapper>
   );
   return { onCancel, onSaved };
 }
 
 beforeEach(() => {
   mutate.mockReset();
+  mutateAsync.mockClear();
   useItemUpdateMutation.mockClear();
 });
 
@@ -188,7 +212,6 @@ describe("ItemEditPanel", () => {
 
   it("reports a saved item back so the modal can refresh and close", async () => {
     const user = userEvent.setup();
-    mutate.mockImplementation((_values, options) => options?.onSuccess?.());
     const { onSaved } = renderPanel();
 
     await user.click(screen.getByRole("button", { name: SAVE }));
