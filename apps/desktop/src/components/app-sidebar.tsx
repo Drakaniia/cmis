@@ -263,8 +263,9 @@ function NavItemLink({
  * CMIS-UI-00 §1.2 / §2.1 — the sidebar is the *heavy* structural material:
  * tonally deeper than the canvas (Apple §12 material weight encodes
  * hierarchy) so it separates the structural region without a hard divider.
- * It spans the full window height so the brand owns the top-left corner and
- * the header only has to cover the content column.
+ * It fills the column beneath the full-width global header, so the brand mark
+ * anchors the top of the rail itself rather than the window's top-left corner
+ * — which is what keeps the page title still while the rail changes width.
  *
  * Active state carries the BukSU maroon (§1.4) so wayfinding is branded
  * rather than a generic grey pill.
