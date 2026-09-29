@@ -5,6 +5,26 @@
 **Status:** Draft, awaiting implementation
 **Date:** 2026-09-21
 **Phases:** Phase 1 — page rebuild + analytics relocation + system Print. Phase 2 — the Rust-drawn PDF.
+
+> **Implementation revision (2026-09-29).** Three deviations from F7/F8/F10, taken after
+> review:
+>
+> 1. **Print and preview share one document.** `StockReportDocument` renders the
+>    report once; the page mounts a copy behind `hidden print:block` (the interactive
+>    screen carries `print:hidden`), so Print produces the document rather than the app
+>    screen, and the preview modal shows the same markup.
+> 2. **Save PDF previews before writing.** `Save PDF` opens the preview; the operator
+>    then confirms through the **native save dialog** (`tauri-plugin-dialog`, already
+>    present for the workbook export), so the destination is chosen rather than
+>    auto-written into Documents (supersedes D24's destination half and the F10
+>    "no dialog" note).
+> 3. **The command takes the path.** `generate_stock_report_pdf(payload, path)` writes
+>    the bytes it is handed; the timestamped filename is built in TypeScript
+>    (`stockReportPdfFileName`), so Rust no longer resolves Documents.
+>
+> F10's table renderer was also rebuilt with real Helvetica AFM metrics, per-column
+> alignment and page-break headers, because the estimated widths let cell text drift
+> out of its column.
 **Supersedes, in part:** the widget grid and export controls described in `CMIS-UI-07` as implemented in `features/admin/reports/`
 
 ---

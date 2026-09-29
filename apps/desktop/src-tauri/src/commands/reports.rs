@@ -17,14 +17,15 @@ pub fn save_stock_report_workbook(bytes: Vec<u8>, path: String) -> Result<String
     Ok(path)
 }
 
-// ── Stock Level Report PDF (stock-level-report spec F10) ────────────────────
+// ── Stock Level Report PDF (stock-level-report spec F8/F10) ──────────────────
 // The app's first Rust-drawn document (SL13): A4 landscape, Base-14 Helvetica
 // (no font files ship), pure renderer — the frontend sends the already-computed
-// report and Rust never touches SQLite.
+// report and Rust never touches SQLite. The destination path also arrives from
+// the frontend, because the preview step has already asked the operator where
+// the file should go.
 
 use printpdf::{BuiltinFont, Mm, PdfDocument};
 use serde::Deserialize;
-use tauri::Manager;
 
 #[derive(Deserialize, Default)]
 pub struct PdfSummary {
@@ -104,9 +105,6 @@ pub struct PdfGrandTotal {
 pub struct StockReportPdfPayload {
     #[serde(default)]
     pub as_of: String,
-    /// `YYYY-MM` — doubles as the filename fragment.
-    #[serde(default)]
-    pub month: String,
     #[serde(default)]
     pub month_label: String,
     #[serde(default)]
@@ -125,6 +123,140 @@ pub struct StockReportPdfPayload {
     pub groups: Vec<PdfGroup>,
     #[serde(default)]
     pub grand_total: PdfGrandTotal,
+}
+
+// ── Metrics ─────────────────────────────────────────────────────────────────
+// printpdf exposes no measurements for Base-14 fonts, so a character-width
+// guess is what made an earlier revision's numbers drift out of their columns.
+// These are the standard Helvetica AFM advance widths (units per 1000 em),
+// which make truncation exact and right-aligned columns actually line up.
+
+const PT_TO_MM: f32 = 25.4 / 72.0;
+
+/// Helvetica's cap height as a fraction of the em — used to centre text in a row.
+const CAP_HEIGHT_RATIO: f32 = 0.717;
+
+fn helvetica_units(code: u8, bold: bool) -> u16 {
+    if bold {
+        return helvetica_bold_units(code);
+    }
+    match code {
+        b' ' | b'!' => 278,
+        b'"' => 355,
+        b'#' | b'$' => 556,
+        b'%' => 889,
+        b'&' => 667,
+        b'\'' => 191,
+        b'(' | b')' => 333,
+        b'*' => 389,
+        b'+' => 584,
+        b',' | b'.' => 278,
+        b'-' => 333,
+        b'/' => 278,
+        b'0'..=b'9' => 556,
+        b':' | b';' => 278,
+        b'<' | b'=' | b'>' => 584,
+        b'?' => 556,
+        b'@' => 1015,
+        b'A' | b'B' | b'E' | b'K' | b'P' | b'S' | b'V' | b'X' | b'Y' => 667,
+        b'C' | b'D' | b'H' | b'N' | b'R' | b'U' => 722,
+        b'F' | b'T' | b'Z' => 611,
+        b'G' | b'O' | b'Q' => 778,
+        b'I' => 278,
+        b'J' => 500,
+        b'L' => 556,
+        b'M' => 833,
+        b'W' => 944,
+        b'[' | b'\\' | b']' => 278,
+        b'^' => 469,
+        b'_' => 556,
+        b'`' => 333,
+        b'a' | b'b' | b'd' | b'e' | b'g' | b'h' | b'n' | b'o' | b'p' | b'q' | b'u' => 556,
+        b'c' | b'k' | b's' | b'v' | b'x' | b'y' | b'z' => 500,
+        b'f' | b't' => 278,
+        b'i' | b'j' | b'l' => 222,
+        b'm' => 833,
+        b'r' => 333,
+        b'w' => 722,
+        b'{' | b'}' => 334,
+        b'|' => 260,
+        b'~' => 584,
+        // Latin-1 accents and anything else: a safe mid-width average.
+        _ => 500,
+    }
+}
+
+fn helvetica_bold_units(code: u8) -> u16 {
+    match code {
+        b' ' => 278,
+        b'!' => 333,
+        b'"' => 474,
+        b'#' | b'$' => 556,
+        b'%' => 889,
+        b'&' => 722,
+        b'\'' => 238,
+        b'(' | b')' => 333,
+        b'*' => 389,
+        b'+' => 584,
+        b',' | b'.' => 278,
+        b'-' => 333,
+        b'/' => 278,
+        b'0'..=b'9' => 556,
+        b':' | b';' => 333,
+        b'<' | b'=' | b'>' => 584,
+        b'?' => 611,
+        b'@' => 975,
+        b'A'..=b'D' => 722,
+        b'E' => 667,
+        b'F' => 611,
+        b'G' => 778,
+        b'H' => 722,
+        b'I' => 278,
+        b'J' => 556,
+        b'K' => 722,
+        b'L' => 611,
+        b'M' => 833,
+        b'N' => 722,
+        b'O' => 778,
+        b'P' => 667,
+        b'Q' => 778,
+        b'R' => 722,
+        b'S' => 667,
+        b'T' => 611,
+        b'U' => 722,
+        b'V' => 667,
+        b'W' => 944,
+        b'X' | b'Y' => 667,
+        b'Z' => 611,
+        b'[' | b']' => 333,
+        b'\\' => 278,
+        b'^' => 584,
+        b'_' => 556,
+        b'`' => 333,
+        b'a' => 556,
+        b'b' | b'd' | b'g' | b'h' | b'n' | b'o' | b'p' | b'q' | b'u' => 611,
+        b'c' | b'e' | b's' => 556,
+        b'f' | b't' => 333,
+        b'i' | b'j' | b'l' => 278,
+        b'k' | b'v' | b'x' | b'y' => 556,
+        b'm' => 889,
+        b'r' => 389,
+        b'w' => 778,
+        b'z' => 500,
+        b'{' | b'}' => 389,
+        b'|' => 280,
+        b'~' => 584,
+        _ => 556,
+    }
+}
+
+/// The rendered width of `text`, in millimetres, at `size` points.
+fn text_width_mm(text: &str, size: f32, bold: bool) -> f32 {
+    let units: u32 = text
+        .bytes()
+        .map(|byte| u32::from(helvetica_units(byte, bold)))
+        .sum();
+    (units as f32 / 1000.0) * size * PT_TO_MM
 }
 
 /// Builtin Helvetica only covers WinAnsi — normalise the few non-ASCII marks
@@ -147,36 +279,72 @@ fn pdf_text(value: &str) -> String {
         .collect()
 }
 
+/// Comfortable page size for a landscape table (spec D23), and the single margin
+/// every element is positioned against.
+const PAGE_WIDTH_MM: f32 = 297.0;
+const PAGE_HEIGHT_MM: f32 = 210.0;
+const MARGIN_MM: f32 = 12.0;
+
 /// Column widths (mm) for the 8-column stock table. They sum to the printable
-/// width of A4 landscape with 12mm margins: 297 - 24 = 273.
+/// width of A4 landscape: 297 - 24 = 273. Shared with the frontend document's
+/// percentage widths so the preview and this file read the same.
 const TABLE_COL_WIDTHS: [f32; 8] = [62.0, 52.0, 22.0, 38.0, 22.0, 28.0, 28.0, 21.0];
 
-/// Truncate a cell to what fits its column at this font size — same heuristic
-/// as `PdfCursor::line` (Helvetica advance ≈ 0.18 × size per char in mm),
-/// reserving 2mm of cell padding.
-fn fit_cell(text: &str, col_width: f32, size: f32) -> String {
-    let usable = (col_width - 2.0).max(4.0);
-    let max_chars = (usable / (size * 0.18)).max(4.0) as usize;
-    let mut text = pdf_text(text);
-    if text.len() > max_chars {
-        text.truncate(max_chars.saturating_sub(1));
-        text.push('…');
-    }
-    text
+/// Global cell padding — text is inset by this on both sides, so no glyph ever
+/// touches a rule.
+const CELL_PADDING: f32 = 1.5;
+
+const TABLE_HEADERS: [&str; 8] = [
+    "Medicine",
+    "Form & strength",
+    "On hand",
+    "Pack hint",
+    "Threshold",
+    "Status",
+    "Nearest expiry",
+    "Batches",
+];
+
+#[derive(Clone, Copy)]
+enum ColumnAlign {
+    Left,
+    Right,
+    Center,
 }
 
-fn pdf_filename(month: &str) -> String {
-    let safe_month: String = month
-        .chars()
-        .filter(|ch| ch.is_ascii_alphanumeric() || *ch == '-')
-        .collect();
-    let month = if safe_month.is_empty() {
-        "unknown".to_string()
-    } else {
-        safe_month
-    };
-    let stamp = chrono::Local::now().format("%Y%m%d-%H%M").to_string();
-    format!("cmis-stock-report-{month}-{stamp}.pdf")
+/// Numbers right-align exactly as they do on screen; text columns stay left;
+/// Status centres in its cell.
+const TABLE_COL_ALIGN: [ColumnAlign; 8] = [
+    ColumnAlign::Left,
+    ColumnAlign::Left,
+    ColumnAlign::Right,
+    ColumnAlign::Left,
+    ColumnAlign::Right,
+    ColumnAlign::Center,
+    ColumnAlign::Left,
+    ColumnAlign::Right,
+];
+
+fn row_height(size: f32) -> f32 {
+    size * PT_TO_MM * 1.4 + 2.0 * CELL_PADDING
+}
+
+/// Truncate a cell to what fits its column, measured rather than estimated, and
+/// trimmed with an ASCII ellipsis so the WinAnsi sanitiser keeps it.
+fn fit_cell(text: &str, col_width: f32, size: f32, bold: bool) -> String {
+    let text = pdf_text(text);
+    let usable = (col_width - CELL_PADDING * 2.0).max(2.0);
+    if text_width_mm(&text, size, bold) <= usable {
+        return text;
+    }
+    let mut chars: Vec<char> = text.chars().collect();
+    while chars.pop().is_some() {
+        let candidate = format!("{}...", chars.iter().collect::<String>());
+        if text_width_mm(&candidate, size, bold) <= usable {
+            return candidate;
+        }
+    }
+    String::new()
 }
 
 struct PdfCursor {
@@ -192,10 +360,8 @@ struct PdfCursor {
 
 impl PdfCursor {
     fn new(title: &str) -> Self {
-        let page_width = 297.0;
-        let page_height = 210.0;
         let (doc, page, layer) =
-            PdfDocument::new(title, Mm(page_width), Mm(page_height), "Layer 1");
+            PdfDocument::new(title, Mm(PAGE_WIDTH_MM), Mm(PAGE_HEIGHT_MM), "Layer 1");
         let font_regular = doc
             .add_builtin_font(BuiltinFont::Helvetica)
             .expect("builtin Helvetica");
@@ -205,10 +371,10 @@ impl PdfCursor {
         Self {
             doc,
             pages: vec![(page, layer)],
-            page_width,
-            page_height,
-            margin: 12.0,
-            y: page_height - 12.0,
+            page_width: PAGE_WIDTH_MM,
+            page_height: PAGE_HEIGHT_MM,
+            margin: MARGIN_MM,
+            y: PAGE_HEIGHT_MM - MARGIN_MM,
             font_regular,
             font_bold,
         }
@@ -219,40 +385,45 @@ impl PdfCursor {
         self.doc.get_page(*page).get_layer(*layer)
     }
 
-    fn ensure_space(&mut self, needed: f32) {
+    /// Reserve vertical space, starting a fresh page when it does not fit.
+    /// Returns `true` when a new page was started, which is the signal a table
+    /// uses to repeat its column headers.
+    fn ensure_space(&mut self, needed: f32) -> bool {
         if self.y - needed < self.margin + 8.0 {
             let (page, layer) =
                 self.doc
                     .add_page(Mm(self.page_width), Mm(self.page_height), "Layer 1");
             self.pages.push((page, layer));
             self.y = self.page_height - self.margin;
+            true
+        } else {
+            false
         }
     }
 
-    fn line(&mut self, text: &str, size: f32, bold: bool, indent: f32) {
-        self.ensure_space(size * 0.55 + 2.0);
-        let font = if bold {
-            &self.font_bold.clone()
+    fn font(&self, bold: bool) -> printpdf::IndirectFontRef {
+        if bold {
+            self.font_bold.clone()
         } else {
-            &self.font_regular.clone()
-        };
-        // Truncate to what fits the printable width at this size — a medicine
-        // name is the only free-text field and must not overrun the columns.
-        let max_chars =
-            ((self.page_width - self.margin * 2.0 - indent) / (size * 0.18)).max(10.0) as usize;
-        let mut text = pdf_text(text);
-        if text.len() > max_chars {
-            text.truncate(max_chars.saturating_sub(1));
-            text.push('…');
+            self.font_regular.clone()
         }
+    }
+
+    /// A free-text line (titles, context, subtotals) — measured truncation so it
+    /// can never run past the printable area.
+    fn line(&mut self, text: &str, size: f32, bold: bool, indent: f32) {
+        let line_h = size * PT_TO_MM * 1.6 + 1.0;
+        self.ensure_space(line_h);
+        let usable = self.page_width - self.margin * 2.0 - indent;
+        let fitted = fit_cell(text, usable + CELL_PADDING * 2.0, size, bold);
         self.layer().use_text(
-            pdf_text(&text),
+            fitted,
             size,
             Mm(self.margin + indent),
             Mm(self.y),
-            font,
+            &self.font(bold),
         );
-        self.y -= size * 0.55 + 2.0;
+        self.y -= line_h;
     }
 
     fn rule(&mut self) {
@@ -307,36 +478,52 @@ impl PdfCursor {
         layer.add_line(line);
     }
 
-    /// A real table row: each cell is drawn at its column's x position with a
-    /// full grid (outer border + column separators + row divider), so the PDF
-    /// carries selectable positioned text — not a `a | b | c` markdown line.
+    /// A real table row: each cell is measured, aligned to its column, and
+    /// vertically centred inside a closed grid band.
     fn table_row(&mut self, cells: [&str; 8], size: f32, bold: bool, is_header: bool) {
-        let row_h = size * 0.55 + 3.0;
-        self.ensure_space(row_h + 2.0);
-        let thickness = if is_header { 0.6 } else { 0.3 };
-        // Top border for the first row of each table so the grid is closed.
+        let needed = row_height(size) + 1.0;
+        let broke = self.ensure_space(needed);
+        if broke && !is_header {
+            // New page mid-table: repeat the column headers so the continued
+            // rows are not a wall of unlabelled numbers.
+            self.draw_row(TABLE_HEADERS, HEADER_SIZE, true, true);
+        }
+        self.draw_row(cells, size, bold, is_header);
+    }
+
+    fn draw_row(&mut self, cells: [&str; 8], size: f32, bold: bool, is_header: bool) {
+        let height = row_height(size);
+        let thickness = if is_header { 0.5 } else { 0.25 };
+        let top = self.y;
+        let bottom = top - height;
+
         if is_header {
-            self.hline_at(self.y + 2.0, thickness);
+            self.hline_at(top, thickness);
         }
-        let top = self.y + 2.0;
-        let font = if bold {
-            self.font_bold.clone()
-        } else {
-            self.font_regular.clone()
-        };
+
+        let font = self.font(bold);
+        let cap = size * PT_TO_MM * CAP_HEIGHT_RATIO;
+        // Centre the cap-height band on the row's midline.
+        let baseline = top - height / 2.0 - cap / 2.0;
+
         for (index, cell) in cells.iter().enumerate() {
-            let x = self.col_x(index) + 1.0;
-            let fitted = fit_cell(cell, TABLE_COL_WIDTHS[index], size);
+            let width = TABLE_COL_WIDTHS[index];
+            let fitted = fit_cell(cell, width, size, bold);
+            let text_w = text_width_mm(&fitted, size, bold);
+            let x = match TABLE_COL_ALIGN[index] {
+                ColumnAlign::Left => self.col_x(index) + CELL_PADDING,
+                ColumnAlign::Right => self.col_x(index) + width - CELL_PADDING - text_w,
+                ColumnAlign::Center => self.col_x(index) + (width - text_w) / 2.0,
+            };
             self.layer()
-                .use_text(fitted, size, Mm(x), Mm(self.y), &font);
+                .use_text(fitted, size, Mm(x), Mm(baseline), &font);
         }
-        self.y -= row_h;
-        let bottom = self.y + 1.5;
+
         self.hline_at(bottom, thickness);
-        // Column separators + outer borders for this row band.
-        for k in 0..=TABLE_COL_WIDTHS.len() {
-            self.vline_at(self.col_x(k), top, bottom, thickness);
+        for column in 0..=TABLE_COL_WIDTHS.len() {
+            self.vline_at(self.col_x(column), top, bottom, thickness);
         }
+        self.y = bottom;
     }
 
     fn finish(self, footer_right: &str) -> Vec<u8> {
@@ -363,27 +550,26 @@ impl PdfCursor {
     }
 }
 
-/// Draws the Stock Level Report (F8/F10) and saves it to Documents.
+const HEADER_SIZE: f32 = 7.0;
+const BODY_SIZE: f32 = 7.5;
+const TITLE_SIZE: f32 = 16.0;
+
+/// Draws the Stock Level Report (F8/F10) and writes it to the operator-chosen
+/// path, returning that path.
 ///
-/// Returns the absolute path written. The time component in the filename makes
-/// collisions impossible without a dialog (D24). Nothing is written to
-/// `audit_log` — reading is not an event.
+/// The destination arrives from the frontend because the preview step has
+/// already asked the operator where the file should go; the time-stamped default
+/// filename makes collisions impossible. Nothing is written to `audit_log` —
+/// reading is not an event.
 #[tauri::command]
 pub fn generate_stock_report_pdf(
-    app: tauri::AppHandle,
     payload: StockReportPdfPayload,
+    path: String,
 ) -> Result<String, String> {
-    let documents = app
-        .path()
-        .document_dir()
-        .map_err(|error| format!("Could not resolve the Documents folder: {error}"))?;
-    let path = documents.join(pdf_filename(&payload.month));
-    let path_display = path.to_string_lossy().to_string();
-
     let mut pdf = PdfCursor::new("Stock Level Report");
 
     // Header block (F8).
-    pdf.line("Stock Level Report", 16.0, true, 0.0);
+    pdf.line("Stock Level Report", TITLE_SIZE, true, 0.0);
     pdf.line(
         &format!(
             "{}  ·  received {}  ·  dispensed {}  ·  {}",
@@ -462,21 +648,7 @@ pub fn generate_stock_report_pdf(
             true,
             0.0,
         );
-        pdf.table_row(
-            [
-                "Medicine",
-                "Form & strength",
-                "On hand",
-                "Pack hint",
-                "Threshold",
-                "Status",
-                "Nearest expiry",
-                "Batches",
-            ],
-            7.0,
-            true,
-            true,
-        );
+        pdf.table_row(TABLE_HEADERS, HEADER_SIZE, true, true);
         if group.rows.is_empty() {
             pdf.line("(no medicines in this group)", 8.0, false, 2.0);
         }
@@ -500,7 +672,7 @@ pub fn generate_stock_report_pdf(
                     row.nearest_expiry.as_str(),
                     batches.as_str(),
                 ],
-                7.5,
+                BODY_SIZE,
                 false,
                 false,
             );
@@ -545,7 +717,63 @@ pub fn generate_stock_report_pdf(
     );
 
     let bytes = pdf.finish(&format!("Generated {}", payload.generated_at));
-    std::fs::write(&path, &bytes)
-        .map_err(|error| format!("Could not write {path_display}: {error}"))?;
-    Ok(path_display)
+    std::fs::write(&path, &bytes).map_err(|error| format!("Could not write {path}: {error}"))?;
+    Ok(path)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn pdf_text_normalises_non_winansi_marks() {
+        assert_eq!(pdf_text("—"), "-");
+        assert_eq!(pdf_text("≤30d / ‹ ›"), "<=30d / < >");
+        // Anything beyond Latin-1 degrades to a placeholder rather than a box.
+        assert_eq!(pdf_text("ok…"), "ok?");
+    }
+
+    #[test]
+    fn text_width_uses_helvetica_advances() {
+        // Four Helvetica `M`s at 10pt: 4 × 0.833 em × 10pt × 25.4/72.
+        let expected = 4.0 * 0.833 * 10.0 * PT_TO_MM;
+        assert!((text_width_mm("MMMM", 10.0, false) - expected).abs() < 0.01);
+        assert_eq!(text_width_mm("", 10.0, false), 0.0);
+        // Bold is never narrower than regular for the same text.
+        assert!(text_width_mm("Threshold", 7.5, true) >= text_width_mm("Threshold", 7.5, false));
+    }
+
+    #[test]
+    fn fit_cell_never_overflows_its_column() {
+        let long = "Paracetamol 500 mg extra strength tablets".repeat(3);
+        for (index, width) in TABLE_COL_WIDTHS.iter().enumerate() {
+            let fitted = fit_cell(&long, *width, BODY_SIZE, false);
+            let usable = width - CELL_PADDING * 2.0;
+            let measured = text_width_mm(&fitted, BODY_SIZE, false);
+            assert!(
+                measured <= usable + 0.01,
+                "column {index} overflowed: {measured} > {usable} ({fitted:?})"
+            );
+        }
+    }
+
+    #[test]
+    fn fit_cell_keeps_text_that_already_fits() {
+        assert_eq!(fit_cell("In stock", 28.0, BODY_SIZE, false), "In stock");
+    }
+
+    #[test]
+    fn right_aligned_numbers_end_before_the_column_edge() {
+        for (index, align) in TABLE_COL_ALIGN.iter().enumerate() {
+            if !matches!(align, ColumnAlign::Right) {
+                continue;
+            }
+            let width = TABLE_COL_WIDTHS[index];
+            let value = "1234567";
+            let fitted = fit_cell(value, width, BODY_SIZE, false);
+            let measured = text_width_mm(&fitted, BODY_SIZE, false);
+            // The widest x draw_row can produce, plus the text, stays inside.
+            assert!(measured + CELL_PADDING <= width);
+        }
+    }
 }

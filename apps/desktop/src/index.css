@@ -57,6 +57,14 @@ body,
    this block does the structural work CSS classes cannot: the fixed-viewport
    shell has to flow, the report's scroll caps have to lift, and the report
    table's headers have to repeat on every page. */
+
+/* A4 landscape, matching the Rust PDF (D23), so screen print and saved file
+   share a page shape. */
+@page {
+  size: A4 landscape;
+  margin: 12mm;
+}
+
 @media print {
   html,
   body,
@@ -78,10 +86,35 @@ body,
     display: table-header-group;
   }
 
+  /* A preview dialog is a screen affordance — the hidden document prints. */
+  [data-slot="dialog-overlay"],
+  [data-slot="dialog-portal"] {
+    display: none !important;
+  }
+
   /* Keep a category header with its first rows, and its subtotal with its rows. */
-  [data-report-group] > div:first-child,
-  [data-report-group] > div:last-child {
+  [data-report-group] {
     break-inside: avoid;
+  }
+
+  /* Rows never split across pages, and the document's rules stay visible when
+     the browser would otherwise drop background colours. */
+  .stock-report-document tr {
+    break-inside: avoid;
+  }
+
+  .stock-report-document {
+    padding: 0 !important;
+    color: #111827 !important;
+    /* Keep the header/total tints instead of letting the browser drop them. */
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    background: #fff !important;
+  }
+
+  .stock-report-document table {
+    width: 100% !important;
+    border-collapse: collapse !important;
   }
 
   /* Toasts and any decorative overlay never print. */

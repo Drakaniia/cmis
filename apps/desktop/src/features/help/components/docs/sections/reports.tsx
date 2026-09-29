@@ -60,12 +60,19 @@ export function StockReportSection() {
       <DocsSubHeading>Printing and saving</DocsSubHeading>
       <DocsP>
         <span className="font-medium text-foreground">Print</span> opens the
-        system print dialog with the window chrome stripped away and every
-        category present — its own “Save as PDF” produces the document.{" "}
-        <span className="font-medium text-foreground">Save as PDF</span> writes
-        the same report through the app itself as an A4 landscape file into
-        Documents. The report honours the active category filter, so what prints
-        matches what you see.
+        system print dialog with a dedicated document — title, summary, every
+        category and its subtotal, and repeating column headers — rather than a
+        copy of the app screen. The printed sheet and the saved file share one
+        layout, so they read the same.
+      </DocsP>
+      <DocsP>
+        <span className="font-medium text-foreground">Save PDF</span> opens a
+        preview of that document first. Nothing is written until you press{" "}
+        <span className="font-medium text-foreground">Save PDF…</span> in the
+        preview and pick a folder and filename, and you can print from the same
+        dialog. The preview offers a timestamped name and opens in Documents by
+        default. The report honours the active category filter, so what previews
+        and saves matches what you see.
       </DocsP>
 
       <DocsSubHeading>Exporting the workbook</DocsSubHeading>

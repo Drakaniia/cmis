@@ -24,56 +24,22 @@ import {
   exportFileName,
 } from "../stock-report-export";
 import { buildGrandTotal, groupByCategory } from "../stock-report-groups";
-import { buildStockReportPdfPayload } from "../stock-report-pdf";
+import {
+  buildStockReportPdfPayload,
+  STOCK_REPORT_LOCATION,
+  stockReportPdfFileName,
+} from "../stock-report-pdf";
 import {
   buildMonthActivity,
   buildStockSummary,
   formatAsOf,
 } from "../stock-report-summary";
-import type {
-  MonthActivity,
-  StockLevelSort,
-  StockLevelSortKey,
-} from "../types";
+import type { StockLevelSort, StockLevelSortKey } from "../types";
 import { ReportsFilterBar } from "./reports-filter-bar";
 import { StockLevelTable } from "./stock-level-table";
+import { StockReportDocument } from "./stock-report-document";
+import { StockReportPreviewDialog } from "./stock-report-preview-dialog";
 import { SummaryBlock } from "./summary-block";
-
-/**
- * Apple §12 Document header — hidden on screen (F8), the global header carries
- * the title (D14). Printed, it names the document, who produced it, and the
- * active filter. Typography §15: tight tracking on title, loose on meta.
- */
-function PrintHeader({
-  activity,
-  asOf,
-  category,
-  generatedAt,
-  monthLabel,
-}: {
-  activity: MonthActivity;
-  asOf: string;
-  category: string;
-  generatedAt: string;
-  monthLabel: string;
-}) {
-  const categoryLabel = category === "All" ? "All categories" : category;
-  return (
-    <header className="mb-4 hidden print:block">
-      <h1 className="font-bold text-xl tracking-[-0.02em]">
-        Stock Level Report
-      </h1>
-      <p className="mt-1 text-xs tracking-[0.01em]">
-        {monthLabel} · received {activity.received} · dispensed{" "}
-        {activity.dispensed} · {categoryLabel} · {asOf} · generated{" "}
-        {generatedAt}
-      </p>
-      <p className="mt-0.5 text-xs tracking-[0.01em]">
-        Operator: {getOperatorName()} · Location: Local
-      </p>
-    </header>
-  );
-}
 
 async function defaultSavePath(fileName: string): Promise<string> {
   try {
@@ -133,6 +99,7 @@ export function ReportsPage() {
   } = useReportMonth();
   const [category, setCategory] = useState("All");
   const [search, setSearch] = useState("");
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [isSavingPdf, setIsSavingPdf] = useState(false);
   const [sort, setSort] = useState<StockLevelSort>({
     dir: "asc",
@@ -162,6 +129,43 @@ export function ReportsPage() {
   const asOf = useMemo(() => formatAsOf(new Date()), []);
   const generatedAt = useMemo(() => new Date().toLocaleString(), []);
 
+  /** The search-filtered rows — the set the document, preview and PDF share. */
+  const visibleRows = useMemo(
+    () => filterStockLevelRows(rows, search),
+    [rows, search]
+  );
+  const groups = useMemo(
+    () => groupByCategory(visibleRows, sort),
+    [sort, visibleRows]
+  );
+  const grandTotal = useMemo(() => buildGrandTotal(groups), [groups]);
+
+  /** One document model, three surfaces: preview, print, PDF payload. */
+  const documentProps = useMemo(
+    () => ({
+      activity: activityFigures,
+      asOf,
+      category,
+      generatedAt,
+      grandTotal,
+      groups,
+      location: STOCK_REPORT_LOCATION,
+      monthLabel,
+      operator: getOperatorName(),
+      summary,
+    }),
+    [
+      activityFigures,
+      asOf,
+      category,
+      generatedAt,
+      grandTotal,
+      groups,
+      monthLabel,
+      summary,
+    ]
+  );
+
   const handlePrint = useCallback(() => {
     if (typeof window !== "undefined") {
       window.print();
@@ -176,11 +180,7 @@ export function ReportsPage() {
     );
   }, []);
 
-  const visibleCount = useMemo(
-    () => filterStockLevelRows(rows, search).length,
-    [rows, search]
-  );
-  const canExport = rows.length > 0 && visibleCount > 0;
+  const canExport = rows.length > 0 && visibleRows.length > 0;
 
   const handleExport = useCallback(async () => {
     try {
@@ -253,7 +253,10 @@ export function ReportsPage() {
     summary,
   ]);
 
-  const handleSavePdf = useCallback(async () => {
+  /** Opens the review step — nothing is written until the operator confirms. */
+  const handleSavePdf = useCallback(() => setIsPreviewOpen(true), []);
+
+  const handleConfirmSave = useCallback(async () => {
     if (!isTauriRuntime()) {
       if (typeof window !== "undefined") {
         window.print();
@@ -262,20 +265,29 @@ export function ReportsPage() {
     }
     setIsSavingPdf(true);
     try {
-      const groups = groupByCategory(filterStockLevelRows(rows, search), sort);
       const payload = buildStockReportPdfPayload({
         activity: activityFigures,
         asOf,
         category,
         generatedAt,
-        grandTotal: buildGrandTotal(groups),
+        grandTotal,
         groups,
-        month,
         monthLabel,
         operator: getOperatorName(),
         summary,
       });
+      const { save } = await import("@tauri-apps/plugin-dialog");
+      const chosen = await save({
+        defaultPath: await defaultSavePath(stockReportPdfFileName(month)),
+        filters: [{ extensions: ["pdf"], name: "PDF Document" }],
+      });
+      // Cancelling the dialog is not an error: the preview stays open so the
+      // operator can try another destination or close it.
+      if (!chosen) {
+        return;
+      }
       const saved = await invoke<string>("generate_stock_report_pdf", {
+        path: chosen,
         payload,
       });
       toast.success(`Saved to ${saved}`, {
@@ -284,6 +296,7 @@ export function ReportsPage() {
           onClick: () => revealInFolder(saved),
         },
       });
+      setIsPreviewOpen(false);
     } catch (error) {
       toast.error(
         error instanceof Error
@@ -298,11 +311,10 @@ export function ReportsPage() {
     asOf,
     category,
     generatedAt,
+    grandTotal,
+    groups,
     month,
     monthLabel,
-    rows,
-    search,
-    sort,
     summary,
   ]);
 
@@ -325,6 +337,14 @@ export function ReportsPage() {
 
   return (
     <div className="flex h-full flex-col overflow-hidden print:block print:h-auto print:overflow-visible">
+      {/* Print path (F8/F9): on paper the document is the only thing that
+          renders — the interactive screen below carries `print:hidden`. */}
+      {rows.length > 0 ? (
+        <div className="hidden print:block">
+          <StockReportDocument {...documentProps} />
+        </div>
+      ) : null}
+
       <ReportsFilterBar
         canExport={canExport}
         canPrint={rows.length > 0}
@@ -343,7 +363,7 @@ export function ReportsPage() {
       />
 
       {/* §9 overscroll-contain + §12 fade mask where content meets chrome */}
-      <div className="min-h-0 flex-1 overflow-auto overscroll-contain p-3 pb-6 sm:p-4 sm:pb-8 print:overflow-visible print:p-0">
+      <div className="min-h-0 flex-1 overflow-auto overscroll-contain p-3 pb-6 sm:p-4 sm:pb-8 print:hidden">
         {isEmptyDb ? (
           <motion.div
             animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -376,14 +396,6 @@ export function ReportsPage() {
             initial={{ opacity: 0 }}
             transition={{ duration: 0.25 }}
           >
-            <PrintHeader
-              activity={activityFigures}
-              asOf={asOf}
-              category={category}
-              generatedAt={generatedAt}
-              monthLabel={monthLabel}
-            />
-
             {/* §7 enter from where filter sent it — summary springs after bar */}
             <SummaryBlock
               activity={activityFigures}
@@ -425,6 +437,15 @@ export function ReportsPage() {
           </motion.div>
         )}
       </div>
+
+      <StockReportPreviewDialog
+        document={documentProps}
+        isSaving={isSavingPdf}
+        onConfirmSave={handleConfirmSave}
+        onOpenChange={setIsPreviewOpen}
+        onPrint={handlePrint}
+        open={isPreviewOpen}
+      />
     </div>
   );
 }

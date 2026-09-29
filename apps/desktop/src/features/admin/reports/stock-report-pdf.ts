@@ -45,7 +45,6 @@ export interface StockReportPdfPayload {
   };
   groups: StockReportPdfGroup[];
   location: string;
-  month: string;
   month_activity: { dispensed: string; received: string };
   month_label: string;
   operator: string;
@@ -71,7 +70,6 @@ export interface BuildStockReportPdfInput {
   generatedAt: string;
   grandTotal: GrandTotal;
   groups: CategoryGroup[];
-  month: string;
   monthLabel: string;
   operator: string;
   summary: StockSummary;
@@ -115,7 +113,6 @@ export function buildStockReportPdfPayload(
       })),
     })),
     location: STOCK_REPORT_LOCATION,
-    month: input.month,
     month_activity: {
       dispensed: input.activity.dispensed,
       received: input.activity.received,
@@ -135,7 +132,25 @@ export function buildStockReportPdfPayload(
   };
 }
 
-/** Filename prefix the Rust command writes — `cmis-stock-report-YYYY-MM-…`. */
+/** Filename prefix the saved PDF carries — `cmis-stock-report-YYYY-MM-…`. */
 export function stockReportPdfFilenamePrefix(month: string): string {
   return `cmis-stock-report-${month}-`;
+}
+
+/** `YYYYMMDD-HHmm`, the local-time fragment that makes collisions impossible. */
+function pdfTimestamp(date: Date): string {
+  const pad = (value: number): string => String(value).padStart(2, "0");
+  return `${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}-${pad(date.getHours())}${pad(date.getMinutes())}`;
+}
+
+/**
+ * The default filename offered by the save dialog. It is built here rather than
+ * in Rust because the operator now chooses the destination in the frontend, so
+ * the command only writes the bytes it is handed.
+ */
+export function stockReportPdfFileName(
+  month: string,
+  now: Date = new Date()
+): string {
+  return `${stockReportPdfFilenamePrefix(month)}${pdfTimestamp(now)}.pdf`;
 }

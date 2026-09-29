@@ -4,6 +4,7 @@ import { groupByCategory } from "./stock-report-groups";
 import {
   buildStockReportPdfPayload,
   STOCK_REPORT_LOCATION,
+  stockReportPdfFileName,
   stockReportPdfFilenamePrefix,
 } from "./stock-report-pdf";
 import type { StockLevelRow } from "./types";
@@ -48,7 +49,6 @@ describe("stock report PDF payload", () => {
         unitsOnHand: 100,
       },
       groups,
-      month: "2026-09",
       monthLabel: "September 2026",
       operator: "Local user",
       summary: {
@@ -90,7 +90,6 @@ describe("stock report PDF payload", () => {
         unitsOnHand: 50,
       },
       groups: groups.slice(0, 1),
-      month: "2026-09",
       monthLabel: "September 2026",
       operator: "Local user",
       summary: {
@@ -111,6 +110,12 @@ describe("stock report PDF payload", () => {
   it("uses the timestamped PDF filename prefix", () => {
     expect(stockReportPdfFilenamePrefix("2026-09")).toBe(
       "cmis-stock-report-2026-09-"
+    );
+  });
+
+  it("builds the save-dialog default filename from the month and clock", () => {
+    expect(stockReportPdfFileName("2026-09", new Date(2026, 8, 22, 9, 5))).toBe(
+      "cmis-stock-report-2026-09-20260922-0905.pdf"
     );
   });
 });
