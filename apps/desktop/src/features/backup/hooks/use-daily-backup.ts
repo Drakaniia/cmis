@@ -5,13 +5,9 @@ import { loadBackupStore, saveBackupStore } from "@/lib/backup-store";
 import { getDb } from "@/lib/db";
 import { isTauriRuntime } from "@/lib/open-external";
 import { invoke } from "@/lib/tauri";
-import {
-  autoBackupName,
-  localDateKey,
-  manualBackupName,
-  resolveCollision,
-} from "../data/backup-naming";
+import { autoBackupName, localDateKey } from "../data/backup-naming";
 import { shouldRunDailyBackup } from "../data/backup-policy";
+import { writeSafetyBackupFile } from "../data/write-safety-backup";
 import { BACKUP_FILES_KEY, type BackupFileInfo } from "./use-backup-files";
 
 const ROLLOVER_MS = 60_000;
@@ -121,15 +117,7 @@ export function useBackupActions() {
       return manualInFlight;
     }
     const run = (async () => {
-      const dir = await invoke<string>("backup_default_dir");
-      const files = await listToday(dir);
-      const name = resolveCollision(
-        files.map((file) => file.name),
-        manualBackupName(new Date())
-      );
-      const info = await invoke<BackupFileInfo>("create_backup", {
-        destPath: `${dir}/${name}`,
-      });
+      const info = await writeSafetyBackupFile();
       await saveBackupStore({
         lastBackupAt: new Date(info.mtime * 1000).toISOString(),
         lastBackupError: "",
