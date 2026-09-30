@@ -4,6 +4,9 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 const EMPTY_SELECTION: Set<string> = new Set<string>();
 
 import { toast } from "sonner";
+import { runWithSafetyBackup } from "@/features/backup/data/safety-gate";
+import { useBackupActions } from "@/features/backup/hooks/use-daily-backup";
+import { isTauriRuntime } from "@/lib/open-external";
 import { describeImpact, type ItemImpact, sumImpact } from "../creation/impact";
 import type { TrashEntry } from "../creation/trash/types";
 import type { InventoryFilters, InventoryItem } from "../types";
@@ -136,6 +139,7 @@ export function useInventoryDeletion({
   const deleteBatchMut = useDeleteBatch();
   const restoreMut = useRestoreTrash();
   const purgeMut = usePurgeTrash();
+  const { runManualBackup } = useBackupActions();
 
   // The selection is stored together with the filter signature it was made
   // under: changing a filter discards it, so a row the operator can no longer
@@ -383,20 +387,31 @@ export function useInventoryDeletion({
       if (targets.length === 0) {
         return;
       }
-      try {
-        const summary = await purgeMut.mutateAsync(targets.map((t) => t.id));
-        toast.success(
-          `${summary.products} ${summary.products === 1 ? "product" : "products"} deleted permanently`,
-          {
-            description: `${summary.batches} batches · ${summary.dispensingRecords} dispensing records removed${reason ? ` · ${reason}` : ""}`,
-          }
-        );
-        setSelectedTrashIds(new Set());
-      } catch (e) {
-        toast.error(e instanceof Error ? e.message : "Purge failed");
+      // Purge is the only irreversible action in the app: it hard-DELETEs the
+      // rows, and the in-database Trash snapshot it replaces dies with the
+      // database. So it earns the same safety copy Wipe All Data gets, and a
+      // failed copy stops the purge rather than proceeding unprotected.
+      const result = await runWithSafetyBackup({
+        action: () => purgeMut.mutateAsync(targets.map((t) => t.id)),
+        backup: runManualBackup,
+        isDesktop: isTauriRuntime(),
+      });
+      if (!result.ok) {
+        toast.error("Nothing was deleted — the safety backup failed", {
+          description: result.error,
+        });
+        return;
       }
+      const summary = result.value;
+      toast.success(
+        `${summary.products} ${summary.products === 1 ? "product" : "products"} deleted permanently`,
+        {
+          description: `${summary.batches} batches · ${summary.dispensingRecords} dispensing records removed${reason ? ` · ${reason}` : ""}`,
+        }
+      );
+      setSelectedTrashIds(new Set());
     },
-    [purgeMut, purgeTargets]
+    [purgeMut, purgeTargets, runManualBackup]
   );
 
   const restore = useCallback(
