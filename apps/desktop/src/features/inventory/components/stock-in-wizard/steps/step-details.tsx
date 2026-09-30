@@ -3,13 +3,9 @@ import { type ChangeEvent, useCallback } from "react";
 
 import type { ItemDraftErrors } from "../../../domain/item-update";
 import { packSizeText } from "../../../domain/pack-size";
-import {
-  MEDICINE_FORMS,
-  PACK_UNITS,
-  STRENGTH_UNITS,
-} from "../../../domain/vocabulary";
 import { CategoryPicker } from "../../category-picker";
-import { FIELD_CLASS, PACK_SIZE_MAX_LENGTH, SELECT_CLASS } from "../constants";
+import { VocabularyPicker } from "../../vocabulary-picker";
+import { FIELD_CLASS, PACK_SIZE_MAX_LENGTH } from "../constants";
 import type { InventoryCategory } from "../types";
 import { ValidationMessage } from "./validation-message";
 
@@ -60,8 +56,7 @@ function PackPairFields({
     [onPackQtyChange]
   );
   const handleUnitChange = useCallback(
-    (event: ChangeEvent<HTMLSelectElement>) =>
-      onPackUnitChange(event.target.value),
+    (value: string) => onPackUnitChange(value),
     [onPackUnitChange]
   );
 
@@ -82,23 +77,16 @@ function PackPairFields({
         />
         {error ? <ValidationMessage message={error} /> : null}
       </label>
-      <label className="block font-medium text-caption text-foreground">
-        Pack unit
-        <select
-          aria-invalid={unitError !== undefined}
-          className={SELECT_CLASS}
-          onChange={handleUnitChange}
-          value={packUnit}
-        >
-          <option value="">—</option>
-          {PACK_UNITS.map((unit) => (
-            <option key={unit} value={unit}>
-              {unit}
-            </option>
-          ))}
-        </select>
-        {unitError ? <ValidationMessage message={unitError} /> : null}
-      </label>
+      {/* A picker, not a `<select>`: the container list is editable, and V6
+          refuses a pack unit that is not in it — so a clinic whose container is
+          missing needs somewhere to add it without abandoning the delivery. */}
+      <VocabularyPicker
+        error={unitError}
+        kind="pack_unit"
+        name="stock-in-pack-unit"
+        onChange={handleUnitChange}
+        value={packUnit}
+      />
     </>
   );
 }
@@ -161,12 +149,11 @@ export function StepDetails({
     [onStrengthValueChange]
   );
   const handleStrengthUnitChange = useCallback(
-    (event: ChangeEvent<HTMLSelectElement>) =>
-      onStrengthUnitChange(event.target.value),
+    (value: string) => onStrengthUnitChange(value),
     [onStrengthUnitChange]
   );
   const handleFormChange = useCallback(
-    (event: ChangeEvent<HTMLSelectElement>) => onFormChange(event.target.value),
+    (value: string) => onFormChange(value),
     [onFormChange]
   );
   const handlePackSizeChange = useCallback(
@@ -217,36 +204,23 @@ export function StepDetails({
               value={strengthValue}
             />
           </label>
-          <label className="block font-medium text-caption text-foreground">
-            Strength unit
-            <select
-              className={SELECT_CLASS}
-              onChange={handleStrengthUnitChange}
-              value={strengthUnit}
-            >
-              <option value="">—</option>
-              {STRENGTH_UNITS.map((unit) => (
-                <option key={unit} value={unit}>
-                  {unit}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="block font-medium text-caption text-foreground">
-            Form
-            <select
-              className={SELECT_CLASS}
-              onChange={handleFormChange}
-              value={form}
-            >
-              <option value="">—</option>
-              {MEDICINE_FORMS.map((option) => (
-                <option key={option} value={option}>
-                  {option}
-                </option>
-              ))}
-            </select>
-          </label>
+          {/* Both lists are editable from here, for the same reason the category
+              one is: a delivery that names a unit or a form the shipped list
+              does not have would otherwise have to be recorded as the wrong
+              one, and `baseUnitFor` renders an unknown form as a bare `unit` in
+              every quantity on screen. */}
+          <VocabularyPicker
+            kind="strength_unit"
+            name="stock-in-strength-unit"
+            onChange={handleStrengthUnitChange}
+            value={strengthUnit}
+          />
+          <VocabularyPicker
+            kind="form"
+            name="stock-in-form"
+            onChange={handleFormChange}
+            value={form}
+          />
           <label className="block font-medium text-caption text-foreground">
             Pack size
             <input

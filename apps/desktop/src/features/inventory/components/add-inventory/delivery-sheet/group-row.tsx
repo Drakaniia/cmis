@@ -13,11 +13,9 @@ import type {
 import {
   CellCategory,
   CellQty,
-  CellSelect,
   CellStatic,
+  CellTerm,
   CellText,
-  FORM_OPTIONS,
-  STRENGTH_UNIT_OPTIONS,
 } from "../sheet-cells";
 import { formatCount, plural } from "../summary-text";
 import { FIRST_FROZEN_WIDTH, GROUP_TEMPLATE } from "./constants";
@@ -230,22 +228,20 @@ export function GroupRow({
         />
       </div>
       <div className="min-w-0">
-        <CellSelect
+        <CellTerm
+          kind="strength_unit"
           label={`Strength unit for group ${groupIndex + 1}`}
           mark={mark("strengthUnit")}
           onChange={handleUnit}
-          options={STRENGTH_UNIT_OPTIONS}
-          placeholder="Unit"
           value={product.strengthUnit}
         />
       </div>
       <div className="min-w-0">
-        <CellSelect
+        <CellTerm
+          kind="form"
           label={`Form for group ${groupIndex + 1}`}
           mark={mark("form")}
           onChange={handleForm}
-          options={FORM_OPTIONS}
-          placeholder="Form"
           value={product.form}
         />
       </div>

@@ -8,24 +8,21 @@ import {
   restoreUpdatedColumns,
   snapshotTable,
 } from "../creation/snapshot";
-import { composeDisplayName } from "../domain/strength";
 import { packSizeText } from "../domain/pack-size";
+import { composeDisplayName } from "../domain/strength";
+import {
+  VOCABULARY_KINDS,
+  VOCABULARY_NOUN,
+  type VocabularyKind,
+} from "../domain/vocabulary";
+import { setVocabulary, vocabulary } from "../domain/vocabulary-store";
 import {
   newTermId,
   normalizeTermName,
   seedTermId,
-  validateTermName,
   type VocabularyTerm,
+  validateTermName,
 } from "../domain/vocabulary-terms";
-import {
-  setVocabulary,
-  vocabulary,
-} from "../domain/vocabulary-store";
-import {
-  type VocabularyKind,
-  VOCABULARY_KINDS,
-  VOCABULARY_NOUN,
-} from "../domain/vocabulary";
 
 /**
  * Read and write paths for the shared vocabulary tables (migration 0013).
@@ -74,26 +71,14 @@ const ITEM_COLUMN: Record<VocabularyKind, string> = {
 };
 
 /**
- * Which item columns a rename has to recompose, and whether the pack pair
- * changed.
+ * Which item columns a rename has to be able to put back.
  *
- * Only a `pack_unit` rename moves `pack_size`, because `pack_size` is written
- * from the pair alone. A `form` or `strength_unit` rename leaves the pair alone
- * and only the label moves.
+ * `pack_size` is in the list for every kind, including a `form` or
+ * `strength_unit` rename that does not move it: restoring a column the rename
+ * never wrote is a no-op, whereas making the envelope depend on the kind would
+ * give two ways to be wrong.
  */
-interface CascadePlan {
-  /** Columns the rollback must be able to put back. */
-  restoreColumns: readonly string[];
-  /** True when `pack_size` was regenerated and so is part of the snapshot. */
-  packChanged: boolean;
-}
-
-function cascadePlanFor(kind: VocabularyKind): CascadePlan {
-  return {
-    packChanged: kind === "pack_unit",
-    restoreColumns: ["pack_size", "display_name"],
-  };
-}
+const RENAME_RESTORE_COLUMNS = ["pack_size", "display_name"] as const;
 
 interface TermRow {
   id: string;
@@ -107,14 +92,14 @@ interface CountRow {
 
 interface ItemRow {
   display_name: string;
+  form: string;
   id: string;
   name: string;
   pack_qty: number | null;
   pack_size: string;
   pack_unit: string | null;
-  strength_value: string;
   strength_unit: string;
-  form: string;
+  strength_value: string;
 }
 
 /** How many items carry this term's name right now. */
@@ -130,10 +115,7 @@ async function usageCountFor(
   return rows[0]?.c ?? 0;
 }
 
-async function namesIn(
-  db: DbLike,
-  kind: VocabularyKind
-): Promise<string[]> {
+async function namesIn(db: DbLike, kind: VocabularyKind): Promise<string[]> {
   const rows = await db.select<{ name: string }[]>(
     `${TERM_SELECT} WHERE kind = ? ORDER BY name COLLATE NOCASE`,
     [kind]
@@ -182,12 +164,13 @@ export async function listVocabularyTerms(
  * caller can leave the seed snapshot in place rather than emptying the
  * dropdowns.
  */
-export async function loadAllVocabularyTerms(): Promise<
-  Record<VocabularyKind, string[]> | null
-> {
-  const db = await getDb();
+export async function loadAllVocabularyTerms(): Promise<Record<
+  VocabularyKind,
+  string[]
+> | null> {
   let rows: TermRow[];
   try {
+    const db = await getDb();
     rows = await db.select<TermRow[]>(
       `${TERM_SELECT} ORDER BY kind, name COLLATE NOCASE`
     );
@@ -311,7 +294,6 @@ export async function renameVocabularyTerm(
     throw new Error(problem);
   }
 
-  const plan = cascadePlanFor(kind);
   const column = ITEM_COLUMN[kind];
   const suffix = backupSuffix();
   const itemsBackup = await snapshotTable(db, "inventory_items", suffix);
@@ -332,8 +314,13 @@ export async function renameVocabularyTerm(
       `UPDATE inventory_items SET ${column} = ?, updated_at = ? WHERE ${column} = ?`,
       [clean, now, current.name]
     );
-    await rewriteItems(db, before, column, clean, plan);
-    const requestsUnresolved = await repairRequestText(db, before, column, clean);
+    await rewriteItems(db, before, column, clean);
+    const requestsUnresolved = await repairRequestText(
+      db,
+      before,
+      column,
+      clean
+    );
     await db.execute(
       "UPDATE vocabulary_terms SET name = ?, updated_at = ? WHERE id = ?",
       [clean, now, id]
@@ -357,55 +344,86 @@ export async function renameVocabularyTerm(
       itemsBackup,
       name: current.name,
       now,
-      restoreColumns: plan.restoreColumns,
+      restoreColumns: RENAME_RESTORE_COLUMNS,
     });
   }
 }
 
 /**
- * Recomposes `pack_size` and `display_name` for every affected row.
+ * A row's `pack_size` and `display_name` after `column` is renamed to `clean`.
  *
- * Done in JS rather than SQL because both are built by functions that already
- * exist and are already trusted — reusing `composeDisplayName` and
- * `packSizeText` is what guarantees a renamed term produces exactly the label
- * an item edit would have produced, rather than a second string-building rule
- * that drifts.
+ * Both are composed rather than stored, so a rename that only rewrote the term
+ * column would leave the label disagreeing with its own parts — and every read
+ * that matches on `display_name` (`domain/medicine-match.ts`, the stock-in
+ * duplicate probe, the request board) would stop finding the row.
+ *
+ * Recomposing through the same `composeDisplayName` and `packSizeText` the item
+ * writers use is what guarantees a renamed term produces exactly the label an
+ * item edit would have produced, rather than a second string-building rule that
+ * drifts. And it is why this one function is shared by the item rewrite and the
+ * request repair: the two must agree on what the new label is, or a repair would
+ * write text no item actually carries.
+ *
+ * `pack_size` falls back to the stored text when the pair no longer renders one,
+ * so a row whose pair was never usable keeps its legacy cell — the same rule
+ * `domain/item-update.ts` applies on an ordinary save.
  */
-async function rewriteItems(
-  db: DbLike,
-  before: readonly ItemRow[],
+function recomposed(
+  row: ItemRow,
   column: string,
-  clean: string,
-  plan: CascadePlan
-): Promise<void> {
-  for (const row of before) {
-    const strengthUnit = column === "strength_unit" ? clean : row.strength_unit;
-    const form = column === "form" ? clean : row.form;
-    const packUnit = column === "pack_unit" ? clean : (row.pack_unit ?? "");
-    const packSize = plan.packChanged
-      ? packSizeText({ packQty: row.pack_qty ?? 0, packUnit }) || row.pack_size
-      : row.pack_size;
-    const displayName = composeDisplayName({
+  clean: string
+): { displayName: string; packSize: string } {
+  const strengthUnit = column === "strength_unit" ? clean : row.strength_unit;
+  const form = column === "form" ? clean : row.form;
+  const packUnit = column === "pack_unit" ? clean : (row.pack_unit ?? "");
+  const derived = packSizeText({ packQty: row.pack_qty ?? 0, packUnit });
+  const packSize = derived === "" ? row.pack_size : derived;
+  return {
+    displayName: composeDisplayName({
       form,
       name: row.name,
       packSize,
       strengthUnit,
       strengthValue: row.strength_value,
-    });
-    await db.execute(
-      "UPDATE inventory_items SET pack_size = ?, display_name = ? WHERE id = ?",
-      [packSize, displayName, row.id]
-    );
-  }
+    }),
+    packSize,
+  };
+}
+
+/**
+ * Writes the recomposed `pack_size` and `display_name` for every affected row.
+ *
+ * The statements are independent — one row's label never depends on another's —
+ * so they are issued together rather than awaited one at a time. The plugin
+ * serialises them internally; a sequential loop here would only make a
+ * clinic-sized rename take thousands of round trips.
+ */
+async function rewriteItems(
+  db: DbLike,
+  before: readonly ItemRow[],
+  column: string,
+  clean: string
+): Promise<void> {
+  await Promise.all(
+    before.map((row) => {
+      const { displayName, packSize } = recomposed(row, column, clean);
+      return db.execute(
+        "UPDATE inventory_items SET pack_size = ?, display_name = ? WHERE id = ?",
+        [packSize, displayName, row.id]
+      );
+    })
+  );
 }
 
 /**
  * Rewrites the copied `medicine` text on requests that have no `item_id`.
  *
- * Pre-0009 rows are matched by normalised text alone, so a rename moves the
- * label out from under them. An `old → new` map is built first; a string that
- * maps to two different new labels is ambiguous, and guessing which item the
- * operator meant is worse than leaving the text and reporting the count.
+ * Pre-0009 rows are matched by normalised text alone, so a rename moves the label
+ * out from under them. An `old → new` map is built first; a string that maps to
+ * two different new labels is ambiguous — two items whose old labels collide on
+ * one string and diverge after the rename — and guessing which item the operator
+ * meant is worse than leaving the text and reporting the count, because the
+ * operator can see the count and fix it.
  */
 async function repairRequestText(
   db: DbLike,
@@ -417,24 +435,12 @@ async function repairRequestText(
   const ambiguous = new Set<string>();
 
   for (const row of before) {
-    const strengthUnit = column === "strength_unit" ? clean : row.strength_unit;
-    const form = column === "form" ? clean : row.form;
-    const packUnit = column === "pack_unit" ? clean : (row.pack_unit ?? "");
-    const packSize = packSizeText({ packQty: row.pack_qty ?? 0, packUnit })
-      ? packSizeText({ packQty: row.pack_qty ?? 0, packUnit })
-      : row.pack_size;
-    const next = composeDisplayName({
-      form,
-      name: row.name,
-      packSize,
-      strengthUnit,
-      strengthValue: row.strength_value,
-    });
+    const { displayName } = recomposed(row, column, clean);
     const existing = relabelled.get(row.display_name);
-    if (existing !== undefined && existing !== next) {
+    if (existing !== undefined && existing !== displayName) {
       ambiguous.add(row.display_name);
     } else {
-      relabelled.set(row.display_name, next);
+      relabelled.set(row.display_name, displayName);
     }
   }
 
@@ -442,15 +448,16 @@ async function repairRequestText(
     relabelled.delete(old);
   }
 
-  for (const [old, next] of relabelled) {
-    if (old === "" || next === "") {
-      continue;
-    }
-    await db.execute(
-      "UPDATE requests SET medicine = ? WHERE item_id IS NULL AND lower(trim(medicine)) = lower(trim(?))",
-      [next, old]
-    );
-  }
+  await Promise.all(
+    [...relabelled]
+      .filter(([old, next]) => old !== "" && next !== "")
+      .map(([old, next]) =>
+        db.execute(
+          "UPDATE requests SET medicine = ? WHERE item_id IS NULL AND lower(trim(medicine)) = lower(trim(?))",
+          [next, old]
+        )
+      )
+  );
 
   return ambiguous.size;
 }
@@ -511,7 +518,6 @@ export async function deleteVocabularyTerm(id: string): Promise<void> {
 
   const inUse = await usageCountFor(db, current.kind, current.name);
   if (inUse > 0) {
-    const noun = VOCABULARY_NOUN[current.kind];
     throw new Error(
       `Cannot delete ${current.name} — ${inUse} ${inUse === 1 ? "item uses" : "items use"} it. Reassign them first.`
     );
@@ -575,14 +581,35 @@ export function seedVocabularyRows(): {
 }
 
 /** Replaces one name in a list, keeping the order the operator saw. */
-function swap(
-  list: readonly string[],
-  from: string,
-  to: string
-): string[] {
+function swap(list: readonly string[], from: string, to: string): string[] {
   return list.map((term) => (term === from ? to : term));
 }
 
 function capitalize(value: string): string {
-  return value.length === 0 ? value : `${value[0]?.toUpperCase() ?? ""}${value.slice(1)}`;
+  return value.length === 0
+    ? value
+    : `${value[0]?.toUpperCase() ?? ""}${value.slice(1)}`;
+}
+
+let hydratePromise: Promise<boolean> | null = null;
+
+/**
+ * The startup entry point. Cached in module state so two callers racing at boot
+ * share one run, and resolved to `false` when there is no database behind this
+ * window (the browser preview) or the table predates migration 0013.
+ *
+ * A `false` is not an error. The snapshot starts as the shipped seeds, so a
+ * window that never hydrates still offers a usable vocabulary � it just cannot
+ * remember anything the operator adds until the next launch.
+ */
+export function ensureVocabularyHydrated(): Promise<boolean> {
+  if (!hydratePromise) {
+    hydratePromise = hydrateVocabulary().catch(() => false);
+  }
+  return hydratePromise;
+}
+
+/** Test seam � clears the memoized startup run. */
+export function resetVocabularyHydrationForTesting(): void {
+  hydratePromise = null;
 }

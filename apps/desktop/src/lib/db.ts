@@ -143,6 +143,46 @@ async function reseedCategories(db: unknown): Promise<void> {
   }
 }
 
+/**
+ * Puts the shipped vocabulary back after a settings reset, then re-hydrates the
+ * snapshot so the dropdowns do not render the wiped list.
+ *
+ * The same reasoning as `reseedCategories` applies: since migration 0013 the
+ * strength unit, form and pack unit lists are rows, so "also reset categories"
+ * has to reach them or a wipe leaves the pickers empty. Writing the seeds back
+ * is not enough on its own — the synchronous domain reads the hydrated snapshot,
+ * not the table, so without the second call `splitDosage` and `baseUnitFor`
+ * would keep parsing against terms that no longer exist.
+ *
+ * Best-effort, like the category reseed: a database from before that migration
+ * has no table to clear, and that must not turn a completed wipe into a failure.
+ */
+async function reseedVocabularyTerms(db: unknown): Promise<void> {
+  try {
+    const { seedVocabularyRows } = await import(
+      "@/features/inventory/data/vocabulary-terms"
+    );
+    const conn = db as {
+      execute: (sql: string, params?: unknown[]) => Promise<unknown>;
+    };
+    const rows = seedVocabularyRows();
+    const marks = rows.map(() => "(?, ?, ?, ?, ?)").join(", ");
+    await conn.execute("DELETE FROM vocabulary_terms");
+    await conn.execute(
+      `INSERT OR IGNORE INTO vocabulary_terms (id, kind, name, created_at, updated_at) VALUES ${marks}`,
+      rows.flatMap((row) => [
+        row.id,
+        row.kind,
+        row.name,
+        row.created_at,
+        row.updated_at,
+      ])
+    );
+  } catch {
+    // ignore - the vocabulary_terms table may not exist yet
+  }
+}
+
 export async function wipeAllData(opts?: {
   resetSettings?: boolean;
 }): Promise<void> {
@@ -216,5 +256,13 @@ export async function wipeAllData(opts?: {
       // ignore - settings hook is handled by caller resetting DEFAULT_SETTINGS
     }
     await reseedCategories(db);
+    await reseedVocabularyTerms(db);
+    // The pickers read the table, but the synchronous domain reads the hydrated
+    // snapshot — so a reseed that skipped this would leave `splitDosage` parsing
+    // against terms the wipe just deleted.
+    const { hydrateVocabulary } = await import(
+      "@/features/inventory/data/vocabulary-terms"
+    );
+    await hydrateVocabulary();
   }
 }

@@ -32,6 +32,7 @@ import {
   ensureThresholdBackfill,
   type ThresholdBackfillReport,
 } from "@/features/inventory/data/threshold-backfill";
+import { ensureVocabularyHydrated } from "@/features/inventory/data/vocabulary-terms";
 import { QuickDeductDialogProvider } from "@/features/inventory/quick-deduct-dialog-context";
 import { StockItemDetailDialogProvider } from "@/features/inventory/stock-item-detail-dialog-context";
 import { NewRequestDialogProvider } from "@/features/requests/new-request-dialog-context";
@@ -62,17 +63,26 @@ export interface RouterAppContext {
 }
 
 /**
- * The startup hook the strength spec asks for (§6.3, decision 21): the split
- * runs **before any route renders**, so the first inventory query cannot race it
- * and read a half-migrated table. It is guarded to run exactly once per device
- * by its own `app_meta` marker.
+ * The startup hooks the strength spec asks for (§6.3, decision 21): these run
+ * **before any route renders**, so the first inventory query cannot race one and
+ * read a half-migrated table. The three backfills are guarded to run exactly once
+ * per device by their own `app_meta` marker.
+ *
+ * The vocabulary hydration belongs here for a different reason: `splitDosage`,
+ * `baseUnitFor` and `validatePackFields` are synchronous and read the snapshot,
+ * so a route that rendered first would validate against the shipped seeds rather
+ * than what the operator actually has. It is not a backfill and writes nothing,
+ * so it needs no marker — a failed read just leaves the seeds in place.
  */
 export const Route = createRootRouteWithContext<RouterAppContext>()({
-  beforeLoad: async () => ({
-    packBackfill: await ensurePackSizeBackfill(),
-    strengthBackfill: await ensureStrengthBackfill(),
-    thresholdBackfill: await ensureThresholdBackfill(),
-  }),
+  beforeLoad: async () => {
+    await ensureVocabularyHydrated();
+    return {
+      packBackfill: await ensurePackSizeBackfill(),
+      strengthBackfill: await ensureStrengthBackfill(),
+      thresholdBackfill: await ensureThresholdBackfill(),
+    };
+  },
   component: RootComponent,
   head: () => ({
     meta: [

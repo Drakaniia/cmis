@@ -8,6 +8,10 @@ import { NewProductForm, type ProductFormContext } from "./new-product-form";
 
 // The category dropdown owns its own list; this form only has to render it.
 vi.mock("../../hooks/use-categories", () => import("@/test/categories-mock"));
+vi.mock(
+  "../../hooks/use-vocabulary-terms",
+  () => import("@/test/vocabulary-mock")
+);
 vi.mock("@cmis/ui/components/popover", () => import("@/test/popover-shim"));
 
 const ADD_BATCHES = /add batches/i;

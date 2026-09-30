@@ -13,22 +13,12 @@ import {
   type ProductContext,
   validateNewProduct,
 } from "../../creation/validate-draft";
-import {
-  MEDICINE_FORMS,
-  PACK_UNITS,
-  STRENGTH_UNITS,
-} from "../../domain/vocabulary";
 import { deriveSku } from "../../import/sku";
 import { CategoryPicker } from "../category-picker";
+import { VocabularyPicker } from "../vocabulary-picker";
 import { BatchRowsEditor } from "./batch-rows-editor";
 import { CARD_CLASS } from "./field-styles";
-import {
-  CheckField,
-  SelectField,
-  StepperField,
-  TextAreaField,
-  TextField,
-} from "./fields";
+import { CheckField, StepperField, TextAreaField, TextField } from "./fields";
 import { formatCount } from "./summary-text";
 
 /**
@@ -57,22 +47,11 @@ interface NewProductFormProps {
   onSubmit: () => void;
 }
 
-const STRENGTH_UNIT_OPTIONS = STRENGTH_UNITS.map((unit) => ({
-  label: unit,
-  value: unit,
-}));
-
-const FORM_OPTIONS = MEDICINE_FORMS.map((form) => ({
-  label: form,
-  value: form,
-}));
-
-/** The shared pack vocabulary (pack-size D17) — the same list the request form
- *  offers, so `box` cannot mean two things on two screens. */
-const PACK_UNIT_OPTIONS = PACK_UNITS.map((unit) => ({
-  label: unit,
-  value: unit,
-}));
+/**
+ * `categories` and the three vocabularies are deliberately absent: each picker
+ * reads its own shared query, so there is no second copy of a list to pass down
+ * and no chance of this form offering a term the wizard would reject.
+ */
 
 function errorFor(
   validation: ReturnType<typeof validateNewProduct>,
@@ -306,20 +285,18 @@ export function NewProductForm({
             placeholder="500"
             value={draft.strengthValue}
           />
-          <SelectField
+          <VocabularyPicker
+            kind="strength_unit"
             label="Unit"
             name="new-product-strength-unit"
             onChange={setStrengthUnit}
-            options={STRENGTH_UNIT_OPTIONS}
-            placeholder="—"
             value={draft.strengthUnit}
           />
-          <SelectField
+          <VocabularyPicker
+            kind="form"
             label="Form"
             name="new-product-form"
             onChange={setForm}
-            options={FORM_OPTIONS}
-            placeholder="—"
             value={draft.form}
           />
           <TextField
@@ -351,13 +328,11 @@ export function NewProductForm({
             placeholder="10"
             value={draft.packQty}
           />
-          <SelectField
+          <VocabularyPicker
             error={errorFor(validation, "packUnit")}
-            label="Pack unit"
+            kind="pack_unit"
             name="new-product-pack-unit"
             onChange={setPackUnit}
-            options={PACK_UNIT_OPTIONS}
-            placeholder="—"
             value={draft.packUnit}
           />
         </div>

@@ -22,14 +22,10 @@ import {
   validateItemDraft,
 } from "../domain/item-update";
 import { packSizeText } from "../domain/pack-size";
-import {
-  MEDICINE_FORMS,
-  PACK_UNITS,
-  STRENGTH_UNITS,
-} from "../domain/vocabulary";
 import { useItemUpdateMutation } from "../hooks/use-item-update";
 import type { InventoryItem } from "../types";
 import { CategoryPicker } from "./category-picker";
+import { VocabularyPicker } from "./vocabulary-picker";
 
 /**
  * The Edit form (spec §8.3, decision 16).
@@ -48,7 +44,6 @@ const PACK_SIZE_MAX = 40;
 
 const FIELD_CLASS =
   "mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-1 focus:ring-ring";
-const SELECT_CLASS = FIELD_CLASS;
 
 /**
  * One labelled input. Module level so React never remounts the field (and never
@@ -99,9 +94,14 @@ function PackPairFields({
   draft: ItemEditDraft;
   errors: ItemDraftErrors;
   onPackQtyChange: (event: ChangeEvent<HTMLInputElement>) => void;
-  onPackUnitChange: (event: ChangeEvent<HTMLSelectElement>) => void;
+  onPackUnitChange: (value: string) => void;
   showErrors: boolean;
 }) {
+  const handlePackUnitChange = useCallback(
+    (value: string) => onPackUnitChange(value),
+    [onPackUnitChange]
+  );
+
   return (
     <>
       <Field
@@ -120,20 +120,17 @@ function PackPairFields({
           value={draft.packQty === "" ? "" : draft.packQty}
         />
       </Field>
-      <Field error={showErrors ? errors.packUnit : undefined} label="Pack unit">
-        <select
-          className={SELECT_CLASS}
-          onChange={onPackUnitChange}
-          value={draft.packUnit}
-        >
-          <option value="">—</option>
-          {PACK_UNITS.map((unit) => (
-            <option key={unit} value={unit}>
-              {unit}
-            </option>
-          ))}
-        </select>
-      </Field>
+      {/* A picker, not a `<select>`: V6 refuses a pack unit that is not in the
+          list, so a container the clinic uses but the list lacks needs
+          somewhere to be added without abandoning the edit. */}
+      <VocabularyPicker
+        error={showErrors ? errors.packUnit : undefined}
+        hint="The container one pack is counted in."
+        kind="pack_unit"
+        name="item-edit-pack-unit"
+        onChange={handlePackUnitChange}
+        value={draft.packUnit}
+      />
     </>
   );
 }
@@ -201,9 +198,14 @@ export function ItemEditPanel({
       patch({ [key]: event.target.value } as Partial<ItemEditDraft>),
     [patch]
   );
-  const selectHandler = useCallback(
-    (key: keyof ItemEditDraft) => (event: ChangeEvent<HTMLSelectElement>) =>
-      patch({ [key]: event.target.value } as Partial<ItemEditDraft>),
+  /**
+   * The pickers hand back the name itself rather than a change event — they are
+   * popovers, not `<select>` elements, because the list behind each one is
+   * editable and an `<option>` is not a place for buttons.
+   */
+  const termHandler = useCallback(
+    (key: keyof ItemEditDraft) => (value: string) =>
+      patch({ [key]: value } as Partial<ItemEditDraft>),
     [patch]
   );
   const handleCategoryChange = useCallback(
@@ -376,34 +378,23 @@ export function ItemEditPanel({
                 value={draft.strengthValue}
               />
             </Field>
-            <Field label="Strength unit">
-              <select
-                className={SELECT_CLASS}
-                onChange={selectHandler("strengthUnit")}
-                value={draft.strengthUnit}
-              >
-                <option value="">—</option>
-                {STRENGTH_UNITS.map((unit) => (
-                  <option key={unit} value={unit}>
-                    {unit}
-                  </option>
-                ))}
-              </select>
-            </Field>
-            <Field label="Form">
-              <select
-                className={SELECT_CLASS}
-                onChange={selectHandler("form")}
-                value={draft.form}
-              >
-                <option value="">—</option>
-                {MEDICINE_FORMS.map((form) => (
-                  <option key={form} value={form}>
-                    {form}
-                  </option>
-                ))}
-              </select>
-            </Field>
+            {/* Both lists are editable, so a row that was imported with a unit
+                or form the shipped list lacks can be corrected to the right
+                term here rather than left rendering as a bare `unit`. */}
+            <VocabularyPicker
+              kind="strength_unit"
+              label="Strength unit"
+              name="item-edit-strength-unit"
+              onChange={termHandler("strengthUnit")}
+              value={draft.strengthUnit}
+            />
+            <VocabularyPicker
+              kind="form"
+              label="Form"
+              name="item-edit-form"
+              onChange={termHandler("form")}
+              value={draft.form}
+            />
             <Field
               error={attempted ? errors.packSize : undefined}
               hint={
@@ -431,7 +422,7 @@ export function ItemEditPanel({
               draft={draft}
               errors={errors}
               onPackQtyChange={packQtyHandler}
-              onPackUnitChange={selectHandler("packUnit")}
+              onPackUnitChange={termHandler("packUnit")}
               showErrors={attempted}
             />
           </div>

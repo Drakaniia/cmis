@@ -1,16 +1,22 @@
 // biome-ignore-all lint/performance/useTopLevelRegex: test regex convenience
 // biome-ignore-all lint/suspicious/noEmptyBlockStatements: vi.fn wrappers use empty arrow
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useSettings } from "@/features/admin/settings/hooks/use-settings";
+import { pickTerm } from "@/test/pick-term";
 import type { InventoryItem } from "../types";
 import { StockInWizard } from "./stock-in-wizard/stock-in-wizard";
 
 // The category dropdown owns the shared category list and its own popover; the
 // wizard's tests only need a list to choose from (the picker's behaviour has its
-// own suite in category-picker.test.tsx).
+// own suite in category-picker.test.tsx). The three vocabulary pickers on Step 2
+// read their own shared queries for the same reason.
 vi.mock("../hooks/use-categories", () => import("@/test/categories-mock"));
+vi.mock(
+  "../hooks/use-vocabulary-terms",
+  () => import("@/test/vocabulary-mock")
+);
 vi.mock("@cmis/ui/components/popover", () => import("@/test/popover-shim"));
 
 vi.mock("@/features/admin/settings/hooks/use-settings", () => ({
@@ -84,7 +90,7 @@ async function reachBatchStep(
     opts.name
   );
   if (opts.form) {
-    await user.selectOptions(screen.getByLabelText(/^Form$/i), opts.form);
+    await pickTerm(user, /^Form$/i, opts.form);
   }
   await chooseCategory(user, opts.category);
   await user.click(screen.getByRole("button", { name: /Next/i }));
@@ -306,14 +312,20 @@ describe("StockInWizard — supplier UI removed, still proceed without it", () =
 
     expect(screen.queryByLabelText(/^Unit$/i)).toBeNull();
 
-    const unitSelect = screen.getByLabelText(/Strength unit/i);
+    // The options live in the picker's panel, so they are only in the document
+    // once it is open. Both lists come from the shared vocabulary query rather
+    // than from per-screen literals (decision 12), which is also what lets the
+    // operator add a unit the clinic actually stocks.
+    await user.click(screen.getByRole("button", { name: /Strength unit/i }));
     expect(
-      within(unitSelect).getByRole("option", { name: "mg/5ml" })
+      screen.getByRole("button", { name: /^mg\/5ml/ })
     ).toBeInTheDocument();
-    const formSelect = screen.getByLabelText(/^Form$/i);
+    await user.keyboard("{Escape}");
+    await user.click(screen.getByRole("button", { name: /^Form$/i }));
     expect(
-      within(formSelect).getByRole("option", { name: "capsule" })
+      screen.getByRole("button", { name: /^capsule/ })
     ).toBeInTheDocument();
+    await user.keyboard("{Escape}");
 
     // All four are optional (decision 7): a delivery is never blocked on a
     // strength nobody recorded.
@@ -375,7 +387,7 @@ describe("StockInWizard — pack pair and pack-to-base conversion", () => {
     await chooseCategory(user, "Antibiotic");
 
     await user.type(screen.getByLabelText(/Pack quantity/i), "10");
-    await user.selectOptions(screen.getByLabelText(/Pack unit/i), "box");
+    await pickTerm(user, /Pack unit/i, "box");
 
     // The text field follows the pair rather than being typed beside it (F3).
     const packSize = screen.getByLabelText(/Pack size/i) as HTMLInputElement;
@@ -475,7 +487,7 @@ describe("StockInWizard — pack pair and pack-to-base conversion", () => {
       "Cefalexin"
     );
     await chooseCategory(user, "Antibiotic");
-    await user.selectOptions(screen.getByLabelText(/Pack unit/i), "box");
+    await pickTerm(user, /Pack unit/i, "box");
 
     expect(
       screen.getByText(/Enter how many base units one pack holds/i)
@@ -527,9 +539,11 @@ describe("StockInWizard — pack pair and pack-to-base conversion", () => {
     expect(
       (screen.getByLabelText(/Pack quantity/i) as HTMLInputElement).value
     ).toBe("");
+    // The trigger shows the placeholder when the pair is blank, which is the
+    // picker's equivalent of a `<select>` sitting on its empty option.
     expect(
-      (screen.getByLabelText(/Pack unit/i) as HTMLSelectElement).value
-    ).toBe("");
+      screen.getByRole("button", { name: /Pack unit/i })
+    ).toHaveTextContent(/— select/);
   });
 });
 

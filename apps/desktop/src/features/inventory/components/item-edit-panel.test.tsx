@@ -3,6 +3,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { clearTerm } from "@/test/pick-term";
 import type { InventoryItem } from "../types";
 import { ItemEditPanel } from "./item-edit-panel";
 
@@ -25,6 +26,10 @@ vi.mock("../hooks/use-item-update", () => ({
 // The category dropdown reads the shared category query; this panel only has to
 // render it (its own behaviour is tested in category-picker.test.tsx).
 vi.mock("../hooks/use-categories", () => import("@/test/categories-mock"));
+vi.mock(
+  "../hooks/use-vocabulary-terms",
+  () => import("@/test/vocabulary-mock")
+);
 vi.mock("@cmis/ui/components/popover", () => import("@/test/popover-shim"));
 vi.mock("sonner", () => ({
   toast: { error: vi.fn(), info: vi.fn(), success: vi.fn() },
@@ -100,8 +105,10 @@ describe("ItemEditPanel", () => {
     expect(screen.getByLabelText(/Name/)).toHaveValue("Paracetamol");
     expect(screen.getByLabelText(/SKU/)).toHaveValue("SKU-1");
     expect(screen.getByLabelText(/Strength value/)).toHaveValue("500");
-    expect(screen.getByLabelText(/Strength unit/)).toHaveValue("mg");
-    expect(screen.getByLabelText(/^Form/)).toHaveValue("tablet");
+    // The three vocabulary fields are pickers, not `<select>` elements: a select
+    // cannot host the create/rename panel the shared lists now allow.
+    expect(screen.getByLabelText(/Strength unit/)).toHaveTextContent("mg");
+    expect(screen.getByLabelText(/^Form/)).toHaveTextContent("tablet");
     expect(screen.getByLabelText(/Pack size/)).toHaveValue("10");
     // A picker, not a `<select>`: the category is a stored row, and the panel
     // can add or rename one without leaving the edit.
@@ -160,8 +167,8 @@ describe("ItemEditPanel", () => {
     const user = userEvent.setup();
     renderPanel();
 
-    await user.selectOptions(screen.getByLabelText(/Strength unit/), "");
-    await user.selectOptions(screen.getByLabelText(/^Form/), "");
+    await clearTerm(user, /Strength unit/);
+    await clearTerm(user, /^Form/);
     await user.clear(screen.getByLabelText(/Strength value/));
     await user.clear(screen.getByLabelText(/Pack size/));
     await user.click(screen.getByRole("button", { name: SAVE }));

@@ -1,7 +1,4 @@
-import {
-  type VocabularyKind,
-  VOCABULARY_TERM_MAX_LENGTH,
-} from "./vocabulary";
+import { VOCABULARY_TERM_MAX_LENGTH, type VocabularyKind } from "./vocabulary";
 
 /**
  * One row of the shared vocabulary table (migration 0013).

@@ -56,13 +56,8 @@ export function useVocabularyTerms(kind: VocabularyKind) {
 export function useCreateVocabularyTerm() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({
-      kind,
-      name,
-    }: {
-      kind: VocabularyKind;
-      name: string;
-    }) => createVocabularyTerm(kind, name),
+    mutationFn: ({ kind, name }: { kind: VocabularyKind; name: string }) =>
+      createVocabularyTerm(kind, name),
     onSuccess: () => invalidateVocabularyConsumers(queryClient),
   });
 }

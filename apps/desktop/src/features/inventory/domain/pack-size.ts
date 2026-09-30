@@ -18,7 +18,7 @@
  * conservative backfill's reader, not a general-purpose pack parser (D32).
  */
 
-import { PACK_CONTAINER_TOKENS, SEED_MEDICINE_FORMS } from "./vocabulary";
+import { PACK_CONTAINER_TOKENS } from "./vocabulary";
 import { derivedVocabulary, vocabulary } from "./vocabulary-store";
 
 export interface PackParts {
@@ -319,12 +319,38 @@ const PACK_GROUP_RE = /(\d+(?:\.\d+)?)\s*\/\s*([A-Za-z]+)/;
 /** The `20’s` idiom, curly and straight apostrophes both (PK24). */
 const COUNT_IDIOM_RE = /(\d+(?:\.\d+)?)\s*[’'‘`]\s*s\b/;
 
-const CONTAINER_TOKENS = new Set(
-  PACK_CONTAINER_TOKENS.map((token) => normalizeUnit(token))
-);
-const DOSE_FORM_TOKENS = new Set(
-  SEED_MEDICINE_FORMS.map((form) => normalizeUnit(form))
-);
+/**
+ * The containers a legacy `pack_size` cell may name.
+ *
+ * The operator's own pack vocabulary, **plus** the three parser-only tokens in
+ * `PACK_CONTAINER_TOKENS` (`vial`, `ampule`, `nebule`). Those are deliberately
+ * not in the table and not offered in the pack-unit picker — a new item can only
+ * be *written* in a term the operator picked — but the reference workbook's
+ * leftover bucket names them, and `(10/vial)` is still an unambiguous multiple
+ * worth pairing (D32). Reading is more generous than writing, on purpose.
+ */
+function containerTokens(): ReadonlySet<string> {
+  return derivedVocabulary("pack_unit:containers", () => {
+    const set = new Set<string>();
+    for (const token of PACK_CONTAINER_TOKENS) {
+      set.add(normalizeUnit(token));
+    }
+    for (const unit of vocabulary("pack_unit")) {
+      set.add(normalizeUnit(unit));
+    }
+    return set;
+  });
+}
+
+function doseFormTokens(): ReadonlySet<string> {
+  return derivedVocabulary("form:parse-tokens", () => {
+    const set = new Set<string>();
+    for (const form of vocabulary("form")) {
+      set.add(normalizeUnit(form));
+    }
+    return set;
+  });
+}
 
 /**
  * The conservative parse for the backfill (D6, D27, D28, D32).
@@ -355,10 +381,10 @@ export function parsePackSize(text: string): ParsedPackSize | null {
     }
     const qty = Number(rawQty);
     const token = normalizeUnit(rawToken);
-    if (CONTAINER_TOKENS.has(token)) {
+    if (containerTokens().has(token)) {
       return { qty, unit: token };
     }
-    if (DOSE_FORM_TOKENS.has(token)) {
+    if (doseFormTokens().has(token)) {
       return { qty, unit: "" };
     }
     return null;

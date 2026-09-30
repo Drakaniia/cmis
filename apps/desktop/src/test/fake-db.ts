@@ -33,6 +33,7 @@ export const FAKE_TABLES = [
   "trash_records",
   "audit_log",
   "categories",
+  "vocabulary_terms",
 ] as const;
 
 export type FakeTableName = (typeof FAKE_TABLES)[number];
@@ -44,8 +45,16 @@ export interface FakeDb extends DbLike {
 }
 
 type Condition =
-  | { column: string; kind: "compare"; like?: boolean; value: unknown }
+  | {
+      column: string;
+      kind: "compare";
+      /** Compare trimmed and case-folded — `lower(trim(x)) = lower(trim(?))`. */
+      normalized?: boolean;
+      like?: boolean;
+      value: unknown;
+    }
   | { column: string; kind: "in"; values: unknown[] }
+  | { column: string; kind: "is-null" }
   | {
       /** Normalized medicine match — `MEDICINE_WHERE_SQL`'s three branches. */
       kind: "medicine";
@@ -73,7 +82,6 @@ const COUNT_RE = /^COUNT\(\*\)/i;
 const ALIAS_RE = /AS\s+(\w+)/i;
 const CONDITION_RE = /^(\w+)\s*=\s*(.+)$/;
 const IN_CONDITION_RE = /^(\w+)\s+IN\s*\(([^)]*)\)$/i;
-const ID_IN_RE = /^(\w+)\s+IN\s*\(([^)]*)\)$/i;
 const AND_RE = /\s+AND\s+/i;
 const QUOTES_RE = /^'|'$/g;
 const ORDER_TERM_RE = /\s+/;
@@ -82,6 +90,15 @@ const CREATE_AS_SELECT_RE =
   /^CREATE TABLE (?:IF NOT EXISTS )?"?([\w-]+)"? AS SELECT \* FROM ([\w-]+)(\s+WHERE 1=0)?$/i;
 const DROP_TABLE_RE = /^DROP TABLE (?:IF EXISTS )?"?([\w-]+)"?$/i;
 const LIKE_CONDITION_RE = /^(\w+)\s+LIKE\s+'(.+)'$/i;
+const IS_NULL_RE = /^(\w+)\s+IS\s+NULL$/i;
+/**
+ * `lower(trim(col)) = lower(trim(?))` — the app's own text-matching predicate.
+ * A vocabulary rename has to find the request rows that copied an item's old
+ * label, and it matches them on normalized text because pre-0009 rows have no
+ * `item_id` to join on.
+ */
+const NORMALIZED_COMPARE_RE =
+  /^lower\(trim\((\w+)\)\)\s*=\s*lower\(trim\(\?\)\)$/i;
 const NOT_IN_SUBQUERY_RE =
   /^(\w+)\s+NOT\s+IN\s*\(\s*SELECT\s+\w+\s+FROM\s+"?([\w-]+)"?\s*\)$/i;
 /**
@@ -205,6 +222,21 @@ function parseConditions(
       conditions.push({ column: notIn[1], kind: "not-in", table: notIn[2] });
       continue;
     }
+    const isNull = IS_NULL_RE.exec(trimmed);
+    if (isNull) {
+      conditions.push({ column: isNull[1], kind: "is-null" });
+      continue;
+    }
+    const normalized = NORMALIZED_COMPARE_RE.exec(trimmed);
+    if (normalized) {
+      conditions.push({
+        column: normalized[1],
+        kind: "compare",
+        normalized: true,
+        value: nextParam(),
+      });
+      continue;
+    }
     const inList = IN_CONDITION_RE.exec(trimmed);
     if (inList) {
       const marks = splitTopLevel(inList[2], ",");
@@ -264,6 +296,9 @@ function matches(
         (candidate) => String(candidate) === String(value)
       );
     }
+    if (condition.kind === "is-null") {
+      return value === null || value === undefined;
+    }
     if (condition.kind === "not-in") {
       return !readTable(condition.table).some(
         (candidate) => String(candidate[condition.column]) === String(value)
@@ -271,6 +306,13 @@ function matches(
     }
     if (condition.like) {
       return likeToRegExp(String(condition.value)).test(String(value ?? ""));
+    }
+    if (condition.normalized) {
+      const fold = (candidate: unknown) =>
+        String(candidate ?? "")
+          .trim()
+          .toLowerCase();
+      return fold(value) === fold(condition.value);
     }
     return (
       value === condition.value || String(value) === String(condition.value)
@@ -477,30 +519,28 @@ export function createFakeDb(
     }
   }
 
-  /** `WHERE id = ?` or `WHERE id IN (?, ?, …)` — the only filters UPDATE uses. */
+  /**
+   * The rows an UPDATE or DELETE applies to.
+   *
+   * Routed through the same `parseConditions`/`matches` pair a SELECT uses, so
+   * the filter shapes are defined once. That matters because the vocabulary
+   * rename filters on `item_id IS NULL AND lower(trim(medicine)) =
+   * lower(trim(?))` — a pre-0090 request row is identified only by its copied
+   * text — and a second, narrower parser here is how that statement would have
+   * come to be unsupported.
+   */
   function targetRows(
     table: string,
     whereClause: string,
     nextParam: () => unknown
   ): DbRow[] {
-    const equality = CONDITION_RE.exec(whereClause.trim());
-    if (equality && equality[2].trim() === "?") {
-      const value = nextParam();
-      return readTable(table).filter(
-        (row) =>
-          row[equality[1]] === value ||
-          String(row[equality[1]]) === String(value)
-      );
+    const conditions = parseConditions(whereClause, nextParam);
+    if (conditions.length === 0) {
+      return readTable(table);
     }
-    const idIn = ID_IN_RE.exec(whereClause.trim());
-    if (idIn) {
-      const marks = splitTopLevel(idIn[2], ",");
-      const wanted = marks.map(() => String(nextParam()));
-      return readTable(table).filter((row) =>
-        wanted.includes(String(row[idIn[1]]))
-      );
-    }
-    return unsupported(`update where: ${whereClause}`);
+    return readTable(table).filter((row) =>
+      matches(row, conditions, readTable)
+    );
   }
 
   function remove(sql: string, params: unknown[]): void {

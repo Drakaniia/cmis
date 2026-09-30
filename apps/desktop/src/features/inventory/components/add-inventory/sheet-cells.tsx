@@ -2,8 +2,9 @@ import { AppleDatePicker } from "@cmis/ui/components/apple-date-picker";
 import { QuantityStepper } from "@cmis/ui/components/quantity-stepper";
 import { cn } from "@cmis/ui/lib/utils";
 import { type ChangeEvent, type ReactNode, useCallback } from "react";
-import { MEDICINE_FORMS, STRENGTH_UNITS } from "../../domain/vocabulary";
+import type { VocabularyKind } from "../../domain/vocabulary";
 import { CategoryPicker } from "../category-picker";
+import { VocabularyPicker } from "../vocabulary-picker";
 import {
   CELL_CLASS,
   CELL_OVERRIDE_CLASS,
@@ -17,20 +18,6 @@ import {
  * carries its own `aria-label` and stays one 32px row tall. That fixed height is
  * what lets the grid virtualize rows without measuring them.
  */
-
-/**
- * The vocabularies the sheet's selects offer. Declared once so the strip and a
- * group row cannot drift into offering different dose forms.
- */
-export const FORM_OPTIONS = MEDICINE_FORMS.map((form) => ({
-  label: form,
-  value: form,
-}));
-
-export const STRENGTH_UNIT_OPTIONS = STRENGTH_UNITS.map((unit) => ({
-  label: unit,
-  value: unit,
-}));
 
 /** The small "set here" marker on a stencil field the operator typed over. */
 export function OverrideMark({ show }: { show: boolean }) {
@@ -149,9 +136,9 @@ export function CellSelect({
 }
 
 /**
- * The category cell. Unlike the other cells it is not a native `<select>`: the
- * list behind it is editable (create, rename, delete), which a `<select>` cannot
- * express — an `<option>` is not a place for buttons.
+ * The category cell. Unlike the text and quantity cells it is not a native
+ * `<select>`: the list behind it is editable (create, rename, delete), which a
+ * `<select>` cannot express — an `<option>` is not a place for buttons.
  */
 export function CellCategory({
   invalid,
@@ -171,6 +158,46 @@ export function CellCategory({
       <CategoryPicker
         aria-label={label}
         invalid={invalid}
+        onChange={onChange}
+        placeholder={label}
+        title={label}
+        value={value}
+        variant="cell"
+      />
+    </CellChrome>
+  );
+}
+
+/**
+ * The strength unit and dose form cells, for the same reason as the category
+ * one: both lists became editable in migration 0013, and a native `<select>`
+ * cannot host a create/rename panel.
+ *
+ * The panel is portalled out of the cell, so the fixed 32px row height the grid
+ * virtualizes on is unaffected — which is the same reason `CellCategory` was
+ * safe to make a popover in the first place.
+ */
+export function CellTerm({
+  invalid,
+  kind,
+  label,
+  mark,
+  onChange,
+  value,
+}: {
+  invalid?: boolean;
+  kind: VocabularyKind;
+  label: string;
+  mark?: boolean;
+  onChange: (value: string) => void;
+  value: string;
+}) {
+  return (
+    <CellChrome invalid={invalid} mark={mark}>
+      <VocabularyPicker
+        aria-label={label}
+        invalid={invalid}
+        kind={kind}
         onChange={onChange}
         placeholder={label}
         title={label}

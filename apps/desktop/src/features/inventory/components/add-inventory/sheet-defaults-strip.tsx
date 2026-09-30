@@ -14,10 +14,10 @@ import {
   type SheetDefaultField,
   type SheetDefaults,
 } from "../../creation/sheet-types";
-import { MEDICINE_FORMS, STRENGTH_UNITS } from "../../domain/vocabulary";
 import { CategoryPicker } from "../category-picker";
+import { VocabularyPicker } from "../vocabulary-picker";
 import { CARD_CLASS } from "./field-styles";
-import { SelectField, StepperField } from "./fields";
+import { StepperField } from "./fields";
 import { plural } from "./summary-text";
 
 /**
@@ -38,16 +38,6 @@ const FIELD_LABELS: Record<SheetDefaultField, string> = {
 };
 
 const ALL_FIELDS = [...SHEET_DEFAULT_FIELDS];
-
-const FORM_OPTIONS = MEDICINE_FORMS.map((form) => ({
-  label: form,
-  value: form,
-}));
-
-const UNIT_OPTIONS = STRENGTH_UNITS.map((unit) => ({
-  label: unit,
-  value: unit,
-}));
 
 /** One field in the "Apply to selected" menu, with a handler stable per field. */
 function ApplyFieldItem({
@@ -131,22 +121,18 @@ export function SheetDefaultsStrip({
           placeholder={String(DEFAULT_THRESHOLD)}
           value={defaults.threshold}
         />
-        <SelectField
+        <VocabularyPicker
           className="min-w-[120px]"
-          label="Form"
+          kind="form"
           name="sheet-default-form"
           onChange={setForm}
-          options={FORM_OPTIONS}
-          placeholder="—"
           value={defaults.form}
         />
-        <SelectField
+        <VocabularyPicker
           className="min-w-[120px]"
-          label="Strength unit"
+          kind="strength_unit"
           name="sheet-default-strength-unit"
           onChange={setStrengthUnit}
-          options={UNIT_OPTIONS}
-          placeholder="—"
           value={defaults.strengthUnit}
         />
 
