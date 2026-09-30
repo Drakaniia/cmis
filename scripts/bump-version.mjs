@@ -58,10 +58,6 @@ function bumpCargoToml(newVersion) {
   const prev = text.match(CARGO_VERSION_RE)?.[1] ?? "?";
   // only replace the [package] version, not dependency versions
   text = text.replace(CARGO_PACKAGE_VERSION_RE, `$1"${newVersion}"`);
-  // Fallback simple replace if above didn't match
-  if (!text.includes(`"${newVersion}"`) || prev === newVersion) {
-    // do nothing extra
-  }
   writeFileSync(full, text, "utf8");
   console.log(`  ${path}: ${prev} → ${newVersion}`);
 }
