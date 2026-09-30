@@ -25,16 +25,13 @@
   "exports": {
     "./globals.css": "./src/styles/globals.css",
     "./lib/*": "./src/lib/*.ts",
-    "./components/*": "./src/components/*.tsx",
-    "./hooks/*": "./src/hooks/*.ts",
-    "./postcss.config": "./postcss.config.mjs"
+    "./components/*": "./src/components/*.tsx"
   },
   "scripts": {
     "check-types": "tsc --noEmit"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",
-    "@shadcn/react": "^0.2.1",
     "class-variance-authority": "^0.7.1",
     "cmdk": "^1.1.1",
     "cn": "^0.2.4",

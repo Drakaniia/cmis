@@ -6,12 +6,12 @@ import {
   Outlet,
   useRouterState,
 } from "@tanstack/react-router";
+import { ThemeProvider } from "next-themes";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { AppSidebar } from "@/components/app-sidebar";
 import Header from "@/components/header";
-import { ThemeProvider } from "@/components/theme-provider";
 import { TitleBar } from "@/components/titlebar";
 import { BackupWarningBanner } from "@/features/backup/components/backup-warning-banner";
 import { FirstRunRestorePrompt } from "@/features/backup/components/first-run-restore-prompt";

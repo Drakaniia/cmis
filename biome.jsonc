@@ -33,10 +33,7 @@
       }
     },
     {
-      "includes": [
-        "apps/desktop/src/components/theme-provider.tsx",
-        "packages/ui/src/lib/utils.ts"
-      ],
+      "includes": ["packages/ui/src/lib/utils.ts"],
       "linter": {
         "rules": {
           "performance": {
@@ -46,39 +43,11 @@
       }
     },
     {
-      "includes": [
-        "apps/desktop/src/lib/tauri.ts",
-        "packages/ui/src/components/message-scroller.tsx"
-      ],
+      "includes": ["apps/desktop/src/lib/tauri.ts"],
       "linter": {
         "rules": {
           "style": {
             "noExportedImports": "off"
-          }
-        }
-      }
-    },
-    {
-      "includes": ["packages/env/src/web.ts"],
-      "linter": {
-        "rules": {
-          "suspicious": {
-            "noExplicitAny": "off"
-          }
-        }
-      }
-    },
-    {
-      "includes": ["packages/ui/src/components/input-group.tsx"],
-      "linter": {
-        "rules": {
-          "a11y": {
-            "useSemanticElements": "off",
-            "useKeyWithClickEvents": "off",
-            "noNoninteractiveElementInteractions": "off"
-          },
-          "performance": {
-            "noJsxPropsBind": "off"
           }
         }
       }

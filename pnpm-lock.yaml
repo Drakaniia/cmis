@@ -116,9 +116,6 @@ catalogs:
     '@types/react-dom':
       specifier: ^19.2.3
       version: 19.3.0
-    dotenv:
-      specifier: ^17.4.2
-      version: 17.4.2
     lucide-react:
       specifier: ^1.27.0
       version: 1.43.0
@@ -140,23 +137,10 @@ catalogs:
     typescript:
       specifier: ^6.0.3
       version: 6.0.3
-    zod:
-      specifier: ^4.4.3
-      version: 4.6.1
 
 importers:
 
   .:
-    dependencies:
-      '@cmis/env':
-        specifier: workspace:*
-        version: link:packages/env
-      dotenv:
-        specifier: 'catalog:'
-        version: 17.4.2
-      zod:
-        specifier: 'catalog:'
-        version: 4.6.1
     devDependencies:
       '@biomejs/biome':
         specifier: 2.5.9
@@ -167,15 +151,6 @@ importers:
       '@types/bun':
         specifier: 'catalog:'
         version: 1.4.2
-      concurrently:
-        specifier: ^10.0.5
-        version: 10.0.5
-      prettier:
-        specifier: ^3.9.6
-        version: 3.9.6
-      rolldown:
-        specifier: 1.2.6
-        version: 1.2.6
       shadcn:
         specifier: ^4.21.0
         version: 4.21.0(supports-color@10.2.2)(typescript@6.0.3)
@@ -194,9 +169,6 @@ importers:
       '@base-ui/react':
         specifier: ^1.8.0
         version: 1.8.0(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
-      '@cmis/env':
-        specifier: workspace:*
-        version: link:../../packages/env
       '@cmis/ui':
         specifier: workspace:*
         version: link:../../packages/ui
@@ -242,16 +214,10 @@ importers:
       '@visx/event':
         specifier: 4.0.1-alpha.0
         version: 4.0.1-alpha.0
-      '@visx/gradient':
-        specifier: 4.0.1-alpha.0
-        version: 4.0.1-alpha.0(react@19.3.0)
       '@visx/grid':
         specifier: 4.0.1-alpha.0
         version: 4.0.1-alpha.0(react@19.3.0)
       '@visx/group':
-        specifier: 4.0.1-alpha.0
-        version: 4.0.1-alpha.0(react@19.3.0)
-      '@visx/pattern':
         specifier: 4.0.1-alpha.0
         version: 4.0.1-alpha.0(react@19.3.0)
       '@visx/responsive':
@@ -263,24 +229,15 @@ importers:
       '@visx/shape':
         specifier: 4.0.1-alpha.0
         version: 4.0.1-alpha.0(react@19.3.0)
-      clsx:
-        specifier: ^2.1.1
-        version: 2.1.1
       cmdk:
         specifier: ^1.1.1
         version: 1.1.1(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
-      cn:
-        specifier: ^0.2.6
-        version: 0.2.6
       d3-array:
         specifier: ^3.2.4
         version: 3.2.4
       d3-shape:
         specifier: ^3.2.0
         version: 3.2.0
-      dotenv:
-        specifier: 'catalog:'
-        version: 17.4.2
       lucide-react:
         specifier: 'catalog:'
         version: 1.43.0(react@19.3.0)
@@ -296,25 +253,13 @@ importers:
       react-dom:
         specifier: 'catalog:'
         version: 19.3.0(react@19.3.0)
-      react-use-measure:
-        specifier: ^2.1.7
-        version: 2.1.7(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       sonner:
         specifier: 'catalog:'
         version: 2.0.8(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
-      tailwind-merge:
-        specifier: ^3.6.0
-        version: 3.6.0
       xlsx:
         specifier: ^0.18.5
         version: 0.18.5
-      zod:
-        specifier: 'catalog:'
-        version: 4.6.1
     devDependencies:
-      '@cmis/config':
-        specifier: workspace:*
-        version: link:../../packages/config
       '@tanstack/react-query-devtools':
         specifier: ^5.101.4
         version: 5.102.8(@tanstack/react-query@5.102.8(react@19.3.0))(react@19.3.0)
@@ -375,36 +320,11 @@ importers:
 
   packages/config: {}
 
-  packages/env:
-    dependencies:
-      '@t3-oss/env-core':
-        specifier: ^0.13.11
-        version: 0.13.11(typescript@6.0.3)(zod@4.6.1)
-      dotenv:
-        specifier: 'catalog:'
-        version: 17.4.2
-      zod:
-        specifier: 'catalog:'
-        version: 4.6.1
-    devDependencies:
-      '@cmis/config':
-        specifier: workspace:*
-        version: link:../config
-      '@types/bun':
-        specifier: 'catalog:'
-        version: 1.4.2
-      typescript:
-        specifier: 'catalog:'
-        version: 6.0.3
-
   packages/ui:
     dependencies:
       '@base-ui/react':
         specifier: ^1.6.0
         version: 1.8.0(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
-      '@shadcn/react':
-        specifier: ^0.2.1
-        version: 0.2.1(@types/react@19.3.0)(react@19.3.0)
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1
@@ -1651,40 +1571,12 @@ packages:
   '@sec-ant/readable-stream@0.4.1':
     resolution: {integrity: sha512-831qok9r2t8AlxLko40y2ebgSDhenenCatLVeW/uBtnHPyhHOvG0C7TvfgecV+wHzIm5KUICgzmVpWS+IMEAeg==}
 
-  '@shadcn/react@0.2.1':
-    resolution: {integrity: sha512-5krgi3dRMKb5jH6a+qPzVJUy/54s0kKE4Rw4LjDfLqOdVQTWKUgxWf1kW8r912I0jX/Lzxqc+pgjkjWxUIK5BQ==}
-    peerDependencies:
-      '@types/react': '>=19'
-      react: '>=19'
-    peerDependenciesMeta:
-      '@types/react':
-        optional: true
-      react:
-        optional: true
-
   '@sindresorhus/merge-streams@4.0.0':
     resolution: {integrity: sha512-tlqY9xq5ukxTUZBmoOp+m61cqwQD5pHJtFY3Mn8CA8ps6yghLH/Hw8UPdqg4OLmFW3IFlcXnQNmo/dh8HzXYIQ==}
     engines: {node: '>=18'}
 
   '@standard-schema/spec@1.1.0':
     resolution: {integrity: sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w==}
-
-  '@t3-oss/env-core@0.13.11':
-    resolution: {integrity: sha512-sM7GYY+KL7H/Hl0BE0inWfk3nRHZOLhmVn7sHGxaZt9FAR6KqREXAE+6TqKfiavfXmpRxO/OZ2QgKRd+oiBYRQ==}
-    peerDependencies:
-      arktype: ^2.1.0
-      typescript: '>=5.0.0'
-      valibot: ^1.0.0-beta.7 || ^1.0.0
-      zod: ^3.24.0 || ^4.0.0
-    peerDependenciesMeta:
-      arktype:
-        optional: true
-      typescript:
-        optional: true
-      valibot:
-        optional: true
-      zod:
-        optional: true
 
   '@tailwindcss/node@4.3.3':
     resolution: {integrity: sha512-/T8IKEsf9VTU6tLjgC7+sv2mOPtQxzE2jMw7u4Tt40Tx+QSZxpzh95/H6cMKoja9XuW7iMdLJYBB0o9G1CaAgg==}
@@ -2100,11 +1992,6 @@ packages:
   '@visx/event@4.0.1-alpha.0':
     resolution: {integrity: sha512-EQqCMSv/s8NbFjo+hz3FKsvvYfP+2QslsFJ/24/O5l/W+7UC6J6aAvO0ujVwrTwdYbuQ+vhxKi1xdPdKR/qj1g==}
 
-  '@visx/gradient@4.0.1-alpha.0':
-    resolution: {integrity: sha512-HxkxLdThV/gPaulw+t7/ESo7AtqIBq9IlHIkHi7lQqXe0Yl+x8rpM3KYlYqEZjtihD9CeEaVJjBbdY7fQb54IA==}
-    peerDependencies:
-      react: ^16.14.0 || ^17.0.0-0 || ^18.0.0-0 || ^19.0.0-0
-
   '@visx/grid@4.0.1-alpha.0':
     resolution: {integrity: sha512-rycutGmTHO+znNdPumheWMglm7YfpffvRwUkVy5zy4WoORIuKTMkDxwnOzHG2xMxU3EE/YCd37xFV5AxA30yeg==}
     peerDependencies:
@@ -2112,11 +1999,6 @@ packages:
 
   '@visx/group@4.0.1-alpha.0':
     resolution: {integrity: sha512-V19l7iQ7jccBv8kao/EByuI6o4xtxzzLV9nqVI1hRvmdzTVsuLpqlwzYCZUXJaTVvUWf8s4D2SQFjGkj/Nw+0w==}
-    peerDependencies:
-      react: ^16.14.0 || ^17.0.0-0 || ^18.0.0-0 || ^19.0.0-0
-
-  '@visx/pattern@4.0.1-alpha.0':
-    resolution: {integrity: sha512-KCqHpjtHdu95uqamc5PIYG55Xp0w+7/Zz63k4eeZErwK1o0PN2rZiBiuodNtENL8NqIU2b5AP+XI/xXaUH0M4Q==}
     peerDependencies:
       react: ^16.14.0 || ^17.0.0-0 || ^18.0.0-0 || ^19.0.0-0
 
@@ -2606,10 +2488,6 @@ packages:
     resolution: {integrity: sha512-06p9vyLahLa4zkGcgsGxU6iEkSOiuI4fhCH6Emhe2lPAcoUv73n72DnODsnHA+5wwXGnV0n9M9/qOQJSjYhFhw==}
     engines: {node: '>=22'}
 
-  cliui@9.0.1:
-    resolution: {integrity: sha512-k7ndgKhwoQveBL+/1tqGJYNz097I7WOvwbmmU2AR5+magtbjPWQTS1C5vzGkBC8Ym8UWRzfKUzUUqFLypY4Q+w==}
-    engines: {node: '>=20'}
-
   clsx@2.1.1:
     resolution: {integrity: sha512-eYm0QWBtUrBWZWG0d386OGAw16Z995PiOVo2B7bjWSbHedGl5e0ZWaq65kOGgUSNesEIDkB9ISbTg/JK9dhCZA==}
     engines: {node: '>=6'}
@@ -2643,11 +2521,6 @@ packages:
   commander@15.0.0:
     resolution: {integrity: sha512-z67u4ZhzCL/Tydu1lJARtEZYWbWaN7oYLHbsuzocr6y4N6WZAagG3RQ4FW61V1/0+jImpj293XfrcYnd1qxtPg==}
     engines: {node: '>=22.12.0'}
-
-  concurrently@10.0.5:
-    resolution: {integrity: sha512-JaP/CoftUrCcAFW/g//RbgEGwlelnEae6cfBLgH6ZdO6s8jPkn6p9SB9u6pdVxYXoiSnFqseOlHfrEfF82TVOg==}
-    engines: {node: '>=22'}
-    hasBin: true
 
   conf@10.2.0:
     resolution: {integrity: sha512-8fLl9F04EJqjSqH+QjITQfJF8BrOVaYr1jewVgSRAEWePfxT0sku4w2hrGQ60BC/TNLGQ2pgxNlTbWQmMPFvXg==}
@@ -3062,10 +2935,6 @@ packages:
   gensync@1.0.0-beta.2:
     resolution: {integrity: sha512-3hN7NaskYvMDLQY55gnW3NQ+mesEAepTqlg+VEbj7zzqEMBVNhzcGYYeqFo/TlYz6eQiFcp1HcsCZO+nGgS8zg==}
     engines: {node: '>=6.9.0'}
-
-  get-caller-file@2.0.5:
-    resolution: {integrity: sha512-DyFP3BM/3YHTQOCUL/w0OZHR0lpKeGrxotcHWcqNEdnltqFwXVfhEBQ94eIo34AfQpo0rGki4cyIiftY06h2Fg==}
-    engines: {node: 6.* || 8.* || >= 10.*}
 
   get-east-asian-width@1.6.0:
     resolution: {integrity: sha512-QRbvDIbx6YklUe6RxeTeleMR0yv3cYH6PsPZHcnVn7xv7zO1BHN8r0XETu8n6Ye3Q+ahtSarc3WgtNWmehIBfA==}
@@ -3891,15 +3760,6 @@ packages:
       '@types/react':
         optional: true
 
-  react-use-measure@2.1.7:
-    resolution: {integrity: sha512-KrvcAo13I/60HpwGO5jpW7E9DfusKyLPLvuHlUyP5zqnmAPhNc6qTRjUQrdTADl0lpPpDVU2/Gg51UlOGHXbdg==}
-    peerDependencies:
-      react: '>=16.13'
-      react-dom: '>=16.13'
-    peerDependenciesMeta:
-      react-dom:
-        optional: true
-
   react@19.3.0:
     resolution: {integrity: sha512-E8LUcbtBWt20bbl2YoHfx4ZDBdxVTfOKtCZn9cDSJ4l6/nuoApcpIBcj47t2wZoVX8g2ZHuMHbiShgCR1T5Sog==}
     engines: {node: '>=0.10.0'}
@@ -3966,9 +3826,6 @@ packages:
   run-parallel@1.2.0:
     resolution: {integrity: sha512-5l4VyZR86LZ/lDxZTR6jqL8AFE2S0IFLMP26AbjsLVADxHdhB/c0GUsH+y39UfCi3dzz8OlQuPmnaJOMoDHQBA==}
 
-  rxjs@7.8.2:
-    resolution: {integrity: sha512-dhKf903U/PQZY6boNNtAGdWbG85WAbjT/1xYoZIC7FAY0yWapOBQVsVrDl58W86//e1VpMNBtRV4MaXfdMySFA==}
-
   safer-buffer@2.1.2:
     resolution: {integrity: sha512-YZo3K82SD7Riyi0E1EQPojLz7kpepnSQI9IyPbHHg1XXXevb5dJI7tpyN2ADxGcQbHG7vcyRHk0cbwqcQriUtg==}
 
@@ -4021,10 +3878,6 @@ packages:
   shebang-regex@3.0.0:
     resolution: {integrity: sha512-7++dFhtcx3353uBaq8DDR4NuxBetBzC7ZQOhmTQInHEd6bSrXdiEyzCvG07Z44UYdLShWUyXt5M/yhz8ekcb1A==}
     engines: {node: '>=8'}
-
-  shell-quote@1.9.0:
-    resolution: {integrity: sha512-Iov+JwFv/2HcTpcwNMKd8+IWNb8tboQJNQTkAY/LLVK7gGH9jy+LGkVqPxfekHl+yMmiqXszdGWXgkfml7hjqA==}
-    engines: {node: '>= 0.4'}
 
   side-channel-list@1.0.1:
     resolution: {integrity: sha512-mjn/0bi/oUURjc5Xl7IaWi/OJJJumuoJFQJfDDyO46+hBWsfaVM65TBHq2eoZBhzl9EchxOijpkbRC8SVBQU0w==}
@@ -4156,9 +4009,6 @@ packages:
     os: [darwin, linux, win32, freebsd, openbsd, netbsd, sunos, android]
     hasBin: true
 
-  tailwind-merge@3.6.0:
-    resolution: {integrity: sha512-uxL7qAVQriqRQPAyK3pj66VqskWqoZ37PW94jwOTwNfq/z9oyu1V+eqrZqtR2+fCiXdYOZe/Modt8GtvqNzu+w==}
-
   tailwindcss@4.3.3:
     resolution: {integrity: sha512-gOhV3P7ufE62QDGg1zVaTgCR+EtPv92k2nIhVcVKcLmxT1sUBsQGhnZj175j+MqRt4zLF7ic+sCYjfhxMxj7YQ==}
 
@@ -4214,10 +4064,6 @@ packages:
   tr46@5.1.1:
     resolution: {integrity: sha512-hdF5ZgjTqgAntKkklYw0R03MG2x/bSzTtkxmIRw/sTNV8YXsCJ1tfLAX23lhxhHJlEf3CRCOCGGWw3vI3GaSPw==}
     engines: {node: '>=18'}
-
-  tree-kill@1.2.2:
-    resolution: {integrity: sha512-L0Orpi8qGpRG//Nd+H90vFB+3iHnue1zSSGmNOOCh1GLJ7rUKVwV2HvijphGQS2UmhUZewS9VgvxYIdgr+fG1A==}
-    hasBin: true
 
   ts-morph@26.0.0:
     resolution: {integrity: sha512-ztMO++owQnz8c/gIENcM9XfCEzgoGphTv+nKpYNM1bgsdOVC/jRZuEBf6N+mLLDNg68Kl+GgUZfOySaRiG1/Ug==}
@@ -4508,10 +4354,6 @@ packages:
     resolution: {integrity: sha512-M0N4xzyzosiIok3svYlEo1sdLZts/8FPgYH/GPC3wvlmPoRvnoManGMrE54waYj3tISA8w6lsdesfVv67qSr8Q==}
     engines: {node: '>=20'}
 
-  wrap-ansi@9.0.2:
-    resolution: {integrity: sha512-42AtmgqjV+X1VpdOfyTGOYRi0/zsoLqtXQckTmqTeybT+BDIbM/Guxo7x3pE2vtpr1ok6xRqM9OpBe+Jyoqyww==}
-    engines: {node: '>=18'}
-
   wrappy@1.0.2:
     resolution: {integrity: sha512-l4Sp/DRseor9wL6EvV2+TuQn63dMkPjZ/sp9XkghTEbV9KlPS1xUsZ3u7/IQO4wxtcFB4bgpQPRcR3QCvezPcQ==}
 
@@ -4543,10 +4385,6 @@ packages:
   xmlchars@2.2.0:
     resolution: {integrity: sha512-JZnDKK8B0RCDw84FNdDAIpZK+JuJw+s7Lz8nksI7SIuU3UXJJslUthsi+uWBUYOwPFwW7W7PRLRfUKpxjtjFCw==}
 
-  y18n@5.0.8:
-    resolution: {integrity: sha512-0pfFzegeDWJHJIAmTLRP2DwHjdF5s7jo9tuztdQxAhINCdvS+3nGINqPd00AphqJR/0LhANUS6/+7SCb98YOfA==}
-    engines: {node: '>=10'}
-
   yallist@3.1.1:
     resolution: {integrity: sha512-a4UGQaWPH59mOXUYnAG2ewncQS4i4F43Tv3JoAM+s2VDAmS9NsK8GpDMLrCHPksFT7h3K6TOoUNn2pb7RoXx4g==}
 
@@ -4554,14 +4392,6 @@ packages:
     resolution: {integrity: sha512-2AvhNX3mb8zd6Zy7INTtSpl1F15HW6Wnqj0srWlkKLcpYl/gMIMJiyuGq2KeI2YFxUPjdlB+3Lc10seMLtL4cA==}
     engines: {node: '>= 14.6'}
     hasBin: true
-
-  yargs-parser@22.0.0:
-    resolution: {integrity: sha512-rwu/ClNdSMpkSrUb+d6BRsSkLUq1fmfsY6TOpYzTwvwkg1/NRG85KBy3kq++A8LKQwX6lsu+aWad+2khvuXrqw==}
-    engines: {node: ^20.19.0 || ^22.12.0 || >=23}
-
-  yargs@18.0.0:
-    resolution: {integrity: sha512-4UEqdc2RYGHZc7Doyqkrqiln3p9X2DZVxaGbwhn2pi7MrRagKaOcIKe8L3OxYcbhXLgLFUS3zAYuQjKBQgmuNg==}
-    engines: {node: ^20.19.0 || ^22.12.0 || >=23}
 
   yocto-spinner@1.2.2:
     resolution: {integrity: sha512-DODGl1wJjA/s5pnJFKau9lIYHT81lnhob1i3e1TjxZRxEhWRKl74nTbWE6H5KlkViQQTo/Z29YFdxzTZAMY3ng==}
@@ -5468,19 +5298,9 @@ snapshots:
 
   '@sec-ant/readable-stream@0.4.1': {}
 
-  '@shadcn/react@0.2.1(@types/react@19.3.0)(react@19.3.0)':
-    optionalDependencies:
-      '@types/react': 19.3.0
-      react: 19.3.0
-
   '@sindresorhus/merge-streams@4.0.0': {}
 
   '@standard-schema/spec@1.1.0': {}
-
-  '@t3-oss/env-core@0.13.11(typescript@6.0.3)(zod@4.6.1)':
-    optionalDependencies:
-      typescript: 6.0.3
-      zod: 4.6.1
 
   '@tailwindcss/node@4.3.3':
     dependencies:
@@ -5871,11 +5691,6 @@ snapshots:
       '@types/react': 19.3.0
       '@visx/point': 4.0.1-alpha.0
 
-  '@visx/gradient@4.0.1-alpha.0(react@19.3.0)':
-    dependencies:
-      '@types/react': 19.3.0
-      react: 19.3.0
-
   '@visx/grid@4.0.1-alpha.0(react@19.3.0)':
     dependencies:
       '@types/react': 19.3.0
@@ -5888,12 +5703,6 @@ snapshots:
       react: 19.3.0
 
   '@visx/group@4.0.1-alpha.0(react@19.3.0)':
-    dependencies:
-      '@types/react': 19.3.0
-      classnames: 2.5.1
-      react: 19.3.0
-
-  '@visx/pattern@4.0.1-alpha.0(react@19.3.0)':
     dependencies:
       '@types/react': 19.3.0
       classnames: 2.5.1
@@ -6301,12 +6110,6 @@ snapshots:
       slice-ansi: 9.0.0
       string-width: 8.2.2
 
-  cliui@9.0.1:
-    dependencies:
-      string-width: 7.2.0
-      strip-ansi: 7.2.0
-      wrap-ansi: 9.0.2
-
   clsx@2.1.1: {}
 
   cmdk@1.1.1(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0):
@@ -6332,15 +6135,6 @@ snapshots:
   commander@14.0.3: {}
 
   commander@15.0.0: {}
-
-  concurrently@10.0.5:
-    dependencies:
-      chalk: 5.6.2
-      rxjs: 7.8.2
-      shell-quote: 1.9.0
-      supports-color: 10.2.2
-      tree-kill: 1.2.2
-      yargs: 18.0.0
 
   conf@10.2.0:
     dependencies:
@@ -6775,8 +6569,6 @@ snapshots:
   fuzzysort@3.1.0: {}
 
   gensync@1.0.0-beta.2: {}
-
-  get-caller-file@2.0.5: {}
 
   get-east-asian-width@1.6.0: {}
 
@@ -7501,12 +7293,6 @@ snapshots:
     optionalDependencies:
       '@types/react': 19.3.0
 
-  react-use-measure@2.1.7(react-dom@19.3.0(react@19.3.0))(react@19.3.0):
-    dependencies:
-      react: 19.3.0
-    optionalDependencies:
-      react-dom: 19.3.0(react@19.3.0)
-
   react@19.3.0: {}
 
   readdirp@5.1.1: {}
@@ -7613,10 +7399,6 @@ snapshots:
     dependencies:
       queue-microtask: 1.2.3
 
-  rxjs@7.8.2:
-    dependencies:
-      tslib: 2.8.1
-
   safer-buffer@2.1.2: {}
 
   saxes@6.0.0:
@@ -7708,8 +7490,6 @@ snapshots:
       shebang-regex: 3.0.0
 
   shebang-regex@3.0.0: {}
-
-  shell-quote@1.9.0: {}
 
   side-channel-list@1.0.1:
     dependencies:
@@ -7823,13 +7603,12 @@ snapshots:
     dependencies:
       min-indent: 1.0.1
 
-  supports-color@10.2.2: {}
+  supports-color@10.2.2:
+    optional: true
 
   symbol-tree@3.2.4: {}
 
   systeminformation@5.33.10: {}
-
-  tailwind-merge@3.6.0: {}
 
   tailwindcss@4.3.3: {}
 
@@ -7871,8 +7650,6 @@ snapshots:
   tr46@5.1.1:
     dependencies:
       punycode: 2.3.1
-
-  tree-kill@1.2.2: {}
 
   ts-morph@26.0.0:
     dependencies:
@@ -8125,12 +7902,6 @@ snapshots:
       ansi-styles: 6.2.3
       string-width: 8.2.2
 
-  wrap-ansi@9.0.2:
-    dependencies:
-      ansi-styles: 6.2.3
-      string-width: 7.2.0
-      strip-ansi: 7.2.0
-
   wrappy@1.0.2: {}
 
   ws@8.21.3: {}
@@ -8154,22 +7925,9 @@ snapshots:
 
   xmlchars@2.2.0: {}
 
-  y18n@5.0.8: {}
-
   yallist@3.1.1: {}
 
   yaml@2.9.0: {}
-
-  yargs-parser@22.0.0: {}
-
-  yargs@18.0.0:
-    dependencies:
-      cliui: 9.0.1
-      escalade: 3.2.0
-      get-caller-file: 2.0.5
-      string-width: 7.2.0
-      y18n: 5.0.8
-      yargs-parser: 22.0.0
 
   yocto-spinner@1.2.2:
     dependencies:
