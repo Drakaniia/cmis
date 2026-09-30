@@ -3,9 +3,7 @@
  * Kept React-free so hooks can derive labels without re-render churn.
  */
 
-const MINUTE_MS = 60_000;
-const HOUR_MS = 3_600_000;
-const DAY_MS = 86_400_000;
+import { DAY_MS, HOUR_MS, MINUTE_MS } from "@/features/shared/format";
 
 /** Relative time with an absolute tooltip companion (§1.3 Last Login). */
 export function relativeTime(iso: string, now: number = Date.now()): string {
@@ -67,16 +65,4 @@ export function auditTimestamp(iso: string): string {
 /** `2026-09-12` — value shape used by `<input type="date">`. */
 export function toDateInputValue(iso: string): string {
   return new Date(iso).toISOString().slice(0, 10);
-}
-
-export function startOfDayTimestamp(isoDate: string): number {
-  const date = new Date(`${isoDate}T00:00:00`);
-  date.setHours(0, 0, 0, 0);
-  return date.getTime();
-}
-
-export function endOfDayTimestamp(isoDate: string): number {
-  const date = new Date(`${isoDate}T00:00:00`);
-  date.setHours(23, 59, 59, 999);
-  return date.getTime();
 }

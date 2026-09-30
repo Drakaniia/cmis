@@ -3,9 +3,7 @@
  * filter chips. Kept free of React so the 60s ticker only re-renders text.
  */
 
-const MINUTE_MS = 60_000;
-const HOUR_MS = 3_600_000;
-const DAY_MS = 86_400_000;
+import { DAY_MS, HOUR_MS, MINUTE_MS } from "@/features/shared/format";
 
 /** Card caption: "just now" · "45m ago" · "2h ago" · "3d ago" · "Sep 12" */
 export function relativeTimeLabel(iso: string, now: number): string {
@@ -60,19 +58,6 @@ export function compactDateTimeLabel(iso: string): string {
 /** Local start of the day containing `now`, as a timestamp. */
 export function startOfDay(now: number): number {
   const date = new Date(now);
-  date.setHours(0, 0, 0, 0);
-  return date.getTime();
-}
-
-/** Inclusive bound for a `yyyy-mm-dd` date input value. */
-export function endOfDayTimestamp(isoDate: string): number {
-  const date = new Date(`${isoDate}T00:00:00`);
-  date.setHours(23, 59, 59, 999);
-  return date.getTime();
-}
-
-export function startOfDayTimestamp(isoDate: string): number {
-  const date = new Date(`${isoDate}T00:00:00`);
   date.setHours(0, 0, 0, 0);
   return date.getTime();
 }

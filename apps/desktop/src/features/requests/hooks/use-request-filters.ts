@@ -1,7 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import {
+  endOfDayTimestamp,
+  startOfDayTimestamp,
+} from "@/features/shared/format";
 import { hiddenFromBoard } from "../drag-rules";
-import { endOfDayTimestamp, startOfDay, startOfDayTimestamp } from "../format";
+import { startOfDay } from "../format";
 import type { RequestFilters, RequestItem } from "../types";
 import { REQUEST_DATE_PRESETS } from "../types";
 
