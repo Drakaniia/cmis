@@ -2,7 +2,7 @@ import { deriveStatus } from "../import/inventory-status";
 import type { InventoryItem, InventoryStatus } from "../types";
 import { isPackIncomplete, packSizeText } from "./pack-size";
 import { composeDisplayName, isDetailsIncomplete } from "./strength";
-import { PACK_UNITS } from "./vocabulary";
+import { hasVocabularyTerm } from "./vocabulary-store";
 
 /**
  * Stock detail modal §10 — the rules behind the Edit form.
@@ -12,10 +12,12 @@ import { PACK_UNITS } from "./vocabulary";
  * rendering, and so the panel stays a form.
  *
  * The four strength fields are optional and never block a save (decision 15 /
- * the strength spec's own rule). `form` and `strengthUnit` come from the
- * canonical `domain/vocabulary.ts` lists, which the export writer also reads,
- * and every derived label comes from `domain/strength.ts` rather than a rule of
- * this file's own — so the form and the importer cannot disagree.
+ * the strength spec's own rule). `form` and `strengthUnit` are checked against
+ * the live vocabulary in `domain/vocabulary-store.ts` — the table the operator
+ * can edit, which starts as the template's own tokens and which the export
+ * writer's split also reads — and every derived label comes from
+ * `domain/strength.ts` rather than a rule of this file's own, so the form and the
+ * importer cannot disagree.
  */
 
 /** §10.1 — `pack_size` is capped so it cannot run away in the template column. */
@@ -102,8 +104,6 @@ export function draftFromItem(item: InventoryItem): ItemEditDraft {
   };
 }
 
-const PACK_UNIT_TOKENS = new Set<string>(PACK_UNITS);
-
 /**
  * The pack rules V1–V6, shared by the new-product form and the edit panel.
  * Returns errors keyed by field, plus warnings the caller lists on review.
@@ -120,9 +120,12 @@ export function validatePackFields(draft: {
   const qtyTyped = rawQty !== "";
   const form = draft.form.trim().toLowerCase();
 
-  // V6 — the container must come from the shared vocabulary.
-  if (unit !== "" && !PACK_UNIT_TOKENS.has(unit.toLowerCase())) {
-    errors.packUnit = `“${unit}” is not a pack unit — choose one from the list.`;
+  // V6 — the container must come from the shared vocabulary. Since migration
+  // 0013 that vocabulary is the table the operator edits, so this rejects a
+  // typo rather than a unit the clinic genuinely uses: a missing token is added
+  // from inside the dropdown, not worked around by typing it here.
+  if (unit !== "" && !hasVocabularyTerm("pack_unit", unit)) {
+    errors.packUnit = `“${unit}” is not a pack unit — choose one from the list or add it.`;
   }
 
   if (qtyTyped) {

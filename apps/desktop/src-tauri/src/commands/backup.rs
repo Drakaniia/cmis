@@ -11,7 +11,7 @@ use tauri::{AppHandle, Manager};
 
 /// Newest migration registered in `lib.rs::db_migrations`. A backup whose
 /// recorded schema version is greater than this is refused (spec D10/F10).
-pub const CURRENT_SCHEMA_VERSION: i64 = 12;
+pub const CURRENT_SCHEMA_VERSION: i64 = 13;
 
 /// Tables a file must contain before it is treated as a CMIS database.
 /// `inventory_items` + `requests` are the load-bearing pair; the rest of B6

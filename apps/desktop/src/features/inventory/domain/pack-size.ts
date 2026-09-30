@@ -18,7 +18,8 @@
  * conservative backfill's reader, not a general-purpose pack parser (D32).
  */
 
-import { MEDICINE_FORMS, PACK_CONTAINER_TOKENS } from "./vocabulary";
+import { PACK_CONTAINER_TOKENS, SEED_MEDICINE_FORMS } from "./vocabulary";
+import { derivedVocabulary, vocabulary } from "./vocabulary-store";
 
 export interface PackParts {
   /** `"10"` from a form, `10` from a row, `""` when untyped. */
@@ -70,7 +71,15 @@ function canonicalUnit(value: string): string {
   return UNIT_ALIASES[normalized] ?? normalized;
 }
 
-const KNOWN_FORMS = new Set(MEDICINE_FORMS.map((form) => normalizeUnit(form)));
+function knownForms(): ReadonlySet<string> {
+  return derivedVocabulary("form:known", () => {
+    const set = new Set<string>();
+    for (const form of vocabulary("form")) {
+      set.add(normalizeUnit(form));
+    }
+    return set;
+  });
+}
 
 /**
  * The unit stock is counted in: the dose form, folded to its display token.
@@ -81,7 +90,7 @@ const KNOWN_FORMS = new Set(MEDICINE_FORMS.map((form) => normalizeUnit(form)));
  */
 export function baseUnitFor(item: { form: string }): string {
   const form = normalizeUnit(item.form);
-  if (form === "" || !KNOWN_FORMS.has(form)) {
+  if (form === "" || !knownForms().has(form)) {
     return FALLBACK_BASE_UNIT;
   }
   return canonicalUnit(form);
@@ -314,7 +323,7 @@ const CONTAINER_TOKENS = new Set(
   PACK_CONTAINER_TOKENS.map((token) => normalizeUnit(token))
 );
 const DOSE_FORM_TOKENS = new Set(
-  MEDICINE_FORMS.map((form) => normalizeUnit(form))
+  SEED_MEDICINE_FORMS.map((form) => normalizeUnit(form))
 );
 
 /**

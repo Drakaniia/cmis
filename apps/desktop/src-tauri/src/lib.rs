@@ -91,6 +91,12 @@ fn db_migrations() -> Vec<Migration> {
             sql: include_str!("../migrations/0012_pack_size_fields.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 13,
+            description: "vocabulary_terms",
+            sql: include_str!("../migrations/0013_vocabulary_terms.sql"),
+            kind: MigrationKind::Up,
+        },
     ]
 }
 

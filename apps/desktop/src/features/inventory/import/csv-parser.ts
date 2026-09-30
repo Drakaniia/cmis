@@ -5,7 +5,7 @@ import {
   isDetailsIncomplete,
   normalizeText,
 } from "../domain/strength";
-import { PACK_UNITS } from "../domain/vocabulary";
+import { hasVocabularyTerm } from "../domain/vocabulary-store";
 import type { ImportWarning, ParsedInventoryRow, ParseResult } from "./types";
 
 /**
@@ -498,7 +498,11 @@ function parseRow(
   }
   const rawPackUnit = cellAt(cells, layout.packUnit).trim();
   let packUnit = rawPackUnit.toLowerCase();
-  if (packUnit !== "" && !PACK_UNITS.includes(packUnit as never)) {
+  // Checked against the live vocabulary (migration 0013), so a container the
+  // operator added in the app imports cleanly. An unknown one is still folded to
+  // blank with a warning rather than stored: a pack multiple in a unit nothing
+  // else recognises cannot be rendered in a quantity.
+  if (packUnit !== "" && !hasVocabularyTerm("pack_unit", packUnit)) {
     warnings.push({
       coerced: null,
       column: "pack_unit",

@@ -12,11 +12,14 @@
  * 3. **completeness**: which rows still have a blank part, which is what
  *    `dosage_missing` now means (§6.4).
  *
- * The vocabularies come from `domain/vocabulary.ts`, which mirrors the template's
- * own xlsx `DataValidation` lists.
+ * The vocabularies come from the hydrated snapshot in `domain/vocabulary-store.ts`,
+ * which starts as the template's own xlsx `DataValidation` tokens and then holds
+ * whatever the operator has added since (migration 0013). The reads here are
+ * synchronous on purpose — this module runs inside a render, a draft validation
+ * and a parse loop — so the snapshot is the seam rather than a parameter.
  */
 
-import { MEDICINE_FORMS, STRENGTH_UNITS } from "./vocabulary";
+import { derivedVocabulary, vocabulary } from "./vocabulary-store";
 
 export interface StrengthParts {
   form: string;
@@ -58,8 +61,19 @@ const LEADING_STRENGTH = /^\s*(\d+(?:\.\d+)?(?:\/\d+(?:\.\d+)?)*)/;
  */
 const BARE_RATIO = /^\d+(?:\.\d+)?\/\d+(?:\.\d+)?$/;
 
-/** Longest tokens first, so `mg/5ml` wins over `mg`. */
-const UNITS_BY_LENGTH = [...STRENGTH_UNITS].sort((a, b) => b.length - a.length);
+/**
+ * Longest tokens first, so `mg/5ml` wins over `mg`.
+ *
+ * Memoised rather than sorted on every call because `splitDosage` runs once per
+ * imported row, and a vocabulary edit is rare — but the memo has to be rebuilt
+ * when one happens, or a unit the operator just added would be unparseable
+ * until the next launch.
+ */
+function unitsLongestFirst(): readonly string[] {
+  return derivedVocabulary("strength_unit:longest-first", () =>
+    [...vocabulary("strength_unit")].sort((a, b) => b.length - a.length)
+  );
+}
 
 const DIGITS_RE = /\d+/;
 
@@ -93,7 +107,8 @@ function takeToken(
  * two-word window is tried before the single token.
  */
 function takeForm(text: string): { form: string; rest: string } {
-  const single = takeToken(text, MEDICINE_FORMS);
+  const forms = vocabulary("form");
+  const single = takeToken(text, forms);
   if (single.token !== "") {
     return { form: single.token, rest: single.rest };
   }
@@ -102,7 +117,7 @@ function takeForm(text: string): { form: string; rest: string } {
     return { form: "", rest: text };
   }
   const pair = `${first} ${second}`;
-  const paired = takeToken(pair, MEDICINE_FORMS);
+  const paired = takeToken(pair, forms);
   if (paired.token === "" && paired.rest !== pair) {
     return { form: "", rest: text };
   }
@@ -130,12 +145,13 @@ export function splitDosage(dosage: string): SplitResult {
   let rest = text;
   let strengthValue = "";
   let strengthUnit = "";
+  const units = unitsLongestFirst();
 
   const valueMatch = rest.match(LEADING_STRENGTH);
   if (valueMatch) {
     strengthValue = valueMatch[1] ?? "";
     rest = rest.slice(valueMatch[0].length).trim();
-    const { rest: nextRest, token } = takeToken(rest, UNITS_BY_LENGTH);
+    const { rest: nextRest, token } = takeToken(rest, units);
     strengthUnit = token;
     rest = nextRest;
   } else {
@@ -143,7 +159,7 @@ export function splitDosage(dosage: string): SplitResult {
     // `mg/5ml syrup 120 ml` from rows whose strength_value is blank, and a
     // split that could not read that shape back would make a re-import insert a
     // duplicate instead of updating (§7.1).
-    const { rest: nextRest, token } = takeToken(rest, UNITS_BY_LENGTH);
+    const { rest: nextRest, token } = takeToken(rest, units);
     strengthUnit = token;
     rest = nextRest;
   }
