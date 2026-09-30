@@ -1,6 +1,6 @@
 {
   "name": "cmis",
-  "version": "1.8.0",
+  "version": "1.9.0",
   "private": true,
   "description": "Clinic Medicine Inventory System — Tauri desktop app for inventory, dispensing, and analytics built with TanStack Router, Vite, and TypeScript",
   "keywords": [
