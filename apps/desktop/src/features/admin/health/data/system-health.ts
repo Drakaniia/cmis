@@ -60,6 +60,8 @@ interface CountRow {
 }
 
 export interface BackupSummaryFile {
+  /** Device tag in the name; `null` for a manual or untagged copy. */
+  device: string | null;
   kind: string;
   mtime: number;
   name: string;
@@ -68,6 +70,8 @@ export interface BackupSummaryFile {
 
 /** File-based backup facts (from `list_backups`), merged by the hook. */
 export interface BackupSummary {
+  /** This machine's tag, so another machine's copies are not counted as ours. */
+  deviceTag: string;
   dir: string;
   error: string;
   files: BackupSummaryFile[];
@@ -105,8 +109,31 @@ export function buildBackupCard(backup?: BackupSummary): HealthCardData {
       statusLabel: "No backup yet",
     };
   }
-  const [newest] = backup.files;
-  const totalBytes = backup.files.reduce((sum, file) => sum + file.size, 0);
+  // A copy tagged to another machine is not evidence about this one: two
+  // machines can share the backup folder, and the day's file is named after the
+  // device that wrote it. Untagged copies stay counted here — they carry no
+  // device, so this card does not assert a failure it cannot prove.
+  const own = backup.files.filter(
+    (file) => file.device === null || file.device === backup.deviceTag
+  );
+  const fromOthers = backup.files.length - own.length;
+  if (own.length === 0) {
+    return {
+      ...base,
+      // A recorded failure outranks the device note: it names a real problem.
+      caption: backup.error
+        ? `${backup.error} · ${BACKUP_NEXT}`
+        : `${fromOthers} copies here came from another device · ${BACKUP_NEXT}`,
+      metric: "—",
+      status: "warn",
+      statusLabel: backup.error ? "Backup failed" : "No copy from this device",
+    };
+  }
+
+  const [newest] = own;
+  const totalBytes = own.reduce((sum, file) => sum + file.size, 0);
+  const othersNote =
+    fromOthers > 0 ? ` · ${fromOthers} from another device` : "";
   const date = new Date(newest.mtime * 1000).toLocaleDateString("en-US", {
     day: "numeric",
     month: "short",
@@ -122,7 +149,7 @@ export function buildBackupCard(backup?: BackupSummary): HealthCardData {
   }
   return {
     ...base,
-    caption: `Newest ${newest.name} · ${backup.files.length} copies · ${formatBytes(totalBytes)} · ${BACKUP_NEXT}`,
+    caption: `Newest ${newest.name} · ${own.length} copies${othersNote} · ${formatBytes(totalBytes)} · ${BACKUP_NEXT}`,
     metric: date,
     status: "ok",
     statusLabel: "Backup current",

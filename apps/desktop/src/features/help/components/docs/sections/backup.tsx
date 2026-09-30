@@ -21,10 +21,13 @@ export function BackupSection() {
 
       <DocsSubHeading>Where the copies live</DocsSubHeading>
       <DocsP>
-        Every daily copy is named for its date, and a copy you make by hand
-        carries the time too. Automatic copies age out on their own and you
-        choose how many to keep (ten by default); anything you made by hand is
-        never deleted by the app. You can also turn automatic copies off in{" "}
+        Every daily copy is named for its date and for the computer that wrote
+        it, so two machines may share the same CMIS Backups folder without one
+        mistaking the other's file for its own. A copy you make by hand carries
+        the time too. Automatic copies age out on their own — the newest ones
+        from each machine are kept, and you choose how many (ten by default) —
+        while anything you made by hand is never deleted by the app. You can
+        also turn automatic copies off in{" "}
         <DocsRoute to="/admin/settings">Settings → Backup</DocsRoute>. If a
         backup ever fails, a banner stays on every page until one succeeds —
         success itself is silent.
@@ -38,7 +41,8 @@ export function BackupSection() {
         you put one on a USB stick or a shared folder — that hand-carried copy
         is what actually gets your data off the machine. Both live in{" "}
         <DocsRoute to="/admin/settings">Settings → Backup</DocsRoute>, which
-        also lists every copy with its date and size.
+        also lists every copy with its date, size and — for a copy another
+        computer wrote into the shared folder — that computer's name.
       </DocsP>
 
       <DocsSubHeading>Restoring a copy</DocsSubHeading>

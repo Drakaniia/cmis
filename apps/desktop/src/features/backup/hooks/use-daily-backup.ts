@@ -8,6 +8,7 @@ import { invoke } from "@/lib/tauri";
 import type { BackupInspection } from "../data/backup-inspection";
 import { autoBackupName, localDateKey } from "../data/backup-naming";
 import { shouldRunDailyBackup } from "../data/backup-policy";
+import { loadDeviceTag } from "../data/device-tag";
 import { writeSafetyBackupFile } from "../data/write-safety-backup";
 import { BACKUP_FILES_KEY, type BackupFileInfo } from "./use-backup-files";
 
@@ -55,12 +56,17 @@ async function adoptionIsSafe(file: BackupFileInfo): Promise<boolean> {
   return inspection === null || inspection.ok;
 }
 
-/** Adopt today's existing file (spec §7.4) or write it via `create_backup`. */
+/**
+ * Adopt this device's copy of the day (spec §7.4) or write it with
+ * `create_backup`. The day's name carries the device tag, so the other
+ * machine's copy of the same day is a different file — adopting it would
+ * report protection over data this machine does not hold.
+ */
 async function ensureAutoBackup(
   dir: string,
   today: string
 ): Promise<BackupFileInfo> {
-  const wanted = autoBackupName(today);
+  const wanted = autoBackupName(today, await loadDeviceTag());
   const files = await listToday(dir);
   const existing = files.find((file) => file.name === wanted);
   if (existing && (await adoptionIsSafe(existing))) {

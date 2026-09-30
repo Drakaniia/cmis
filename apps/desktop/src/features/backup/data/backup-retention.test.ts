@@ -26,4 +26,44 @@ describe("backup-retention", () => {
     ];
     expect(selectPruneVictims(files, 1, "cmis-auto-2026-09-01.db")).toEqual([]);
   });
+
+  // A shared `<Documents>/CMIS Backups`: two machines write the day's copy
+  // under names carrying their own device tag.
+  const sharedNames = [
+    "cmis-auto-2026-09-28-deped-4f2a.db",
+    "cmis-auto-2026-09-29-deped-4f2a.db",
+    "cmis-auto-2026-09-30-deped-4f2a.db",
+    "cmis-auto-2026-09-27-desk-11ab.db",
+    "cmis-auto-2026-09-28-desk-11ab.db",
+    "cmis-auto-2026-09-26.db",
+  ];
+
+  it("counts retention per device, not per folder", () => {
+    const victims = selectPruneVictims(
+      sharedNames,
+      1,
+      "cmis-auto-2026-09-30-deped-4f2a.db"
+    );
+    // One survivor per device — two beyond the machine's own newest go, one
+    // beyond the other machine's newest goes, and the untagged copy is a third
+    // group of its own, so it survives too.
+    expect([...victims].sort()).toEqual(
+      [
+        "cmis-auto-2026-09-27-desk-11ab.db",
+        "cmis-auto-2026-09-28-deped-4f2a.db",
+        "cmis-auto-2026-09-29-deped-4f2a.db",
+      ].sort()
+    );
+  });
+
+  it("never empties another device's history to make room", () => {
+    const files = [
+      "cmis-auto-2026-09-30-deped-4f2a.db",
+      "cmis-auto-2026-09-29-deped-4f2a.db",
+      "cmis-auto-2026-09-28-desk-11ab.db",
+    ];
+    expect(selectPruneVictims(files, 1, files[0])).toEqual([
+      "cmis-auto-2026-09-29-deped-4f2a.db",
+    ]);
+  });
 });

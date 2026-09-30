@@ -128,6 +128,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             commands::backup::backup_default_dir,
+            commands::backup::backup_device_tag,
             commands::backup::backup_live_db_path,
             commands::backup::create_backup,
             commands::backup::list_backups,
@@ -479,9 +480,8 @@ mod tests {
     /// exact failure this split exists to prevent, so it is worth a test.
     #[test]
     fn dev_config_identifier_matches_the_constant() {
-        let conf: serde_json::Value =
-            serde_json::from_str(include_str!("../tauri.dev.conf.json"))
-                .expect("tauri.dev.conf.json must be valid JSON");
+        let conf: serde_json::Value = serde_json::from_str(include_str!("../tauri.dev.conf.json"))
+            .expect("tauri.dev.conf.json must be valid JSON");
         assert_eq!(
             conf["identifier"].as_str(),
             Some(DEV_IDENTIFIER),
@@ -493,8 +493,8 @@ mod tests {
     /// separation is meaningless without.
     #[test]
     fn prod_config_identifier_matches_the_constant() {
-        let conf: serde_json::Value =
-            serde_json::from_str(include_str!("../tauri.conf.json")).expect("tauri.conf.json must be valid JSON");
+        let conf: serde_json::Value = serde_json::from_str(include_str!("../tauri.conf.json"))
+            .expect("tauri.conf.json must be valid JSON");
         assert_eq!(
             conf["identifier"].as_str(),
             Some(PROD_IDENTIFIER),

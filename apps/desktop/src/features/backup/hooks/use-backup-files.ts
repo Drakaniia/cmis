@@ -3,6 +3,8 @@ import { isTauriRuntime } from "@/lib/open-external";
 import { invoke } from "@/lib/tauri";
 
 export interface BackupFileInfo {
+  /** Device tag in the name; `null` for a manual copy or an untagged one. */
+  device: string | null;
   kind: string;
   mtime: number;
   name: string;

@@ -1,8 +1,19 @@
-/** Backup file naming (backup-restore spec F3). Pure — no Tauri, no React. */
+/**
+ * Backup file naming (backup-restore spec F3). Pure — no Tauri, no React.
+ *
+ * Automatic names carry the tag of the device that wrote them, because
+ * `<Documents>/CMIS Backups` can be a folder two machines share:
+ *
+ * - `cmis-auto-YYYY-MM-DD-<device>.db` — the day's copy from one machine.
+ * - `cmis-auto-YYYY-MM-DD.db` — the same, from a build that predates device
+ *   tags. Still listed and still restorable, never adopted as another machine's
+ *   copy of today and never pruned on a machine's say-so.
+ */
 
 export type BackupKind = "auto" | "manual" | "other";
 
-const AUTO_RE = /^cmis-auto-\d{4}-\d{2}-\d{2}\.db$/;
+const AUTO_RE = /^cmis-auto-\d{4}-\d{2}-\d{2}(?:-[a-z0-9][a-z0-9-]*)?\.db$/;
+const AUTO_DEVICE_RE = /^cmis-auto-\d{4}-\d{2}-\d{2}-([a-z0-9][a-z0-9-]*)\.db$/;
 const MANUAL_RE = /^cmis-manual-\d{4}-\d{2}-\d{2}-\d{4}(-\d+)?\.db$/;
 
 function pad(value: number): string {
@@ -14,9 +25,16 @@ export function localDateKey(date: Date = new Date()): string {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }
 
-/** `cmis-auto-YYYY-MM-DD.db` — one per day. */
-export function autoBackupName(dateKey: string): string {
-  return `cmis-auto-${dateKey}.db`;
+/**
+ * `cmis-auto-YYYY-MM-DD-<device>.db` — one per device per day.
+ *
+ * An empty tag produces the untagged name, which is what a build without a
+ * device record would still write; the caller passes `loadDeviceTag()`.
+ */
+export function autoBackupName(dateKey: string, deviceTag = ""): string {
+  return deviceTag
+    ? `cmis-auto-${dateKey}-${deviceTag}.db`
+    : `cmis-auto-${dateKey}.db`;
 }
 
 /** `cmis-manual-YYYY-MM-DD-HHmm.db` — local time, to the minute. */
@@ -27,6 +45,14 @@ export function manualBackupName(now: Date = new Date()): string {
 /** In-progress copy path — renamed into place only on success. */
 export function partialName(name: string): string {
   return `${name}.partial`;
+}
+
+/**
+ * The device tag in an automatic copy's name, `null` when it carries none
+ * (written before tags existed, or by a build that has none).
+ */
+export function deviceTagOf(name: string): string | null {
+  return AUTO_DEVICE_RE.exec(name)?.[1] ?? null;
 }
 
 export function backupKindOf(name: string): BackupKind {

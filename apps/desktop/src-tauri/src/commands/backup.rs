@@ -54,6 +54,16 @@ pub struct BackupFileInfo {
     pub size: u64,
     pub mtime: u64,
     pub kind: String,
+    /// Device tag the copy is named after, when it has one. `None` for a manual
+    /// copy, a foreign file, and an automatic copy written before names carried
+    /// a device — the UI reads it to tell one machine's copies from another's.
+    pub device: Option<String>,
+}
+
+/// Record kept in `<app_data>/cmis-device.json`.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+struct DeviceRecord {
+    tag: String,
 }
 
 /// `"auto"` for `cmis-auto-*.db`, `"manual"` for `cmis-manual-*.db`,
@@ -66,6 +76,74 @@ pub fn backup_kind(name: &str) -> &'static str {
     } else {
         "other"
     }
+}
+
+/// The device tag in an automatic copy's name.
+///
+/// `cmis-auto-2026-09-30-deped-4f2a.db` → `Some("deped-4f2a")`, and
+/// `cmis-auto-2026-09-30.db` → `None`: a copy written before names carried a
+/// device, or by a build that predates this change. `None` is a group of its
+/// own — an unattributed copy is never grouped with a machine's own.
+fn auto_device_tag(name: &str) -> Option<String> {
+    let rest = name.strip_prefix("cmis-auto-")?.strip_suffix(".db")?;
+    // Slicing below is only safe and only meaningful for an ASCII name.
+    if !rest.is_ascii() || rest.len() <= 11 || rest.as_bytes()[10] != b'-' {
+        return None;
+    }
+    let date = &rest[..10];
+    let tag = &rest[11..];
+    let is_date = date.len() == 10
+        && date.chars().enumerate().all(|(index, ch)| match index {
+            4 | 7 => ch == '-',
+            _ => ch.is_ascii_digit(),
+        });
+    let is_tag = !tag.is_empty()
+        && tag
+            .chars()
+            .all(|ch| ch.is_ascii_lowercase() || ch.is_ascii_digit() || ch == '-');
+    if is_date && is_tag {
+        Some(tag.to_string())
+    } else {
+        None
+    }
+}
+
+/// Which automatic copies a run may delete.
+///
+/// Retention is per device, not per folder: the newest `keep` copies of *each*
+/// device (and of the untagged copies older builds wrote) survive, and only the
+/// rest are victims. A single global count is the wrong rule once two machines
+/// write into one folder — machine B would delete machine A's entire history
+/// the first time it had `keep` copies of its own, and A's "protected" state
+/// would rest on files B had removed.
+///
+/// Keeping each group bounded also means a machine that never writes again (or
+/// is reinstalled under a new tag) leaves at most `keep` files behind rather
+/// than an ever-growing pile.
+fn prune_victims(names: &[String], keep: usize) -> Vec<String> {
+    let keep = keep.max(1);
+    let mut groups: std::collections::BTreeMap<String, Vec<&String>> =
+        std::collections::BTreeMap::new();
+    for name in names {
+        // A manual copy, a foreign file, or a staging file is not a victim no
+        // matter who hands it in — this function only ever names files written
+        // under the automatic pattern.
+        if backup_kind(name) != "auto" {
+            continue;
+        }
+        groups
+            .entry(auto_device_tag(name).unwrap_or_default())
+            .or_default()
+            .push(name);
+    }
+    let mut victims = Vec::new();
+    for (_, mut group) in groups {
+        // `YYYY-MM-DD` sorts chronologically as text, so newest is last.
+        group.sort_unstable();
+        group.reverse();
+        victims.extend(group.into_iter().skip(keep).cloned());
+    }
+    victims
 }
 
 fn file_info(path: &std::path::Path) -> Result<BackupFileInfo, String> {
@@ -83,6 +161,7 @@ fn file_info(path: &std::path::Path) -> Result<BackupFileInfo, String> {
         .unwrap_or(0);
     Ok(BackupFileInfo {
         kind: backup_kind(&name).to_string(),
+        device: auto_device_tag(&name),
         name,
         path: path.to_string_lossy().to_string(),
         size: meta.len(),
@@ -208,20 +287,39 @@ fn journal_path(app: &AppHandle) -> Result<std::path::PathBuf, String> {
     Ok(data.join("cmis-restore-journal.json"))
 }
 
+/// How long a `.partial` file must have been untouched before a launch sweeps
+/// it. A copy in flight on another machine is seconds old; a copy left by a
+/// killed process is not. Without this grace period, opening the app on one
+/// machine deletes the scratch file another machine is writing into the shared
+/// folder, and that machine's own run then fails to publish.
+const PARTIAL_SWEEP_AGE: std::time::Duration = std::time::Duration::from_secs(600);
+
+fn is_sweepable_partial(path: &std::path::Path, now: std::time::SystemTime) -> bool {
+    let modified = match std::fs::metadata(path).and_then(|meta| meta.modified()) {
+        Ok(modified) => modified,
+        Err(_) => return false,
+    };
+    now.duration_since(modified)
+        .is_ok_and(|age| age >= PARTIAL_SWEEP_AGE)
+}
+
 /// Remove stray `<name>.partial` files in `dir`. A killed copy is
-/// unremarkable (spec Q6): swept silently, never listed or counted.
+/// unremarkable (spec Q6): swept silently, never listed or counted. Files
+/// touched within the last few minutes are left alone — they belong to a copy
+/// that is still running, here or on the other machine.
 pub fn sweep_partial_files(dir: &std::path::Path) {
     let entries = match std::fs::read_dir(dir) {
         Ok(entries) => entries,
         Err(_) => return,
     };
+    let now = std::time::SystemTime::now();
     for entry in entries.flatten() {
         let path = entry.path();
         let name = path
             .file_name()
             .map(|name| name.to_string_lossy().to_string())
             .unwrap_or_default();
-        if name.ends_with(".partial") {
+        if name.ends_with(".partial") && is_sweepable_partial(&path, now) {
             if let Err(error) = std::fs::remove_file(&path) {
                 log::warn!("Could not sweep {}: {error}", path.display());
             }
@@ -244,6 +342,100 @@ pub fn backup_default_dir(app: AppHandle) -> Result<String, String> {
     std::fs::create_dir_all(&dir)
         .map_err(|error| format!("Could not create {}: {error}", dir.display()))?;
     Ok(dir.to_string_lossy().to_string())
+}
+
+/// Host name reduced to a filename-safe label: `DEPED-PC` → `deped-pc`.
+fn host_label() -> String {
+    let raw = std::env::var("COMPUTERNAME")
+        .or_else(|_| std::env::var("HOSTNAME"))
+        .unwrap_or_default();
+    let mut label = String::new();
+    let mut pending_dash = false;
+    for ch in raw.chars() {
+        if label.len() >= 12 {
+            break;
+        }
+        if ch.is_ascii_alphanumeric() {
+            if pending_dash && !label.is_empty() {
+                label.push('-');
+            }
+            label.push(ch.to_ascii_lowercase());
+            pending_dash = false;
+        } else {
+            pending_dash = true;
+        }
+    }
+    if label.is_empty() {
+        "device".to_string()
+    } else {
+        label
+    }
+}
+
+/// Four hex characters that do not repeat between two machines.
+///
+/// The host name alone is not enough: clinics image machines from one install,
+/// so two devices can share `DESKTOP-XXXX` and would then collide on the daily
+/// name — exactly the bug the tag exists to prevent. Time plus process id
+/// separates them without pulling in a random-number crate.
+fn tag_suffix() -> String {
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |elapsed| elapsed.as_nanos());
+    let mixed = nanos ^ (u128::from(std::process::id()) << 40);
+    let spun = (mixed as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15);
+    format!("{:04x}", (spun >> 32) as u16)
+}
+
+/// This machine's short tag, e.g. `deped-4f2a`.
+///
+/// Two machines that share a backup folder each need a copy of their *own* data
+/// under the day's name, and neither may prune the other's history. The tag is
+/// generated once, kept in app data — per machine, never in the shared folder —
+/// and is legible enough that an operator recognises the machine in a filename.
+fn device_tag(app: &AppHandle) -> Result<String, String> {
+    let data = app
+        .path()
+        .app_data_dir()
+        .map_err(|error| format!("Could not resolve the app data folder: {error}"))?;
+    std::fs::create_dir_all(&data)
+        .map_err(|error| format!("Could not create {}: {error}", data.display()))?;
+    let path = data.join("cmis-device.json");
+    if let Ok(raw) = std::fs::read_to_string(&path) {
+        match serde_json::from_str::<DeviceRecord>(&raw) {
+            Ok(record) if is_device_tag(&record.tag) => return Ok(record.tag),
+            // A damaged record is replaced rather than guessed at: a fresh tag
+            // costs a new group of files, which retention keeps bounded.
+            _ => log::warn!(
+                "Ignoring the unreadable device record at {}",
+                path.display()
+            ),
+        }
+    }
+    let tag = format!("{}-{}", host_label(), tag_suffix());
+    let json = serde_json::to_string_pretty(&DeviceRecord { tag: tag.clone() })
+        .map_err(|error| format!("Could not write the device record: {error}"))?;
+    std::fs::write(&path, json)
+        .map_err(|error| format!("Could not write {}: {error}", path.display()))?;
+    Ok(tag)
+}
+
+/// A tag as it may appear in a filename — the same alphabet `auto_device_tag`
+/// accepts, so a hand-edited record cannot produce an unmatchable name.
+fn is_device_tag(tag: &str) -> bool {
+    !tag.is_empty()
+        && tag.len() <= 24
+        && tag
+            .chars()
+            .all(|ch| ch.is_ascii_lowercase() || ch.is_ascii_digit() || ch == '-')
+        && !tag.starts_with('-')
+        && !tag.ends_with('-')
+}
+
+/// This machine's tag, for the frontend to name the day's copy after.
+#[tauri::command]
+pub fn backup_device_tag(app: AppHandle) -> Result<String, String> {
+    device_tag(&app)
 }
 
 /// Resolve `<app_data>/cmis.db` — the live database every copy is made from.
@@ -296,10 +488,9 @@ pub async fn create_backup(app: AppHandle, dest_path: String) -> Result<BackupFi
     let staging = staging_path(&dest)?;
     discard_staging(&staging);
 
-    let options =
-        SqliteConnectOptions::from_str(&format!("sqlite:{}?mode=rw", live.display()))
-            .map_err(|error| format!("Could not open the live database: {error}"))?
-            .busy_timeout(std::time::Duration::from_secs(10));
+    let options = SqliteConnectOptions::from_str(&format!("sqlite:{}?mode=rw", live.display()))
+        .map_err(|error| format!("Could not open the live database: {error}"))?
+        .busy_timeout(std::time::Duration::from_secs(10));
     let pool = sqlx::SqlitePool::connect_with(options)
         .await
         .map_err(|error| format!("Could not open the live database: {error}"))?;
@@ -350,12 +541,11 @@ pub async fn create_backup(app: AppHandle, dest_path: String) -> Result<BackupFi
 #[tauri::command]
 pub fn list_backups(dir: String) -> Result<Vec<BackupFileInfo>, String> {
     let dir = std::path::PathBuf::from(&dir);
-    let entries =
-        std::fs::read_dir(&dir).map_err(|error| format!("Could not read {}: {error}", dir.display()))?;
+    let entries = std::fs::read_dir(&dir)
+        .map_err(|error| format!("Could not read {}: {error}", dir.display()))?;
     let mut files = Vec::new();
     for entry in entries {
-        let entry =
-            entry.map_err(|error| format!("Could not read {}: {error}", dir.display()))?;
+        let entry = entry.map_err(|error| format!("Could not read {}: {error}", dir.display()))?;
         let path = entry.path();
         let name = path
             .file_name()
@@ -373,48 +563,41 @@ pub fn list_backups(dir: String) -> Result<Vec<BackupFileInfo>, String> {
     Ok(files)
 }
 
-/// Delete `cmis-auto-*.db` files beyond the newest `keep`, then sweep stray
-/// `.partial` files. Only the app's own auto pattern is ever eligible;
-/// `cmis-manual-*.db` and foreign files are structurally invisible here.
-/// Best-effort: an undeletable file is skipped, never fatal. Returns the
-/// removed file names.
+/// Delete `cmis-auto-*.db` files beyond the newest `keep` **of each device**
+/// that writes into this folder, then sweep stray `.partial` files. Only the
+/// app's own auto pattern is ever eligible; `cmis-manual-*.db` and foreign
+/// files are structurally invisible here. Best-effort: an undeletable file is
+/// skipped, never fatal. Returns the removed file names.
+///
+/// Retention on one machine never reaches into another machine's history — see
+/// `prune_victims` for why a single global count is the wrong rule in a folder
+/// two machines share.
 #[tauri::command]
 pub fn prune_backups(dir: String, keep: u32) -> Result<Vec<String>, String> {
     let dir = std::path::PathBuf::from(&dir);
-    let entries =
-        std::fs::read_dir(&dir).map_err(|error| format!("Could not read {}: {error}", dir.display()))?;
+    let entries = std::fs::read_dir(&dir)
+        .map_err(|error| format!("Could not read {}: {error}", dir.display()))?;
     let mut auto: Vec<String> = Vec::new();
-    let mut partials: Vec<std::path::PathBuf> = Vec::new();
     for entry in entries {
-        let entry =
-            entry.map_err(|error| format!("Could not read {}: {error}", dir.display()))?;
-        let path = entry.path();
-        let name = path
+        let entry = entry.map_err(|error| format!("Could not read {}: {error}", dir.display()))?;
+        let name = entry
+            .path()
             .file_name()
             .map(|name| name.to_string_lossy().to_string())
             .unwrap_or_default();
-        if name.ends_with(".partial") {
-            partials.push(path);
-        } else if backup_kind(&name) == "auto" {
+        if backup_kind(&name) == "auto" {
             auto.push(name);
         }
     }
-    auto.sort();
-    auto.reverse();
-    let keep = keep.max(1) as usize;
     let mut removed = Vec::new();
-    for name in auto.into_iter().skip(keep) {
-        let path = dir.join(&name);
-        match std::fs::remove_file(&path) {
+    for name in prune_victims(&auto, keep.max(1) as usize) {
+        match std::fs::remove_file(dir.join(&name)) {
             Ok(()) => removed.push(name),
             Err(error) => log::warn!("Could not prune backup {name}: {error}"),
         }
     }
-    for path in partials {
-        if let Err(error) = std::fs::remove_file(&path) {
-            log::warn!("Could not sweep {}: {error}", path.display());
-        }
-    }
+    sweep_partial_files(&dir);
+    removed.sort();
     Ok(removed)
 }
 
@@ -429,8 +612,8 @@ pub fn prune_backups(dir: String, keep: u32) -> Result<Vec<String>, String> {
 /// so the only two definitions of "a restorable backup" — the one that gates a
 /// restore and the one that gates a publish — cannot drift apart.
 async fn inspect_file(file: &std::path::Path) -> Result<BackupInspection, String> {
-    use sqlx::Row;
     use sqlx::sqlite::SqliteConnectOptions;
+    use sqlx::Row;
     use std::str::FromStr;
 
     let shown = file.to_string_lossy().to_string();
@@ -448,25 +631,20 @@ async fn inspect_file(file: &std::path::Path) -> Result<BackupInspection, String
         .unwrap_or(0);
     let size = meta.len();
 
-    let refused = |code: &str, reason: String| {
-        BackupInspection {
-            ok: false,
-            code: code.to_string(),
-            reason,
-            schema_version: None,
-            app_version: None,
-            size,
-            mtime,
-            name: name.clone(),
-        }
+    let refused = |code: &str, reason: String| BackupInspection {
+        ok: false,
+        code: code.to_string(),
+        reason,
+        schema_version: None,
+        app_version: None,
+        size,
+        mtime,
+        name: name.clone(),
     };
 
-    let options = SqliteConnectOptions::from_str(&format!(
-        "sqlite:{}?mode=ro",
-        file.display()
-    ))
-    .map_err(|_| format!("{shown} is not a database file and cannot be restored."))?
-    .busy_timeout(std::time::Duration::from_secs(5));
+    let options = SqliteConnectOptions::from_str(&format!("sqlite:{}?mode=ro", file.display()))
+        .map_err(|_| format!("{shown} is not a database file and cannot be restored."))?
+        .busy_timeout(std::time::Duration::from_secs(5));
     let pool = sqlx::SqlitePool::connect_with(options).await.map_err(|_| {
         refused(
             "not-database",
@@ -498,7 +676,8 @@ async fn inspect_file(file: &std::path::Path) -> Result<BackupInspection, String
             pool.close().await;
             return Ok(refused(
                 "damaged",
-                "This backup is damaged (integrity check failed) and cannot be restored.".to_string(),
+                "This backup is damaged (integrity check failed) and cannot be restored."
+                    .to_string(),
             ));
         }
         Err(_) => {
@@ -528,11 +707,10 @@ async fn inspect_file(file: &std::path::Path) -> Result<BackupInspection, String
     }
 
     let schema_version: Option<i64> = async {
-        if let Ok(row) = sqlx::query(
-            "SELECT value FROM app_meta WHERE key = 'backup_schema_version'",
-        )
-        .fetch_optional(&pool)
-        .await
+        if let Ok(row) =
+            sqlx::query("SELECT value FROM app_meta WHERE key = 'backup_schema_version'")
+                .fetch_optional(&pool)
+                .await
         {
             if let Some(row) = row {
                 if let Ok(raw) = row.try_get::<String, _>("value") {
@@ -544,10 +722,9 @@ async fn inspect_file(file: &std::path::Path) -> Result<BackupInspection, String
         }
         // Databases from before the stamp carry no key: fall back to the
         // migration ledger, then to "unknown" (accepted unless tables lie).
-        if let Ok(row) =
-            sqlx::query("SELECT MAX(version) AS v FROM _sqlx_migrations")
-                .fetch_optional(&pool)
-                .await
+        if let Ok(row) = sqlx::query("SELECT MAX(version) AS v FROM _sqlx_migrations")
+            .fetch_optional(&pool)
+            .await
         {
             if let Some(row) = row {
                 if let Ok(version) = row.try_get::<i64, _>("v") {
@@ -558,14 +735,13 @@ async fn inspect_file(file: &std::path::Path) -> Result<BackupInspection, String
         None
     }
     .await;
-    let app_version: Option<String> = sqlx::query(
-        "SELECT value FROM app_meta WHERE key = 'backup_app_version'",
-    )
-    .fetch_optional(&pool)
-    .await
-    .ok()
-    .flatten()
-    .and_then(|row| row.try_get::<String, _>("value").ok());
+    let app_version: Option<String> =
+        sqlx::query("SELECT value FROM app_meta WHERE key = 'backup_app_version'")
+            .fetch_optional(&pool)
+            .await
+            .ok()
+            .flatten()
+            .and_then(|row| row.try_get::<String, _>("value").ok());
     pool.close().await;
 
     if let Some(version) = schema_version {
@@ -573,7 +749,8 @@ async fn inspect_file(file: &std::path::Path) -> Result<BackupInspection, String
             return Ok(BackupInspection {
                 ok: false,
                 code: "newer-version".to_string(),
-                reason: "This backup was made by a newer version of CMIS — update the app first.".to_string(),
+                reason: "This backup was made by a newer version of CMIS — update the app first."
+                    .to_string(),
                 schema_version: Some(version),
                 app_version,
                 size,
@@ -637,9 +814,7 @@ pub async fn apply_restore(
         if path.exists() {
             std::fs::remove_file(&path).map_err(|error| {
                 let _ = std::fs::remove_file(&incoming);
-                format!(
-                    "Could not replace the live database (nothing was changed): {error}"
-                )
+                format!("Could not replace the live database (nothing was changed): {error}")
             })?;
         }
     }
@@ -666,10 +841,12 @@ pub async fn apply_restore(
         at: chrono::Utc::now().to_rfc3339(),
     };
     let path = journal_path(&app)?;
-    let json = serde_json::to_string_pretty(&journal)
-        .map_err(|error| format!("Database was restored, but the journal could not be written: {error}"))?;
-    std::fs::write(&path, json)
-        .map_err(|error| format!("Database was restored, but the journal could not be written: {error}"))?;
+    let json = serde_json::to_string_pretty(&journal).map_err(|error| {
+        format!("Database was restored, but the journal could not be written: {error}")
+    })?;
+    std::fs::write(&path, json).map_err(|error| {
+        format!("Database was restored, but the journal could not be written: {error}")
+    })?;
     Ok(live.to_string_lossy().to_string())
 }
 
@@ -680,11 +857,7 @@ pub async fn apply_restore(
 /// listed, pruned, or mistaken for backups; each staging run replaces the
 /// previous file of the same name.
 #[tauri::command]
-pub fn stage_import_db(
-    app: AppHandle,
-    name: String,
-    bytes: Vec<u8>,
-) -> Result<String, String> {
+pub fn stage_import_db(app: AppHandle, name: String, bytes: Vec<u8>) -> Result<String, String> {
     let stem = std::path::Path::new(&name)
         .file_name()
         .map(|name| name.to_string_lossy().to_string())
@@ -703,8 +876,7 @@ pub fn stage_import_db(
     std::fs::create_dir_all(&dir)
         .map_err(|error| format!("Could not create {}: {error}", dir.display()))?;
     let staged = dir.join(&stem);
-    std::fs::write(&staged, &bytes)
-        .map_err(|error| format!("Could not stage {stem}: {error}"))?;
+    std::fs::write(&staged, &bytes).map_err(|error| format!("Could not stage {stem}: {error}"))?;
     Ok(staged.to_string_lossy().to_string())
 }
 
@@ -847,7 +1019,10 @@ mod tests {
         let whole = dir.join("whole.db");
         write_cmis_database(&whole, CURRENT_SCHEMA_VERSION);
         let bytes = std::fs::read(&whole).expect("read scratch database");
-        assert!(bytes.len() > 1024, "scratch database is too small to truncate");
+        assert!(
+            bytes.len() > 1024,
+            "scratch database is too small to truncate"
+        );
         let cut = dir.join("cmis-auto-2026-09-30.db");
         std::fs::write(&cut, &bytes[..bytes.len() / 2]).expect("truncated copy");
 
@@ -864,6 +1039,112 @@ mod tests {
 
         let error = verify(&path).expect_err("a newer schema must be refused");
         assert!(error.contains("newer-version"), "{error}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn device_tags_are_parsed_out_of_automatic_names() {
+        assert_eq!(
+            auto_device_tag("cmis-auto-2026-09-30-deped-4f2a.db"),
+            Some("deped-4f2a".to_string())
+        );
+        // Before names carried a device: unattributed, and never grouped with a
+        // machine's own copies.
+        assert_eq!(auto_device_tag("cmis-auto-2026-09-30.db"), None);
+        // Manual copies and foreign files carry no device.
+        assert_eq!(auto_device_tag("cmis-manual-2026-09-30-0914.db"), None);
+        assert_eq!(auto_device_tag("notes.db"), None);
+        // Malformed names are not tags, and must not panic on slicing.
+        assert_eq!(auto_device_tag("cmis-auto-2026-09-30-.db"), None);
+        assert_eq!(auto_device_tag("cmis-auto-not-a-date-abc.db"), None);
+        assert_eq!(auto_device_tag("cmis-auto-2026-09-30-ÜNICODE.db"), None);
+    }
+
+    #[test]
+    fn prune_victims_keeps_the_newest_of_each_device() {
+        let names: Vec<String> = [
+            "cmis-auto-2026-09-28-deped-4f2a.db",
+            "cmis-auto-2026-09-29-deped-4f2a.db",
+            "cmis-auto-2026-09-30-deped-4f2a.db",
+            "cmis-auto-2026-09-27-desk-11ab.db",
+            "cmis-auto-2026-09-28-desk-11ab.db",
+            "cmis-auto-2026-09-26.db",
+            "cmis-auto-2026-09-25.db",
+            "cmis-manual-2026-09-30-0914.db",
+            "notes.db",
+        ]
+        .map(String::from)
+        .to_vec();
+
+        // Retention is per device: this machine's oldest copy is a victim, the
+        // other device's is not, and the manual and foreign files are never
+        // candidates even though they are handed in.
+        assert_eq!(
+            prune_victims(&names, 1),
+            vec![
+                "cmis-auto-2026-09-25.db".to_string(),
+                "cmis-auto-2026-09-29-deped-4f2a.db".to_string(),
+                "cmis-auto-2026-09-28-deped-4f2a.db".to_string(),
+                "cmis-auto-2026-09-27-desk-11ab.db".to_string(),
+            ]
+        );
+
+        let keep_two = prune_victims(&names, 2);
+        assert_eq!(
+            keep_two,
+            vec!["cmis-auto-2026-09-28-deped-4f2a.db".to_string()]
+        );
+        assert_eq!(prune_victims(&names, 10), Vec::<String>::new());
+    }
+
+    #[test]
+    fn prune_victims_never_empties_a_devices_history() {
+        // Three machines that have written once each, and `keep` below the file
+        // count: nobody loses their only copy.
+        let names: Vec<String> = [
+            "cmis-auto-2026-09-30-a-1111.db",
+            "cmis-auto-2026-09-30-b-2222.db",
+            "cmis-auto-2026-09-30-c-3333.db",
+            "cmis-auto-2026-09-29.db",
+        ]
+        .map(String::from)
+        .to_vec();
+        assert_eq!(prune_victims(&names, 1), Vec::<String>::new());
+    }
+
+    #[test]
+    fn generated_tags_survive_the_filename_alphabet() {
+        let tag = format!("{}-{}", host_label(), tag_suffix());
+        assert!(is_device_tag(&tag), "generated tag was {tag:?}");
+        // The tag must round-trip through a file name and be readable back.
+        let name = format!("cmis-auto-2026-09-30-{tag}.db");
+        assert_eq!(auto_device_tag(&name), Some(tag));
+        let too_long = "x".repeat(25);
+        for rejected in ["", "-", "UPPER", "trailing-", "-leading", too_long.as_str()] {
+            assert!(!is_device_tag(rejected), "accepted {rejected:?}");
+        }
+    }
+
+    #[test]
+    fn only_stale_scratch_files_are_swept() {
+        let dir = scratch_dir("sweep");
+        let stale = dir.join("cmis-auto-2026-09-30.db.1-2-0.partial");
+        std::fs::write(&stale, b"killed mid-copy").expect("stale scratch");
+        let in_flight = dir.join("cmis-auto-2026-09-30.db.3-4-1.partial");
+        std::fs::write(&in_flight, b"being written now").expect("fresh scratch");
+        let old = std::time::SystemTime::now() - PARTIAL_SWEEP_AGE - PARTIAL_SWEEP_AGE;
+        std::fs::File::options()
+            .write(true)
+            .open(&stale)
+            .expect("open stale scratch")
+            .set_modified(old)
+            .expect("age the stale scratch file");
+
+        sweep_partial_files(&dir);
+
+        assert!(!stale.exists(), "an abandoned copy is swept");
+        // The other machine may be writing this one right now.
+        assert!(in_flight.exists(), "a copy in flight is left alone");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -923,7 +1204,11 @@ mod tests {
     fn backup_kind_ignores_staging_files() {
         let staged = staging_path(&std::path::PathBuf::from("cmis-auto-2026-09-30.db"))
             .expect("staging path");
-        let name = staged.file_name().expect("name").to_string_lossy().to_string();
+        let name = staged
+            .file_name()
+            .expect("name")
+            .to_string_lossy()
+            .to_string();
         // `prune_backups` sweeps `.partial` and never counts it as a backup.
         assert_eq!(backup_kind(&name), "other");
         assert!(name.ends_with(".partial"));

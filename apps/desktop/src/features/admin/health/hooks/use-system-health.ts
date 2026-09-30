@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { loadDeviceTag } from "@/features/backup/data/device-tag";
 import { loadBackupStore } from "@/lib/backup-store";
 import { getDb } from "@/lib/db";
 import { isTauriRuntime } from "@/lib/open-external";
@@ -32,9 +33,15 @@ async function loadHealth(): Promise<SystemHealth> {
       dir,
     });
     const store = await loadBackupStore();
-    summary = { dir, error: store.lastBackupError, files };
+    summary = {
+      deviceTag: await loadDeviceTag(),
+      dir,
+      error: store.lastBackupError,
+      files,
+    };
   } catch (error) {
     summary = {
+      deviceTag: "",
       dir: "",
       error: error instanceof Error ? error.message : String(error),
       files: [],

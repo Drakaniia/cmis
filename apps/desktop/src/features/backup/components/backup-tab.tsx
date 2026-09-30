@@ -18,6 +18,7 @@ import { manualBackupName } from "../data/backup-naming";
 import { type BackupFileInfo, useBackupFiles } from "../hooks/use-backup-files";
 import { useBackupStatus } from "../hooks/use-backup-status";
 import { useBackupActions } from "../hooks/use-daily-backup";
+import { useDeviceTag } from "../hooks/use-device-tag";
 import { RestoreDialog, type RestoreSource } from "./restore-dialog";
 
 function formatBytes(bytes: number): string {
@@ -78,16 +79,29 @@ function basename(path: string): string {
 function BackupRow({
   file,
   onRestore,
+  ownDevice,
 }: {
   file: BackupFileInfo;
   onRestore: (file: BackupFileInfo) => void;
+  ownDevice: string;
 }) {
   const handleRestore = useCallback(() => {
     onRestore(file);
   }, [file, onRestore]);
+  // A tagged copy that is not this machine's: another computer sharing the
+  // folder wrote it, and neither the daily run nor retention will touch it.
+  const fromOtherDevice = Boolean(file.device && file.device !== ownDevice);
   return (
     <li className="flex items-center gap-3 py-2 text-sm">
       <span className="min-w-0 flex-1 truncate font-medium">{file.name}</span>
+      {fromOtherDevice ? (
+        <span
+          className="shrink-0 rounded-full border border-border/60 px-2 py-0.5 text-caption text-muted-foreground"
+          title={`Written by another device — ${file.device}`}
+        >
+          {file.device}
+        </span>
+      ) : null}
       <span className="shrink-0 rounded-full border border-border/60 px-2 py-0.5 text-caption text-muted-foreground">
         {kindLabel(file.kind)}
       </span>
@@ -115,6 +129,7 @@ export function BackupTab() {
   const { status, setEnabled, setKeep } = useBackupStatus();
   const { data, refetch } = useBackupFiles();
   const { runManualBackup } = useBackupActions();
+  const deviceTag = useDeviceTag();
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
   const [restoreSource, setRestoreSource] = useState<RestoreSource | null>(
@@ -124,6 +139,9 @@ export function BackupTab() {
   const { dir = "", files = [] } = data ?? {};
   const [newest] = files;
   const totalBytes = files.reduce((sum, file) => sum + file.size, 0);
+  const otherDeviceCount = files.filter(
+    (file) => file.device && file.device !== deviceTag
+  ).length;
 
   const handleBackupNow = useCallback(async () => {
     setBusy(true);
@@ -288,6 +306,9 @@ export function BackupTab() {
               {files.length === 0
                 ? "None yet"
                 : `${files.length} · ${formatBytes(totalBytes)}`}
+              {otherDeviceCount > 0
+                ? ` · ${otherDeviceCount} from another device`
+                : ""}
             </dd>
           </div>
           {newest ? (
@@ -357,7 +378,7 @@ export function BackupTab() {
       </SettingsCard>
 
       <SettingsCard
-        description="Automatic copies age out on their own; manual copies are never deleted by the app."
+        description="Automatic copies are kept per device — the newest ones each machine wrote — so a folder shared with another computer never loses its history. Manual copies are never deleted by the app."
         title="All backups"
       >
         {files.length === 0 ? (
@@ -371,6 +392,7 @@ export function BackupTab() {
                 file={file}
                 key={file.path}
                 onRestore={handleRestoreRow}
+                ownDevice={deviceTag}
               />
             ))}
           </ul>
