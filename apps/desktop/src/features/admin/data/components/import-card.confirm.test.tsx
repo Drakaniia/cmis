@@ -5,6 +5,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { utils, write } from "xlsx";
 import { INVENTORY_TEMPLATE_HEADERS } from "@/features/inventory/import/csv-parser";
 
+// The import takes a safety backup through this hook. The gate is inert in
+// tests (`isTauriRuntime()` is false), so the stub only has to satisfy the
+// hook's QueryClient requirement.
+vi.mock("@/features/backup/hooks/use-daily-backup", () => ({
+  useBackupActions: () => ({ runManualBackup: vi.fn(), retry: vi.fn() }),
+}));
+
 const DISPENSING_MONTH = /Dispensing month 2026-08 · from the file name/i;
 const CONFIRM_IMPORT = /Confirm import/i;
 const OVERWRITE_PROMPT = /Overwrite current data\?/i;

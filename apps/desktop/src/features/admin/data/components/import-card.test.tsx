@@ -1,8 +1,16 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { utils, write } from "xlsx";
 import { INVENTORY_TEMPLATE_HEADERS } from "@/features/inventory/import/csv-parser";
+
+// The import takes a safety backup through this hook. The gate is inert in
+// tests (`isTauriRuntime()` is false), so the stub only has to satisfy the
+// hook's QueryClient requirement.
+vi.mock("@/features/backup/hooks/use-daily-backup", () => ({
+  useBackupActions: () => ({ retry: vi.fn(), runManualBackup: vi.fn() }),
+}));
+
 import { ImportCard } from "./import-card";
 
 const INVENTORY_CSV = /Inventory CSV/i;

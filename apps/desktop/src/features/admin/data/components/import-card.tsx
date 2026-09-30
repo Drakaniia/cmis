@@ -14,6 +14,8 @@ import {
   RestoreDialog,
   type RestoreSource,
 } from "@/features/backup/components/restore-dialog";
+import { runWithSafetyBackup } from "@/features/backup/data/safety-gate";
+import { useBackupActions } from "@/features/backup/hooks/use-daily-backup";
 import {
   allIdentityKeys,
   identityKeysOf,
@@ -220,6 +222,7 @@ export function ImportCard() {
   const [restoreSource, setRestoreSource] = useState<RestoreSource | null>(
     null
   );
+  const { runManualBackup } = useBackupActions();
 
   const readFile = useCallback(async (file: File) => {
     // Nothing is staged until a file reads cleanly, and a file that cannot be
@@ -350,14 +353,31 @@ export function ImportCard() {
         const { importInventoryCsv } = await import(
           "@/features/inventory/import/import"
         );
-        const db = await getDb();
-        const result = await importInventoryCsv(
-          inventoryCsv,
-          db as Parameters<typeof importInventoryCsv>[1],
-          {
-            month: staged.month,
-          }
-        );
+        // An import overwrites the month grid, so it earns the same safety copy
+        // Wipe and Purge take. `importInventoryCsv` can only roll back to an
+        // in-database snapshot, which dies with the database — so without this
+        // the confirmation's promise of a backup was simply untrue.
+        const gated = await runWithSafetyBackup({
+          action: async () => {
+            const db = await getDb();
+            return importInventoryCsv(
+              inventoryCsv,
+              db as Parameters<typeof importInventoryCsv>[1],
+              { month: staged.month }
+            );
+          },
+          backup: runManualBackup,
+          isDesktop: isTauriRuntime(),
+        });
+        if (!gated.ok) {
+          setProgress(null);
+          toast.error("Nothing was imported — the safety backup failed", {
+            description: gated.error,
+            id: IMPORT_TOAST_ID,
+          });
+          return;
+        }
+        const result = gated.value;
         setProgress(100);
         await new Promise((resolve) => setTimeout(resolve, 140));
         setProgress(null);
@@ -397,7 +417,7 @@ export function ImportCard() {
       id: IMPORT_TOAST_ID,
     });
     setDiff(null);
-  }, [diff]);
+  }, [diff, runManualBackup]);
 
   const handleDiscard = useCallback(() => setDiff(null), []);
   const handleRequestConfirm = useCallback(() => setConfirmOpen(true), []);
