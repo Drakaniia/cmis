@@ -43,13 +43,22 @@ import { REPO_ROOT } from "@/test/project-paths";
 
 // ─── Database location ──────────────────────────────────────────────────────
 
-const APP_IDENTIFIER = "com.cmis.app";
+/**
+ * The **dev** bundle identifier, matching `src-tauri/tauri.dev.conf.json`.
+ *
+ * This script wipes and rewrites the database it opens, so it must never
+ * default to the shipped app's folder — running it against `com.cmis.app`
+ * would destroy the clinic's real inventory. Point `CMIS_DB` at a file
+ * explicitly to target anything else.
+ */
+const APP_IDENTIFIER = "com.cmis.app.dev";
 const DB_FILE = "cmis.db";
 
 /**
  * Mirrors tauri-plugin-sql's `path_mapper`: a `sqlite:<file>` connection string
  * resolves to `<app_config_dir>/<file>`, and the app's config dir is keyed by the
- * bundle identifier from `tauri.conf.json`.
+ * bundle identifier from `tauri.conf.json` (plus the dev overlay under
+ * `tauri dev`).
  */
 function defaultDbPath(): string {
   if (process.platform === "win32") {

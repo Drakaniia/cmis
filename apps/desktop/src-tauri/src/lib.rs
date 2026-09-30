@@ -8,6 +8,19 @@ mod commands;
 /// this exact key.
 const DB_URL: &str = "sqlite:cmis.db";
 
+/// Bundle identifier of the shipped app, from `tauri.conf.json`.
+pub const PROD_IDENTIFIER: &str = "com.cmis.app";
+
+/// Bundle identifier of the dev build, from `tauri.dev.conf.json`.
+///
+/// `pnpm desktop:dev` merges that overlay, which moves `app_data_dir` — and with
+/// it `cmis.db`, the plugin-store file and the restore journal — to its own
+/// folder. Without it the debug binary opens the *shipped* app's database, so
+/// editing a migration that has already run corrupts real clinic data instead
+/// of a scratch copy. That is not hypothetical: it is how migration 13's
+/// checksum drifted and locked the app out of its own database.
+pub const DEV_IDENTIFIER: &str = "com.cmis.app.dev";
+
 /// The device-local schema.
 ///
 /// The `.sql` files in `src-tauri/migrations` are inert on their own — the SQL
@@ -453,5 +466,39 @@ fn handle_menu_event(app: &tauri::AppHandle, event: tauri::menu::MenuEvent) {
     ];
     if CUSTOM_IDS.contains(&id) {
         let _ = app.emit("menu:action", id);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{DEV_IDENTIFIER, PROD_IDENTIFIER};
+
+    /// The dev overlay is a separate JSON file, so the identifier it pins can
+    /// drift from the constant the backup folder is keyed on. If they diverge,
+    /// the dev build writes backups into the clinic's real folder again — the
+    /// exact failure this split exists to prevent, so it is worth a test.
+    #[test]
+    fn dev_config_identifier_matches_the_constant() {
+        let conf: serde_json::Value =
+            serde_json::from_str(include_str!("../tauri.dev.conf.json"))
+                .expect("tauri.dev.conf.json must be valid JSON");
+        assert_eq!(
+            conf["identifier"].as_str(),
+            Some(DEV_IDENTIFIER),
+            "tauri.dev.conf.json identifier has drifted from DEV_IDENTIFIER"
+        );
+    }
+
+    /// Same drift risk for the shipped identifier, which the app_data_dir
+    /// separation is meaningless without.
+    #[test]
+    fn prod_config_identifier_matches_the_constant() {
+        let conf: serde_json::Value =
+            serde_json::from_str(include_str!("../tauri.conf.json")).expect("tauri.conf.json must be valid JSON");
+        assert_eq!(
+            conf["identifier"].as_str(),
+            Some(PROD_IDENTIFIER),
+            "tauri.conf.json identifier has drifted from PROD_IDENTIFIER"
+        );
     }
 }

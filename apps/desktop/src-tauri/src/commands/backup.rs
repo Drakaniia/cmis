@@ -9,6 +9,32 @@
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager};
 
+use crate::DEV_IDENTIFIER;
+
+/// Folder name under `<Documents>` holding the backup files.
+///
+/// Production uses the spec'd `CMIS Backups`. The dev build gets its own folder
+/// because this path is keyed by *document* directory, not by bundle
+/// identifier — so a dev launch would otherwise write `cmis-auto-<today>.db`
+/// into the clinic's real backup folder and then prune that folder down to the
+/// dev store's retention count, deleting genuine backups of real data.
+fn backup_dir_name(identifier: &str) -> &'static str {
+    if identifier == DEV_IDENTIFIER {
+        "CMIS Backups (dev)"
+    } else {
+        "CMIS Backups"
+    }
+}
+
+/// `<Documents>/CMIS Backups` (or its dev sibling) for this build.
+fn backup_dir(app: &AppHandle) -> Result<std::path::PathBuf, String> {
+    let documents = app
+        .path()
+        .document_dir()
+        .map_err(|error| format!("Could not resolve the Documents folder: {error}"))?;
+    Ok(documents.join(backup_dir_name(&app.config().identifier)))
+}
+
 /// Newest migration registered in `lib.rs::db_migrations`. A backup whose
 /// recorded schema version is greater than this is refused (spec D10/F10).
 pub const CURRENT_SCHEMA_VERSION: i64 = 13;
@@ -125,21 +151,15 @@ pub fn sweep_partial_files(dir: &std::path::Path) {
 /// Sweep stray `.partial` files in `<Documents>/CMIS Backups` (spec §9).
 /// Best-effort with logged warnings — never fails the launch.
 pub fn sweep_backup_partials(app: &AppHandle) {
-    let documents = match app.path().document_dir() {
-        Ok(documents) => documents,
-        Err(_) => return,
-    };
-    sweep_partial_files(&documents.join("CMIS Backups"));
+    if let Ok(dir) = backup_dir(app) {
+        sweep_partial_files(&dir);
+    }
 }
 
 /// Resolve and create `<Documents>/CMIS Backups`.
 #[tauri::command]
 pub fn backup_default_dir(app: AppHandle) -> Result<String, String> {
-    let documents = app
-        .path()
-        .document_dir()
-        .map_err(|error| format!("Could not resolve the Documents folder: {error}"))?;
-    let dir = documents.join("CMIS Backups");
+    let dir = backup_dir(&app)?;
     std::fs::create_dir_all(&dir)
         .map_err(|error| format!("Could not create {}: {error}", dir.display()))?;
     Ok(dir.to_string_lossy().to_string())
