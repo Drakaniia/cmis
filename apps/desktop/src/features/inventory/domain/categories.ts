@@ -1,4 +1,5 @@
 import { INVENTORY_CATEGORIES } from "../types";
+import { findTaxonomyByName, normalizeTaxonomyName } from "./taxonomy-name";
 
 /**
  * The category taxonomy, and the rules a name has to satisfy.
@@ -49,7 +50,7 @@ export function newCategoryId(now: number = Date.now()): string {
  * "First Aid" cannot become two categories that look identical in a dropdown.
  */
 export function normalizeCategoryName(raw: string): string {
-  return raw.trim().replace(/\s+/g, " ");
+  return normalizeTaxonomyName(raw);
 }
 
 /**
@@ -68,8 +69,7 @@ export function findCategoryByName(
   name: string,
   existing: readonly string[]
 ): string | null {
-  const needle = normalizeCategoryName(name).toLowerCase();
-  return existing.find((entry) => entry.toLowerCase() === needle) ?? null;
+  return findTaxonomyByName(name, existing);
 }
 
 /**

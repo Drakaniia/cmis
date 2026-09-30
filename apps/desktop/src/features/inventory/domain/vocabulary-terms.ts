@@ -1,3 +1,4 @@
+import { findTaxonomyByName, normalizeTaxonomyName } from "./taxonomy-name";
 import { VOCABULARY_TERM_MAX_LENGTH, type VocabularyKind } from "./vocabulary";
 
 /**
@@ -39,7 +40,7 @@ export function newTermId(now: number = Date.now()): string {
  * stored text being rewritten out from under the operator.
  */
 export function normalizeTermName(raw: string): string {
-  return raw.trim().replace(/\s+/g, " ");
+  return normalizeTaxonomyName(raw);
 }
 
 /**
@@ -63,8 +64,7 @@ export function findTermByName(
   name: string,
   existing: readonly string[]
 ): string | null {
-  const needle = normalizeTermName(name).toLowerCase();
-  return existing.find((entry) => entry.toLowerCase() === needle) ?? null;
+  return findTaxonomyByName(name, existing);
 }
 
 /**
