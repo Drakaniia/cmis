@@ -9,7 +9,8 @@ build
 *.tsbuildinfo
 
 # Generated files
-apps/web/src/routeTree.gen.ts
+# apps/desktop/src/routeTree.gen.ts is intentionally COMMITTED - TanStack Router
+# needs the file at build time, so it is not ignored.
 local.db
 local.db-*
 
@@ -51,16 +52,17 @@ lerna-debug.log*
 coverage
 .nyc_output
 
-# Clinic inventory workbooks — runtime data imported by the user, never tracked or required at build
+# Clinic inventory workbooks - runtime data imported by the user, never tracked or required at build
 AUGUST 2026 inventory*.xlsx
 AUGUST 2026 inventory*.csv
-!docs/public/inventory - TEMPLATE.xlsx
+# Excel lock stubs ("~$" is a leading prefix, so it defeats the "AUGUST 2026 inventory*" rules above)
+~$*
 # Misc
 *.tgz
 .cache
 tmp
 temp
 
-# Python bytecode (scripts/generate-template.py)
+# Python bytecode (scripts/inventory_vocabulary.py)
 __pycache__/
 *.pyc
