@@ -1,5 +1,5 @@
 name: Bug Report
-description: Report a reproducible defect in CMIS (inventory, alerts, queue, dispensing, reports, viewer, admin, offline).
+description: Report a reproducible defect in CMIS (inventory, alerts, queue, dispensing, reports, viewer, admin).
 title: "[Bug] "
 labels: ["bug"]
 assignees: []
@@ -8,7 +8,6 @@ body:
     attributes:
       value: |
         Thanks for filing a bug! Complete the form so we can reproduce it.
-        Before submitting, check `docs/context/CMIS-02-user-stories.md` (role matrix) and `docs/context/CMIS-03-system-flow.md` to confirm expected behavior.
   - type: dropdown
     id: area
     attributes:
@@ -26,8 +25,7 @@ body:
         - Reports & analytics (CMIS-UI-07)
         - Viewer portal (CMIS-UI-08)
         - Admin (CMIS-UI-09)
-        - Offline / Sync (CMIS-03 §4)
-        - Packages (ui / env / config)
+        - Packages (ui / config)
         - Tauri / Desktop build
         - CI / Tooling
     validations:

@@ -35,14 +35,12 @@ body:
         - Queue / Kanban / Dispensing
         - Reports / Analytics
         - Viewer / Admin
-        - Offline / Sync
         - packages/ui
-        - packages/env
         - packages/config
         - apps/desktop (Tauri)
         - .github / CI
         - Root tooling (biome, ultracite, pnpm)
-      default: 11
+      default: 9
     validations:
       required: true
   - type: textarea

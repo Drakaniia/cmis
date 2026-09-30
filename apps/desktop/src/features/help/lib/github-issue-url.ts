@@ -27,8 +27,7 @@ export const AREA_OPTIONS = [
   "Reports & analytics (CMIS-UI-07)",
   "Viewer portal (CMIS-UI-08)",
   "Admin (CMIS-UI-09)",
-  "Offline / Sync (CMIS-03 §4)",
-  "Packages (ui / env / config)",
+  "Packages (ui / config)",
   "Tauri / Desktop build",
   "CI / Tooling",
 ] as const;

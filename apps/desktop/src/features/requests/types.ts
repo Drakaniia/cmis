@@ -1,6 +1,5 @@
 /**
  * CMIS-UI-05 — Request Queue (Kanban Board) domain types.
- * Spec: docs/ui/CMIS-UI-05-request-queue-kanban.md
  *
  * Status colors always pair a color token with text (§3) — never color alone.
  */

@@ -7,17 +7,16 @@ body:
   - type: markdown
     attributes:
       value: |
-        For spec gaps, see `docs/context/` and `docs/spec/` first. Questions about `CMIS-03` open questions belong here.
+        For spec gaps and open product questions, file here.
   - type: dropdown
     id: doc_area
     attributes:
       label: Doc Area
       multiple: true
       options:
-        - context — problem / roles / flows (CMIS-01/02/03)
-        - spec — CMIS-ui-spec
-        - ui — CMIS-UI-00..09
         - README / AGENTS.md
+        - privacy / signing policy
+        - In-app Help sections
         - Other
     validations:
       required: true
@@ -26,7 +25,7 @@ body:
     attributes:
       label: Current State
       description: What does the doc say today? Quote or link.
-      placeholder: CMIS-03 §5 asks whether Viewer claim is auto-approved or Staff-approved — no decision yet.
+      placeholder: The viewer claim policy is unclear — is it auto-approved or Staff-approved?
     validations:
       required: true
   - type: textarea
@@ -45,5 +44,5 @@ body:
     attributes:
       label: Checks
       options:
-        - label: I checked `docs/ui/README.md` and `docs/spec/CMIS-ui-spec.md` for existing coverage.
+        - label: I checked the existing docs and issues for coverage.
           required: true

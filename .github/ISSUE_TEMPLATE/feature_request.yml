@@ -7,7 +7,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Propose one feature per issue. Ground it in `docs/context/CMIS-02-user-stories.md` (role) and `docs/spec/CMIS-ui-spec.md` / `docs/ui/*` if UI is involved.
+        Propose one feature per issue. Say which role benefits and what problem it solves.
   - type: dropdown
     id: area
     attributes:
@@ -25,8 +25,7 @@ body:
         - Reports & analytics (CMIS-UI-07)
         - Viewer portal (CMIS-UI-08)
         - Admin (CMIS-UI-09)
-        - Offline / Sync (CMIS-03 §4)
-        - Packages (ui / env / config)
+        - Packages (ui / config)
         - Tauri / Desktop / Build
         - Tooling / CI / Docs
     validations:
@@ -48,7 +47,7 @@ body:
     id: problem
     attributes:
       label: Problem Statement
-      description: What clinic problem does this solve? Link to pain points in CMIS-01 if relevant.
+      description: What clinic problem does this solve?
       placeholder: Staff must manually check each batch to decide FEFO; errors cause expired dispensing.
     validations:
       required: true
@@ -110,7 +109,7 @@ body:
     attributes:
       label: Checks
       options:
-        - label: I checked `docs/ui/README.md` and existing issues for duplicates.
+        - label: I checked existing issues for duplicates.
           required: true
-        - label: This aligns with the role permission matrix in `CMIS-02` (or proposes a matrix change with rationale).
+        - label: This aligns with the existing role permission matrix (or proposes a matrix change with rationale).
           required: true

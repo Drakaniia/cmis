@@ -2,7 +2,7 @@
 
 ## Summary
 
-<!-- What and why — 1-3 sentences. Link to design doc if applicable: docs/spec/CMIS-ui-spec.md or docs/context/CMIS-*.md -->
+<!-- What and why — 1-3 sentences. Link to the linked issue for context. -->
 
 ## Linked Issues
 
@@ -25,7 +25,7 @@ Closes #
 
 ## Scope / Area
 
-<!-- Check all that apply — aligns with CMIS modules (docs/ui/CMIS-UI-*.md, docs/context/CMIS-03-system-flow.md) -->
+<!-- Check all that apply — aligns with the CMIS module codes (CMIS-UI-00 … CMIS-UI-09) -->
 
 - [ ] Inventory (`CMIS-UI-02`)
 - [ ] Expiry alerts (`CMIS-UI-03`)
@@ -35,11 +35,10 @@ Closes #
 - [ ] Reports & analytics (`CMIS-UI-07`)
 - [ ] Viewer portal (`CMIS-UI-08`)
 - [ ] Admin (`CMIS-UI-09`)
-- [ ] Shell / Navigation / Auth (`CMIS-UI-00`, role matrix in `CMIS-02`)
-- [ ] Offline / Sync (`CMIS-03 §4`)
+- [ ] Shell / Navigation / Auth (`CMIS-UI-00`)
 - [ ] Desktop (Tauri / `apps/desktop`)
-- [ ] Packages (`packages/ui`, `packages/env`, `packages/config`)
-- [ ] Tooling / CI (`biome.jsonc`, `bts.jsonc`, `.github/workflows/*`)
+- [ ] Packages (`packages/ui`, `packages/config`)
+- [ ] Tooling / CI (`biome.jsonc`, `.github/workflows/*`)
 
 ## Roles Impacted
 
@@ -82,9 +81,9 @@ pnpm --filter desktop desktop:dev   # or pnpm run dev:desktop
 - [ ] Ran `pnpm run check-types` — no type errors
 - [ ] Tests added/updated and `pnpm run test` passes
 - [ ] A11y checked — semantic HTML, labels, keyboard + SR path, no `console.log` left
-- [ ] Roles/permissions respected — matches `docs/context/CMIS-02-user-stories.md` matrix
+- [ ] Roles/permissions respected — matches the Admin / Staff / Viewer capability split
 - [ ] Stock flows handle edge cases — FEFO/expiry block, no negative stock, audit linkage
-- [ ] Docs updated if behavior changes — `docs/spec/*`, `docs/ui/*`, or `docs/context/*`
+- [ ] Docs updated if behavior changes — see `docs/` for signing / privacy policy changes
 - [ ] No `dangerouslySetInnerHTML`, `eval`, or `document.cookie` direct assignment
 - [ ] Breaking change noted below (if any)
 
