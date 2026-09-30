@@ -24,10 +24,6 @@
   "license": "MIT",
   "author": "Drakaniia",
   "type": "module",
-  "workspaces": [
-    "apps/*",
-    "packages/*"
-  ],
   "scripts": {
     "build": "vp run -r build",
     "check": "ultracite check",
@@ -52,18 +48,11 @@
   "overrides": {
     "vite": "npm:@voidzero-dev/vite-plus-core@0.3.0"
   },
-  "dependencies": {
-    "@cmis/env": "workspace:*",
-    "dotenv": "catalog:",
-    "zod": "catalog:"
-  },
+  "dependencies": {},
   "devDependencies": {
     "@biomejs/biome": "2.5.9",
     "@cmis/config": "workspace:*",
     "@types/bun": "catalog:",
-    "concurrently": "^10.0.5",
-    "prettier": "^3.9.6",
-    "rolldown": "1.2.6",
     "shadcn": "^4.21.0",
     "typescript": "catalog:",
     "ultracite": "7.10.7",
