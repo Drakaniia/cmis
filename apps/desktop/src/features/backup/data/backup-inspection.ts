@@ -1,7 +1,12 @@
 /** Restore inspection verdicts (backup-restore spec F10.1–F10.2). Pure. */
 
-/** Newest migration in `src-tauri/src/lib.rs::db_migrations`. */
-export const CURRENT_SCHEMA_VERSION = 12;
+/**
+ * Newest migration in `src-tauri/src/lib.rs::db_migrations` — kept equal to
+ * `CURRENT_SCHEMA_VERSION` in `src-tauri/src/commands/backup.rs`. It is what
+ * `stampBackupVersion` writes into `app_meta`, so a lagging value makes a
+ * backup under-report its own schema and weakens the newer-version refusal.
+ */
+export const CURRENT_SCHEMA_VERSION = 13;
 
 export type InspectionCode =
   | "damaged"

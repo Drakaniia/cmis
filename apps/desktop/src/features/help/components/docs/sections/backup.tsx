@@ -67,9 +67,11 @@ export function BackupSection() {
       <DocsP>
         Opening the app with an empty database offers to restore a copy right
         away. A `.db` file dropped on{" "}
-        <DocsRoute to="/admin/data">Data → Import</DocsRoute> opens this same
-        Restore flow with that file pre-selected instead of previewing it as an
-        import.
+        <DocsRoute to="/admin/settings">
+          Settings → Data Export/Import
+        </DocsRoute>{" "}
+        opens this same Restore flow with that file pre-selected instead of
+        previewing it as an import.
       </DocsP>
     </DocsSection>
   );

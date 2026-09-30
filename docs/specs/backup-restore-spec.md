@@ -134,7 +134,8 @@ A long-running session must not silently skip a day.
 - **Automatic copy:** `cmis-auto-YYYY-MM-DD.db` (one per day; local date).
 - **Manual copy ("Back up now"):** `cmis-manual-YYYY-MM-DD-HHmm.db`.
 - **Pre-wipe copy (F7):** `cmis-manual-YYYY-MM-DD-HHmm.db` — the same manual prefix, because it is a deliberate, hand-triggered copy (**D18**, **D22**).
-- **In-progress copy:** `cmis-auto-YYYY-MM-DD.db.partial`, renamed on success only. A `.partial` left behind by a killed process is swept on the next launch and is never treated as a backup.
+- **In-progress copy:** `<final name>.<pid>-<clock>-<n>.partial`, renamed on success only. The scratch name is unique to each attempt and never equal to the final name, because `CMIS Backups` can be a folder two devices share (network path, synced `Documents`): a fixed staging name lets one machine's `VACUUM INTO` open the file the other is still writing, which SQLite reports as `table _sqlx_migrations already exists`.
+- A `.partial` left behind by a killed process — or by a failed attempt, which is cleaned up immediately — is swept on the next launch and is never treated as a backup, listed, or pruned.
 - **Collisions** (two manual copies in the same minute) append `-2`, `-3`, … before `.db`. Nothing is ever overwritten.
 - The live database is never written to by any backup path.
 
@@ -261,6 +262,7 @@ A plain `std::fs::copy` of a database that the app is actively writing to can ca
 - **No silent fallback.** If the consistent copy cannot be produced, the backup **fails** and reports it (F6). Copying a possibly-torn file and calling it a backup is precisely the failure this feature exists to prevent.
 - `VACUUM INTO` refuses to overwrite an existing file, which lines up with the never-overwrite rule in F3: the naming step guarantees the target does not exist, and a collision is resolved by the naming step, not by the copy.
 - The target directory must exist first (`create_dir_all`), and the target must not be inside a path SQLite is holding open.
+- **The finished copy is verified before it is named.** The staging file goes through the same read-only judgement a restore runs (`inspect_backup`: opens as SQLite, `integrity_check` is `ok`, the expected tables are present, the schema version is not newer than this app) and only a copy that passes is renamed into place. This is the "0" in 3-2-1-1-0 — zero errors, confirmed rather than assumed. A copy that fails is discarded, never published, so the next launch cannot adopt an unusable file as today's backup and report protection over it.
 - The resulting file is a normal SQLite database with SQLite's default page settings — the restored app re-runs migrations against it like any other database.
 
 **Where the statement runs.** Preferred: the existing `tauri-plugin-sql` connection the frontend already holds (`VACUUM INTO` accepts an absolute path literal; quote escaping is handled by the caller). If the plugin's statement handling refuses `VACUUM` (it must not run inside a transaction), the command moves into Rust: add `sqlx` with the `sqlite` feature — **matching the version `tauri-plugin-sql` 2.4 already pulls in**, so a second `libsqlite3-sys` is not linked — and run the same statement (or the backup API) there. Either path satisfies D14; the second one keeps the whole file operation in Rust, which is also where `resolve`/`list`/`prune` live.
@@ -275,8 +277,8 @@ All file and database-path work moves behind a small set of commands in a new `s
 |---------|---------|---------|
 | `backup_default_dir` | Resolve and `create_dir_all` `<Documents>/CMIS Backups` | Absolute path |
 | `backup_live_db_path` | Resolve `<app_data>/cmis.db` (and its expected sidecars) | Absolute path |
-| `create_backup(dest_path)` | Produce a **consistent** copy at `dest_path` via `.partial` + rename (§8). Never overwrites | `BackupFileInfo` (name, size, mtime) |
-| `inspect_backup(path)` | Read-only open: `integrity_check`, expected-table presence, recorded app/schema version | `BackupInspection` (ok / reason, version, size, mtime) |
+| `create_backup(dest_path)` | Produce a **consistent** copy at `dest_path` via a per-attempt `.partial` + verify + rename (§8). Never overwrites; an existing destination is adopted only if it verifies | `BackupFileInfo` (name, size, mtime) |
+| `inspect_backup(path)` | Read-only open: `integrity_check`, expected-table presence, recorded app/schema version. Shared with `create_backup`, so the check that gates a restore is the check that gates a publish | `BackupInspection` (ok / reason, version, size, mtime) |
 | `list_backups(dir)` | Every `cmis-*.db` with size, mtime and kind (`auto` \| `manual`) | `BackupFileInfo[]` |
 | `prune_backups(dir, keep)` | Delete only `cmis-auto-*.db` beyond the newest `keep`; sweep `.partial` | `string[]` (removed names) |
 | `apply_restore(source_path)` | Temp copy → remove `-wal`/`-shm` → rename over `cmis.db` → write the restore journal | Path written |

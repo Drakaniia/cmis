@@ -5,6 +5,7 @@ import { loadBackupStore, saveBackupStore } from "@/lib/backup-store";
 import { getDb } from "@/lib/db";
 import { isTauriRuntime } from "@/lib/open-external";
 import { invoke } from "@/lib/tauri";
+import type { BackupInspection } from "../data/backup-inspection";
 import { autoBackupName, localDateKey } from "../data/backup-naming";
 import { shouldRunDailyBackup } from "../data/backup-policy";
 import { writeSafetyBackupFile } from "../data/write-safety-backup";
@@ -36,6 +37,24 @@ function listToday(dir: string): Promise<BackupFileInfo[]> {
   return invoke<BackupFileInfo[]>("list_backups", { dir });
 }
 
+/**
+ * Whether today's file may stand in for a copy of this device's data.
+ *
+ * The name alone is not enough: a shared folder can hold exactly today's name
+ * as a zero-byte placeholder a sync client has not hydrated yet, or as a file
+ * another device left half-written. Adopting one of those records a successful
+ * backup over nothing, which is the one thing the daily run must never do.
+ *
+ * An inspection that cannot run at all (a transient lock) keeps the previous
+ * behaviour — adopt — rather than report a failure that cannot be proven.
+ */
+async function adoptionIsSafe(file: BackupFileInfo): Promise<boolean> {
+  const inspection = await invoke<BackupInspection>("inspect_backup", {
+    path: file.path,
+  }).catch(() => null);
+  return inspection === null || inspection.ok;
+}
+
 /** Adopt today's existing file (spec §7.4) or write it via `create_backup`. */
 async function ensureAutoBackup(
   dir: string,
@@ -44,9 +63,11 @@ async function ensureAutoBackup(
   const wanted = autoBackupName(today);
   const files = await listToday(dir);
   const existing = files.find((file) => file.name === wanted);
-  if (existing) {
+  if (existing && (await adoptionIsSafe(existing))) {
     return existing;
   }
+  // `create_backup` refuses to overwrite the unusable file and says so, so the
+  // banner names it instead of the run going quiet.
   return invoke<BackupFileInfo>("create_backup", {
     destPath: `${dir}/${wanted}`,
   });

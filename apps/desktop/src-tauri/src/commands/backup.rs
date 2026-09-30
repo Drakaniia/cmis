@@ -90,6 +90,87 @@ fn file_info(path: &std::path::Path) -> Result<BackupFileInfo, String> {
     })
 }
 
+/// Scratch file the copy is built in, unique to this attempt.
+///
+/// The staging name must never be deterministic. `CMIS Backups` is a folder two
+/// clinic machines can share — over a network path, or because `Documents` is a
+/// synced folder — and both devices back up on the same calendar day under the
+/// same `cmis-auto-<date>.db` name. With a fixed staging name (`.db.partial`),
+/// one device's `VACUUM INTO` opens the file the other device is still writing
+/// and SQLite aborts with `table _sqlx_migrations already exists`, which reaches
+/// the operator as "backup failed — this device is unprotected". The published
+/// name stays per-day; only the scratch file is per-attempt. It keeps the
+/// `.partial` suffix so `sweep_partial_files` still recognises a leftover.
+fn staging_path(dest: &std::path::Path) -> Result<std::path::PathBuf, String> {
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    /// Distinguishes two attempts started in the same clock tick — the clock
+    /// alone is not a guarantee (Windows file times can be coarse).
+    static ATTEMPT: AtomicU64 = AtomicU64::new(0);
+
+    let name = dest
+        .file_name()
+        .map(|name| name.to_string_lossy().to_string())
+        .ok_or_else(|| {
+            format!(
+                "Refusing to write a backup to {}: no file name",
+                dest.display()
+            )
+        })?;
+    let stamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |elapsed| elapsed.as_nanos());
+    let attempt = ATTEMPT.fetch_add(1, Ordering::Relaxed);
+    Ok(dest.with_file_name(format!(
+        "{name}.{}-{stamp}-{attempt}.partial",
+        std::process::id()
+    )))
+}
+
+/// Delete a scratch copy and any journal SQLite left beside it. Best-effort:
+/// this only ever removes a file the current attempt created.
+fn discard_staging(staging: &std::path::Path) {
+    let _ = std::fs::remove_file(staging);
+    for suffix in ["-journal", "-wal", "-shm"] {
+        let mut sidecar = staging.as_os_str().to_os_string();
+        sidecar.push(suffix);
+        let _ = std::fs::remove_file(std::path::PathBuf::from(sidecar));
+    }
+}
+
+/// Operator-facing hint for the copy failures that come from the folder rather
+/// than from the database: a scratch file another program — or the other device,
+/// through a synced or network folder — is holding or left behind mid-write.
+/// Anything else is reported exactly as SQLite worded it.
+/// Verify a finished scratch copy the way a restore would, before it is given
+/// the backup name — the "0" in 3-2-1-1-0: zero errors, confirmed, not assumed.
+/// A copy that cannot be restored must never be published, because the next
+/// launch adopts whatever holds today's name and would then report protection
+/// over an unusable file.
+async fn verify_copy(staging: &std::path::Path) -> Result<(), String> {
+    match inspect_file(staging).await {
+        Ok(verdict) if verdict.ok => Ok(()),
+        Ok(verdict) => Err(format!(
+            "Backup not written — the finished copy did not verify ({}): {}",
+            verdict.code, verdict.reason
+        )),
+        Err(error) => Err(format!(
+            "Backup not written — the finished copy could not be verified: {error}"
+        )),
+    }
+}
+
+fn copy_failure_hint(message: &str) -> &'static str {
+    let lower = message.to_lowercase();
+    if lower.contains("already exists") {
+        " — another program or the other device is using this backup folder; close it and retry, or back up to a different folder"
+    } else if lower.contains("unable to open database file") {
+        " — the backup folder could not be written to; another program or the other device may be using it"
+    } else {
+        ""
+    }
+}
+
 /// Verdict of `inspect_backup`: read-only, before anything is touched.
 #[derive(Serialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -179,9 +260,14 @@ pub fn backup_live_db_path(app: AppHandle) -> Result<String, String> {
 ///
 /// The copy is produced by SQLite itself (`VACUUM INTO`), so it is valid even
 /// if a write was in flight — a plain file copy can capture a torn page set
-/// and miss the `-wal` sidecar. The copy goes to `<dest>.partial` first and is
-/// renamed into place only on success, so a killed process never leaves a file
-/// that looks like a backup. An existing `dest_path` is never overwritten.
+/// and miss the `-wal` sidecar. The copy goes to a per-attempt `.partial` file
+/// first (see `staging_path`) and is renamed into place only on success, so a
+/// killed process never leaves a file that looks like a backup. It is verified
+/// with the same check a restore runs (`inspect_file`) *before* it is renamed:
+/// a file the app would refuse to restore never gets a backup name. An existing
+/// `dest_path` is never overwritten; if one appears while the copy is being
+/// built — another device publishing today's file into a shared folder — it is
+/// adopted instead, but only if it verifies.
 #[tauri::command]
 pub async fn create_backup(app: AppHandle, dest_path: String) -> Result<BackupFileInfo, String> {
     use sqlx::sqlite::SqliteConnectOptions;
@@ -207,8 +293,8 @@ pub async fn create_backup(app: AppHandle, dest_path: String) -> Result<BackupFi
             live.display()
         ));
     }
-    let partial = dest.with_extension("db.partial");
-    let _ = std::fs::remove_file(&partial);
+    let staging = staging_path(&dest)?;
+    discard_staging(&staging);
 
     let options =
         SqliteConnectOptions::from_str(&format!("sqlite:{}?mode=rw", live.display()))
@@ -217,15 +303,45 @@ pub async fn create_backup(app: AppHandle, dest_path: String) -> Result<BackupFi
     let pool = sqlx::SqlitePool::connect_with(options)
         .await
         .map_err(|error| format!("Could not open the live database: {error}"))?;
-    let target = partial.to_string_lossy().replace('\'', "''");
-    sqlx::query(&format!("VACUUM INTO '{target}'"))
+    let target = staging.to_string_lossy().replace('\'', "''");
+    let copy = sqlx::query(&format!("VACUUM INTO '{target}'"))
         .execute(&pool)
-        .await
-        .map_err(|error| format!("Consistent copy failed (nothing was written): {error}"))?;
+        .await;
     pool.close().await;
+    if let Err(error) = copy {
+        // Never leave the failed attempt's scratch file behind: it holds a
+        // half-written database in the operator's backup folder.
+        discard_staging(&staging);
+        return Err(format!(
+            "Consistent copy failed (nothing was written): {error}{}",
+            copy_failure_hint(&error.to_string())
+        ));
+    }
 
-    std::fs::rename(&partial, &dest)
-        .map_err(|error| format!("Could not publish {dest_path}: {error}"))?;
+    // Verify the staging file, not the published one: nothing that cannot be
+    // restored may ever reach the backup name.
+    if let Err(reason) = verify_copy(&staging).await {
+        discard_staging(&staging);
+        return Err(reason);
+    }
+
+    if dest.exists() {
+        // Another device published today's file while this copy was built. Adopt
+        // it only if it is usable — adopting a half-synced or damaged file would
+        // claim protection this device does not have.
+        let usable = matches!(inspect_file(&dest).await, Ok(verdict) if verdict.ok);
+        discard_staging(&staging);
+        if usable {
+            return file_info(&dest);
+        }
+        return Err(format!(
+            "{dest_path} already exists but is not a usable backup — delete it, then back up again"
+        ));
+    }
+    std::fs::rename(&staging, &dest).map_err(|error| {
+        discard_staging(&staging);
+        format!("Could not publish {dest_path}: {error}")
+    })?;
     file_info(&dest)
 }
 
@@ -302,21 +418,24 @@ pub fn prune_backups(dir: String, keep: u32) -> Result<Vec<String>, String> {
     Ok(removed)
 }
 
-/// Open `path` read-only and verify it is a restorable CMIS database.
+/// Open `file` read-only and judge whether it is a restorable CMIS database.
 ///
 /// Checks, in order: the file opens as SQLite, `PRAGMA integrity_check`
 /// returns `ok`, the expected tables exist, and the recorded schema version
 /// is not newer than this app. Nothing is modified on any path — a refusal
 /// leaves the live database untouched (spec F10.1–F10.2).
-#[tauri::command]
-pub async fn inspect_backup(path: String) -> Result<BackupInspection, String> {
+///
+/// `create_backup` runs this same judgement on the copy it has just written,
+/// so the only two definitions of "a restorable backup" — the one that gates a
+/// restore and the one that gates a publish — cannot drift apart.
+async fn inspect_file(file: &std::path::Path) -> Result<BackupInspection, String> {
     use sqlx::Row;
     use sqlx::sqlite::SqliteConnectOptions;
     use std::str::FromStr;
 
-    let file = std::path::PathBuf::from(&path);
-    let meta = std::fs::metadata(&file)
-        .map_err(|error| format!("Could not read {path}: {error}"))?;
+    let shown = file.to_string_lossy().to_string();
+    let meta =
+        std::fs::metadata(file).map_err(|error| format!("Could not read {shown}: {error}"))?;
     let name = file
         .file_name()
         .map(|name| name.to_string_lossy().to_string())
@@ -346,9 +465,7 @@ pub async fn inspect_backup(path: String) -> Result<BackupInspection, String> {
         "sqlite:{}?mode=ro",
         file.display()
     ))
-    .map_err(|_| {
-        format!("{path} is not a database file and cannot be restored.")
-    })?
+    .map_err(|_| format!("{shown} is not a database file and cannot be restored."))?
     .busy_timeout(std::time::Duration::from_secs(5));
     let pool = sqlx::SqlitePool::connect_with(options).await.map_err(|_| {
         refused(
@@ -396,7 +513,7 @@ pub async fn inspect_backup(path: String) -> Result<BackupInspection, String> {
     let tables: Vec<String> = sqlx::query("SELECT name FROM sqlite_master WHERE type = 'table'")
         .fetch_all(&pool)
         .await
-        .map_err(|error| format!("Could not inspect {path}: {error}"))?
+        .map_err(|error| format!("Could not inspect {shown}: {error}"))?
         .into_iter()
         .filter_map(|row| row.try_get::<String, _>("name").ok())
         .collect();
@@ -476,6 +593,12 @@ pub async fn inspect_backup(path: String) -> Result<BackupInspection, String> {
         mtime,
         name,
     })
+}
+
+/// Read-only verdict on a file the operator picked, before anything is touched.
+#[tauri::command]
+pub async fn inspect_backup(path: String) -> Result<BackupInspection, String> {
+    inspect_file(&std::path::PathBuf::from(&path)).await
 }
 
 /// Replace the live `cmis.db` with `source_path` (spec F10.4).
@@ -604,5 +727,205 @@ pub fn consume_restore_journal(app: AppHandle) -> Result<Option<RestoreJournal>,
         Err(_) => Err(
             "The restore journal was unreadable, so no audit entry was written. The restored data itself is unaffected.".to_string(),
         ),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn scratch_dir(label: &str) -> std::path::PathBuf {
+        let stamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |elapsed| elapsed.as_nanos());
+        let dir = std::env::temp_dir().join(format!("cmis-backup-{label}-{stamp}"));
+        std::fs::create_dir_all(&dir).expect("scratch dir");
+        dir
+    }
+
+    /// `verify_copy` without the async plumbing at every call site.
+    fn verify(path: &std::path::Path) -> Result<(), String> {
+        tauri::async_runtime::block_on(verify_copy(path))
+    }
+
+    /// A database shaped like the live one: the migration ledger, the two
+    /// load-bearing tables a backup must carry, and the version stamp.
+    fn write_cmis_database(path: &std::path::Path, schema_version: i64) {
+        tauri::async_runtime::block_on(async {
+            let options = sqlx::sqlite::SqliteConnectOptions::new()
+                .filename(path)
+                .create_if_missing(true);
+            let pool = sqlx::SqlitePool::connect_with(options)
+                .await
+                .expect("open scratch database");
+            for sql in [
+                "CREATE TABLE _sqlx_migrations (version BIGINT PRIMARY KEY, description TEXT NOT NULL)",
+                "CREATE TABLE inventory_items (id INTEGER PRIMARY KEY, name TEXT)",
+                "CREATE TABLE requests (id INTEGER PRIMARY KEY)",
+                "CREATE TABLE app_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)",
+            ] {
+                sqlx::query(sql).execute(&pool).await.expect("schema");
+            }
+            sqlx::query("INSERT INTO _sqlx_migrations (version, description) VALUES (?1, 'seed')")
+                .bind(schema_version)
+                .execute(&pool)
+                .await
+                .expect("seed ledger");
+            sqlx::query("INSERT INTO app_meta (key, value) VALUES ('backup_schema_version', ?1)")
+                .bind(schema_version.to_string())
+                .execute(&pool)
+                .await
+                .expect("seed stamp");
+            pool.close().await;
+        });
+    }
+
+    #[test]
+    fn verify_accepts_a_finished_cmis_copy() {
+        let dir = scratch_dir("verify-ok");
+        let path = dir.join("cmis-auto-2026-09-30.db");
+        write_cmis_database(&path, CURRENT_SCHEMA_VERSION);
+
+        verify(&path).expect("a real CMIS database must verify");
+        let verdict = tauri::async_runtime::block_on(inspect_file(&path)).expect("inspect");
+        assert!(verdict.ok);
+        assert_eq!(verdict.code, "ok");
+        assert_eq!(verdict.schema_version, Some(CURRENT_SCHEMA_VERSION));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn verify_accepts_a_vacuum_into_copy() {
+        // The end-to-end shape of `create_backup` minus the `AppHandle`: copy the
+        // live database into a staging file, then pass it through the gate that
+        // stands between the copy and the backup name.
+        let dir = scratch_dir("verify-vacuum");
+        let live = dir.join("live.db");
+        write_cmis_database(&live, CURRENT_SCHEMA_VERSION);
+        let staging = dir.join("cmis-auto-2026-09-30.db.1-2-0.partial");
+
+        tauri::async_runtime::block_on(async {
+            let pool = sqlx::SqlitePool::connect_with(
+                sqlx::sqlite::SqliteConnectOptions::new()
+                    .filename(&live)
+                    .create_if_missing(false),
+            )
+            .await
+            .expect("open live database");
+            let target = staging.to_string_lossy().replace('\'', "''");
+            sqlx::query(&format!("VACUUM INTO '{target}'"))
+                .execute(&pool)
+                .await
+                .expect("vacuum into staging");
+            pool.close().await;
+        });
+
+        verify(&staging).expect("a VACUUM INTO copy must verify");
+        let verdict =
+            tauri::async_runtime::block_on(inspect_file(&staging)).expect("inspect the copy");
+        assert!(verdict.ok && verdict.size > 0);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn verify_rejects_a_zero_byte_placeholder() {
+        // What a half-synced folder leaves behind: it opens as an empty
+        // database, so only the expected-tables check catches it.
+        let dir = scratch_dir("verify-empty");
+        let path = dir.join("cmis-auto-2026-09-30.db");
+        std::fs::write(&path, b"").expect("empty file");
+
+        let error = verify(&path).expect_err("an empty file is not a backup");
+        assert!(error.contains("not-cmis"), "{error}");
+        assert!(error.contains("did not verify"), "{error}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn verify_rejects_a_truncated_copy() {
+        let dir = scratch_dir("verify-truncated");
+        let whole = dir.join("whole.db");
+        write_cmis_database(&whole, CURRENT_SCHEMA_VERSION);
+        let bytes = std::fs::read(&whole).expect("read scratch database");
+        assert!(bytes.len() > 1024, "scratch database is too small to truncate");
+        let cut = dir.join("cmis-auto-2026-09-30.db");
+        std::fs::write(&cut, &bytes[..bytes.len() / 2]).expect("truncated copy");
+
+        let error = verify(&cut).expect_err("a truncated copy is not a backup");
+        assert!(error.contains("did not verify"), "{error}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn verify_rejects_a_copy_from_a_newer_app() {
+        let dir = scratch_dir("verify-newer");
+        let path = dir.join("cmis-auto-2026-09-30.db");
+        write_cmis_database(&path, CURRENT_SCHEMA_VERSION + 1);
+
+        let error = verify(&path).expect_err("a newer schema must be refused");
+        assert!(error.contains("newer-version"), "{error}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn staging_files_are_unique_per_attempt() {
+        // The bug this guards: a fixed `<name>.db.partial` is shared state once
+        // two devices back up into one folder, and one device's VACUUM INTO
+        // then opens the other's half-written file.
+        let dest = std::path::PathBuf::from("backups").join("cmis-auto-2026-09-30.db");
+        let first = staging_path(&dest).expect("staging path");
+        let second = staging_path(&dest).expect("staging path");
+        assert_ne!(first, second, "two attempts must not share a scratch file");
+        for path in [&first, &second] {
+            let name = path
+                .file_name()
+                .expect("name")
+                .to_string_lossy()
+                .to_string();
+            assert!(name.starts_with("cmis-auto-2026-09-30.db."), "{name}");
+            // Still swept at launch, still invisible to list and prune.
+            assert!(name.ends_with(".partial"), "{name}");
+            assert_ne!(path, &dest);
+            assert_eq!(path.parent(), dest.parent());
+        }
+    }
+
+    #[test]
+    fn staging_path_never_reuses_the_legacy_partial_name() {
+        // A folder left in the failed state holds `cmis-auto-<date>.db.partial`,
+        // the fixed name the old code staged into. An attempt must not open it.
+        let dest = std::path::PathBuf::from("backups").join("cmis-auto-2026-09-30.db");
+        let legacy = dest.with_extension("db.partial");
+        assert_ne!(staging_path(&dest).expect("staging path"), legacy);
+    }
+
+    #[test]
+    fn staging_path_refuses_a_destination_with_no_file_name() {
+        assert!(staging_path(std::path::Path::new("..")).is_err());
+    }
+
+    #[test]
+    fn discard_staging_removes_the_copy_and_its_sidecars() {
+        let dir = scratch_dir("staging");
+        let staging = dir.join("cmis-auto-2026-09-30.db.1-2-0.partial");
+        std::fs::write(&staging, b"half-written").expect("stage copy");
+        let journal = dir.join("cmis-auto-2026-09-30.db.1-2-0.partial-journal");
+        std::fs::write(&journal, b"journal").expect("stage journal");
+
+        discard_staging(&staging);
+
+        assert!(!staging.exists());
+        assert!(!journal.exists());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn backup_kind_ignores_staging_files() {
+        let staged = staging_path(&std::path::PathBuf::from("cmis-auto-2026-09-30.db"))
+            .expect("staging path");
+        let name = staged.file_name().expect("name").to_string_lossy().to_string();
+        // `prune_backups` sweeps `.partial` and never counts it as a backup.
+        assert_eq!(backup_kind(&name), "other");
+        assert!(name.ends_with(".partial"));
     }
 }
