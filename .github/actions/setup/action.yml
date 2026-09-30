@@ -1,0 +1,19 @@
+name: setup
+description: Checkout, install pnpm/Node from package.json, install dependencies
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/checkout@v4
+
+    # version omitted -> read from package.json "packageManager"
+    - uses: pnpm/action-setup@v4
+
+    # node-version-file -> read from package.json "engines.node"
+    - uses: actions/setup-node@v4
+      with:
+        node-version-file: package.json
+        cache: pnpm
+
+    - run: pnpm install --frozen-lockfile
+      shell: bash
