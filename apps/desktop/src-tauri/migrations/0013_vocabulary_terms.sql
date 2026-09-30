@@ -150,9 +150,9 @@ ORDER BY trim(pack_unit);
 -- invite recording a pack in a container the clinic does not use. A test in
 -- `domain/vocabulary.test.ts` pins this.
 --
--- A unit or form added in the app is likewise unknown to
--- `scripts/generate-template.py`, which writes the workbook's
--- `DataValidation` list from the Python seed tuples. The exporter writes stored
+-- A unit or form added in the app is likewise unknown to the workbook's
+-- `DataValidation` list, which is authored from the Python seed tuples in
+-- `scripts/inventory_vocabulary.py`. The exporter writes stored
 -- values verbatim, so an exported workbook is correct; only a hand-edit of that
 -- cell in Excel is refused. That is the same trade-off the pre-0013
 -- `vocabulary.test.ts` header already documented, and it is the price of the
