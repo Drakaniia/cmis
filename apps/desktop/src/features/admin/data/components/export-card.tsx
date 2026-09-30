@@ -7,13 +7,17 @@ import { toast } from "sonner";
 import { daysInMonth, monthKey } from "@/lib/month";
 import { invoke } from "@/lib/tauri";
 import { SettingsCard } from "../../settings/components/settings-card";
+import { exportOutcome } from "../export-outcome";
 import { useExportCounts } from "../hooks/use-export-counts";
 import type { ExportDataType, ExportFormat } from "../types";
 import { EXPORT_TYPES } from "../types";
 
-/** Rough row counts that decide whether a progress bar is shown (§4.3). */
-const LARGE_EXPORT_THRESHOLD = 500;
-
+/**
+ * Formats with a working writer today. CSV and JSON stay listed because the
+ * spec asks for them, but no exporter exists for them yet, so they are shown
+ * disabled rather than silently producing nothing.
+ */
+const AVAILABLE_FORMATS: ExportFormat[] = ["xlsx"];
 function ExportTypeToggle({
   checked,
   count,
@@ -53,6 +57,7 @@ function FormatOption({
   onSelect: (format: ExportFormat) => void;
   option: ExportFormat;
 }) {
+  const available = AVAILABLE_FORMATS.includes(option);
   const handleChange = useCallback(() => onSelect(option), [onSelect, option]);
 
   return (
@@ -60,11 +65,15 @@ function FormatOption({
       <input
         checked={active}
         className="accent-primary"
+        disabled={!available}
         name="export-format"
         onChange={handleChange}
         type="radio"
       />
       {option.toUpperCase()}
+      {available ? null : (
+        <span className="text-muted-foreground">(not available yet)</span>
+      )}
     </label>
   );
 }
@@ -74,7 +83,7 @@ export function ExportCard() {
   const [selected, setSelected] = useState<ExportDataType[]>(
     EXPORT_TYPES.map((type) => type.id)
   );
-  const [format, setFormat] = useState<ExportFormat>("csv");
+  const [format, setFormat] = useState<ExportFormat>(AVAILABLE_FORMATS[0]);
   const [progress, setProgress] = useState<number | null>(null);
 
   const selectedTypes = EXPORT_TYPES.filter((type) =>
@@ -87,7 +96,6 @@ export function ExportCard() {
   const hasUnknownCounts = selectedTypes.some(
     (type) => counts[type.id] === null
   );
-  const isLarge = selectedRows > LARGE_EXPORT_THRESHOLD;
   const disabled = selected.length === 0 || progress !== null;
 
   const toggle = useCallback((id: ExportDataType) => {
@@ -213,15 +221,19 @@ export function ExportCard() {
     setProgress(null);
 
     const stamp = new Date().toISOString().slice(0, 10);
-    if (webFallbackDone) {
-      toast.success(`Export ready — cmis-export-${stamp}.xlsx`);
-      return;
+    // Only report what actually happened. A success toast for a file that was
+    // never written is how an operator ends up deleting their last copy.
+    const outcome = exportOutcome({
+      format,
+      nativePath: savedTo,
+      stamp,
+      webFallbackDone,
+    });
+    if (outcome.ok) {
+      toast.success("Export ready", { description: outcome.description });
+    } else {
+      toast.error("Export failed", { description: outcome.description });
     }
-    toast.success(
-      savedTo
-        ? `Export saved to ${savedTo}`
-        : `Export ready — cmis-export-${stamp}.${format}`
-    );
   }, [format, selected]);
 
   return (
@@ -285,7 +297,6 @@ export function ExportCard() {
         <p className="text-caption text-muted-foreground">
           {selectedRows.toLocaleString()}
           {hasUnknownCounts ? "+ rows" : " rows"}
-          {isLarge ? " — streams in chunks" : ""}
         </p>
         <Button
           className="press-feedback"
