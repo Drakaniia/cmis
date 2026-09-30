@@ -291,19 +291,21 @@ function RootComponent() {
                     <div className="flex h-svh flex-col overflow-hidden overflow-x-hidden">
                       <TitleBar onToggleSidebar={handleToggle} />
                       <BackupWarningBanner />
-                      {/* CMIS-UI-00 §7 — the header spans the window instead of
-                          the content column, so the page title is anchored to
-                          the left edge and holds still while the rail springs
-                          between widths. The rail starts below it. */}
-                      <Header />
-                      <div className="flex flex-1 overflow-hidden overflow-x-hidden">
+                      {/* The rail fills the full column height and its footer
+                          (version) stays pinned to the bottom; the header lives
+                          in the content column so the page title never sits over
+                          the sidebar as the rail springs between widths. */}
+                      <div className="flex min-h-0 flex-1 overflow-hidden overflow-x-hidden">
                         <AppSidebar
                           collapsed={sidebarCollapsed}
                           onToggle={handleToggle}
                         />
-                        <main className="page-canvas flex-1 overflow-y-auto">
-                          <Outlet />
-                        </main>
+                        <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+                          <Header />
+                          <main className="page-canvas min-h-0 flex-1 overflow-y-auto">
+                            <Outlet />
+                          </main>
+                        </div>
                       </div>
                     </div>
                   )}
