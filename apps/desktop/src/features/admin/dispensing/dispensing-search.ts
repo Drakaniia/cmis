@@ -5,6 +5,8 @@
  * command palette can deep-link straight to a filtered dispensing log.
  */
 
+import { keysEqual } from "@/features/shared/keys-equal";
+import { readString } from "@/features/shared/read-string";
 import type {
   DispensingDatePreset,
   DispensingFilters,
@@ -20,14 +22,6 @@ export interface DispensingSearch {
   requestor?: string;
   staff?: string;
   status?: string;
-}
-
-function readString(value: unknown): string | undefined {
-  if (typeof value !== "string") {
-    return undefined;
-  }
-  const trimmed = value.trim();
-  return trimmed === "" ? undefined : trimmed;
 }
 
 function isPreset(value: string): value is DispensingDatePreset {
@@ -94,13 +88,13 @@ export function dispensingSearchEquals(
   a: DispensingSearch,
   b: DispensingSearch
 ): boolean {
-  return (
-    (a.branch ?? "") === (b.branch ?? "") &&
-    (a.medicine ?? "") === (b.medicine ?? "") &&
-    (a.preset ?? "30d") === (b.preset ?? "30d") &&
-    (a.q ?? "") === (b.q ?? "") &&
-    (a.requestor ?? "") === (b.requestor ?? "") &&
-    (a.staff ?? "") === (b.staff ?? "") &&
-    (a.status ?? "all") === (b.status ?? "all")
-  );
+  return keysEqual(a, b, {
+    branch: "",
+    medicine: "",
+    preset: "30d",
+    q: "",
+    requestor: "",
+    staff: "",
+    status: "all",
+  });
 }

@@ -5,6 +5,8 @@
  * URL is bookmarkable and shareable.
  */
 
+import { keysEqual } from "@/features/shared/keys-equal";
+import { readString } from "@/features/shared/read-string";
 import type { RequestDatePreset, RequestFilters } from "./types";
 import { REQUEST_DATE_PRESETS } from "./types";
 
@@ -18,14 +20,6 @@ export interface RequestsSearch {
   requestor?: string;
   /** Custom range end, ISO date */
   to?: string;
-}
-
-function readString(value: unknown): string | undefined {
-  if (typeof value !== "string") {
-    return undefined;
-  }
-  const trimmed = value.trim();
-  return trimmed === "" ? undefined : trimmed;
 }
 
 export function isRequestDatePreset(value: string): value is RequestDatePreset {
@@ -82,12 +76,12 @@ export function requestsSearchEquals(
   a: RequestsSearch,
   b: RequestsSearch
 ): boolean {
-  return (
-    (a.category ?? "") === (b.category ?? "") &&
-    (a.from ?? "") === (b.from ?? "") &&
-    (a.preset ?? "all") === (b.preset ?? "all") &&
-    (a.q ?? "") === (b.q ?? "") &&
-    (a.requestor ?? "") === (b.requestor ?? "") &&
-    (a.to ?? "") === (b.to ?? "")
-  );
+  return keysEqual(a, b, {
+    category: "",
+    from: "",
+    preset: "all",
+    q: "",
+    requestor: "",
+    to: "",
+  });
 }

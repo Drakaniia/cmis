@@ -5,6 +5,8 @@
  * command palette can deep-link straight to a filtered log (§6).
  */
 
+import { keysEqual } from "@/features/shared/keys-equal";
+import { readString } from "@/features/shared/read-string";
 import type { AuditActionType, AuditDatePreset, AuditFilters } from "./types";
 import {
   AUDIT_ACTION_TYPES,
@@ -19,14 +21,6 @@ export interface AuditSearch {
   /** Free-text search */
   q?: string;
   user?: string;
-}
-
-function readString(value: unknown): string | undefined {
-  if (typeof value !== "string") {
-    return undefined;
-  }
-  const trimmed = value.trim();
-  return trimmed === "" ? undefined : trimmed;
 }
 
 function isPreset(value: string): value is AuditDatePreset {
@@ -80,12 +74,12 @@ export function searchFromFilters(filters: AuditFilters): AuditSearch {
 }
 
 export function auditSearchEquals(a: AuditSearch, b: AuditSearch): boolean {
-  return (
-    (a.actions ?? "") === (b.actions ?? "") &&
-    (a.preset ?? "30d") === (b.preset ?? "30d") &&
-    (a.q ?? "") === (b.q ?? "") &&
-    (a.user ?? "") === (b.user ?? "")
-  );
+  return keysEqual(a, b, {
+    actions: "",
+    preset: "30d",
+    q: "",
+    user: "",
+  });
 }
 
 export const ALL_ACTION_TYPES = AUDIT_ACTION_TYPES;

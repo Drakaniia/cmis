@@ -9,6 +9,8 @@
  * jump: an alert page links here with an id and the page preselects it.
  */
 
+import { keysEqual } from "@/features/shared/keys-equal";
+
 export type InventoryTab = "stock" | "trash";
 
 export interface InventorySearch {
@@ -46,8 +48,5 @@ export function inventorySearchEquals(
   a: InventorySearch,
   b: InventorySearch
 ): boolean {
-  return (
-    (a.tab ?? "stock") === (b.tab ?? "stock") &&
-    (a.item ?? "") === (b.item ?? "")
-  );
+  return keysEqual(a, b, { item: "", tab: "stock" });
 }

@@ -7,17 +7,11 @@
  * close handler clears the URL without leaving `?item=` behind.
  */
 
+import { readString } from "@/features/shared/read-string";
+
 export interface StockDetailSearch {
   batch?: string;
   item?: string;
-}
-
-function readString(value: unknown): string | undefined {
-  if (typeof value !== "string") {
-    return undefined;
-  }
-  const trimmed = value.trim();
-  return trimmed === "" ? undefined : trimmed;
 }
 
 export function validateStockDetailSearch(
