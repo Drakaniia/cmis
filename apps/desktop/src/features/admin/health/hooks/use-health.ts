@@ -1,53 +1,34 @@
 import { useCallback, useEffect, useState } from "react";
 
+import { getDb } from "@/lib/db";
+import type { DbLike } from "@/features/inventory/creation/db-like";
+import { runHealthAction, type HealthActionResult } from "../data/health-actions";
 import type { HealthCardData, HealthCardId, PendingSync } from "../types";
 
-export interface HealthActionResult {
-  description?: string;
-  message: string;
-}
-
 /**
- * CMIS-UI-09 §5 — health state. Actions are diagnostic and rare, so they update
- * a single card in place rather than navigating away.
+ * CMIS-UI-09 §5 — health state.
+ *
+ * Actions run real SQL via `runHealthAction` and report what actually
+ * happened. They used to patch a card and report success without touching the
+ * database, which on a health page is a false all-clear. The measured set
+ * arrives after mount, so it is adopted onto an empty grid, and a card the
+ * operator has already acted on keeps its patched state.
  */
 export function useHealth(
   initialCards?: HealthCardData[],
   initialSyncs?: PendingSync[]
 ) {
   const [cards, setCards] = useState<HealthCardData[]>(initialCards ?? []);
-  const [pendingSyncs, setPendingSyncs] = useState<PendingSync[]>(
-    initialSyncs ?? []
-  );
-  const [online, setOnline] = useState(
+  const [pendingSyncs] = useState<PendingSync[]>(initialSyncs ?? []);
+  const [online] = useState(
     typeof navigator === "undefined" ? true : navigator.onLine
   );
 
-  useEffect(() => {
-    const onOnline = () => setOnline(true);
-    const onOffline = () => setOnline(false);
-    window.addEventListener("online", onOnline);
-    window.addEventListener("offline", onOffline);
-    return () => {
-      window.removeEventListener("online", onOnline);
-      window.removeEventListener("offline", onOffline);
-    };
-  }, []);
-
-  // The measured set arrives after mount (the page's query resolves later), so
-  // it is adopted onto an empty grid. A card the operator has already acted on
-  // keeps its patched state rather than snapping back to the stored numbers.
   useEffect(() => {
     if (initialCards && initialCards.length > 0) {
       setCards((prev) => (prev.length === 0 ? initialCards : prev));
     }
   }, [initialCards]);
-
-  useEffect(() => {
-    if (initialSyncs && initialSyncs.length > 0) {
-      setPendingSyncs((prev) => (prev.length === 0 ? initialSyncs : prev));
-    }
-  }, [initialSyncs]);
 
   const patchCard = useCallback(
     (id: HealthCardId, patch: Partial<HealthCardData>) => {
@@ -59,60 +40,30 @@ export function useHealth(
   );
 
   const runAction = useCallback(
-    (_id: HealthCardId, actionId: string): HealthActionResult | null => {
-      if (actionId === "vacuum") {
-        patchCard("database", {
-          caption: "Vacuumed just now",
-          status: "ok",
-          statusLabel: "Database healthy",
-        });
-        return {
-          description: "SQLite VACUUM completed",
-          message: "Database vacuumed",
-        };
+    async (
+      id: HealthCardId,
+      actionId: string
+    ): Promise<HealthActionResult | null> => {
+      const db = (await getDb()) as unknown as DbLike;
+      const result = await runHealthAction({ actionId, db });
+      if (!result) {
+        return null;
       }
-      if (actionId === "integrity") {
-        patchCard("database", {
-          caption: "Integrity check passed",
+      // Only patch the card on a real success, so a failed check leaves the
+      // previous reading visible instead of claiming a pass.
+      if (result.ok) {
+        patchCard(id, {
+          caption: result.message,
           status: "ok",
-          statusLabel: "Database healthy",
+          statusLabel:
+            id === "database" ? "Database healthy" : "Storage healthy",
         });
-        return {
-          description: "PRAGMA integrity_check returned ok",
-          message: "Integrity check passed",
-        };
+      } else {
+        patchCard(id, { status: "danger", statusLabel: result.message });
       }
-      if (actionId === "clear-cache") {
-        // `metric` is deliberately left alone: it is the measured database size,
-        // and overwriting it with a made-up figure would undo the real readout.
-        patchCard("storage", {
-          caption: "Cache cleared just now",
-          status: "ok",
-          statusLabel: "Storage healthy",
-        });
-        return {
-          description: "Cached renders and thumbnails removed",
-          message: "Cache cleared",
-        };
-      }
-      if (actionId === "retry-sync") {
-        const count = pendingSyncs.length;
-        setPendingSyncs([]);
-        patchCard("sync", {
-          caption: "All records synced",
-          metric: "Synced",
-          status: "ok",
-          statusLabel: "Sync healthy",
-        });
-        return {
-          description:
-            count > 0 ? `${count} records flushed` : "Already synced",
-          message: "Sync retried",
-        };
-      }
-      return null;
+      return result;
     },
-    [patchCard, pendingSyncs.length]
+    [patchCard]
   );
 
   return { cards, online, pendingSyncs, runAction } as const;

@@ -1,5 +1,6 @@
 import type { DbLike } from "@/features/inventory/creation/db-like";
 import type { HealthCardData, PendingSync } from "../types";
+import { syncCardCopy } from "./health-actions";
 
 /**
  * CMIS-UI-09 §5 — the read path behind the System Health cards.
@@ -193,10 +194,7 @@ export async function loadSystemHealth(
 
   const cards: HealthCardData[] = [
     {
-      actions: [
-        { id: "integrity", label: "Check integrity" },
-        { id: "vacuum", label: "Vacuum" },
-      ],
+      actions: [{ id: "integrity", label: "Check integrity" }],
       caption: `${items} items · ${batches} batches · ${trash} in Trash${expired > 0 ? ` · ${expired} expired` : ""}`,
       id: "database",
       metric: formatBytes(sizeBytes),
@@ -207,7 +205,7 @@ export async function loadSystemHealth(
       trend: dispensedTrend,
     },
     {
-      actions: [{ id: "clear-cache", label: "Clear cache" }],
+      actions: [{ id: "vacuum", label: "Reclaim space" }],
       caption: `${formatBytes(sizeBytes)} used of ${formatBytes(STORAGE_CAPACITY_BYTES)}`,
       id: "storage",
       metric: `${Math.max(1, Math.round((sizeBytes / STORAGE_CAPACITY_BYTES) * 100))}%`,
@@ -217,14 +215,15 @@ export async function loadSystemHealth(
       trend: auditTrend,
     },
     {
-      actions: [{ id: "retry-sync", label: "Retry sync" }],
-      caption:
-        "This device is local-only — every change is written straight through",
+      // No action, and no pending table: there is no queue to retry. The card
+      // states the real storage model instead of implying a sync pipeline.
+      actions: [],
+      caption: syncCardCopy.caption,
       id: "sync",
-      metric: "Synced",
+      metric: syncCardCopy.metric,
       status: "ok",
-      statusLabel: "Sync healthy",
-      title: "Sync",
+      statusLabel: syncCardCopy.statusLabel,
+      title: syncCardCopy.title,
       trend: requestTrend,
     },
     buildBackupCard(backup),
@@ -244,8 +243,9 @@ export async function loadSystemHealth(
 
   return {
     cards,
-    // Nothing is queued: this app writes to SQLite directly, so the pending
-    // table is legitimately empty and the card says "all synced".
+    // Retained for the type shape only. There is no queue: this app writes to
+    // SQLite directly, so nothing is ever pending and nothing needs retrying.
+    // The health page no longer renders a pending-sync table.
     pendingSyncs: [],
   };
 }
