@@ -66,20 +66,22 @@ export function HealthPage() {
       }
       // Every other action runs real SQL and reports what actually happened —
       // a failed integrity check now says so instead of claiming a pass.
-      void (async () => {
-        const result = await runAction(id, action.id);
-        if (!result) {
-          return;
-        }
-        if (result.ok) {
-          toast.success(result.message, { description: result.description });
-        } else {
-          toast.error(result.message, { description: result.description });
-        }
-        await queryClient
-          .invalidateQueries({ queryKey: [SYSTEM_HEALTH_KEY] })
-          .catch(() => undefined);
-      })();
+      runAction(id, action.id)
+        .then((result) => {
+          if (!result) {
+            return;
+          }
+          if (result.ok) {
+            toast.success(result.message, { description: result.description });
+          } else {
+            toast.error(result.message, { description: result.description });
+          }
+        })
+        .finally(() => {
+          queryClient
+            .invalidateQueries({ queryKey: [SYSTEM_HEALTH_KEY] })
+            .catch(() => undefined);
+        });
     },
     [navigate, queryClient, runAction, runManualBackup]
   );
