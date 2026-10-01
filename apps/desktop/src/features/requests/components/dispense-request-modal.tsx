@@ -72,11 +72,13 @@ export function DispenseRequestModal({
   const canConfirm = Boolean(plan?.ok);
 
   const transformOrigin = (() => {
-    if (!open || !_originRect) return "center center";
+    if (!(open && _originRect)) {
+      return "center center";
+    }
     const cx = _originRect.left + _originRect.width / 2;
     const cy = _originRect.top + _originRect.height / 2;
-    const vw = typeof window !== "undefined" ? window.innerWidth : 800;
-    const vh = typeof window !== "undefined" ? window.innerHeight : 600;
+    const vw = typeof window === "undefined" ? 800 : window.innerWidth;
+    const vh = typeof window === "undefined" ? 600 : window.innerHeight;
     return `${((cx / vw) * 100).toFixed(1)}% ${((cy / vh) * 100).toFixed(1)}%`;
   })();
 
@@ -93,18 +95,14 @@ export function DispenseRequestModal({
             onClick={handleClose}
             transition={{ duration: 0.22 }}
           />
-          <div
-            className="fixed inset-0 z-[60] flex items-center justify-center p-3 sm:p-6"
-            onClick={handleClose}
-          >
+          <div className="pointer-events-none fixed inset-0 z-[60] flex items-center justify-center p-3 sm:p-6">
             <motion.div
               animate="animate"
               aria-label={`Dispense ${request.medicine}`}
               aria-modal="true"
-              className="surface-frosted flex max-h-[86vh] w-full max-w-[480px] flex-col overflow-hidden rounded-[20px] border border-white/20 shadow-[0_8px_32px_oklch(0_0_0/0.14),0_1px_4px_oklch(0_0_0/0.08),inset_0_1px_0_oklch(1_0_0/0.6)] dark:border-white/10"
+              className="surface-frosted pointer-events-auto flex max-h-[86vh] w-full max-w-[480px] flex-col overflow-hidden rounded-[20px] border border-white/20 shadow-[0_8px_32px_oklch(0_0_0/0.14),0_1px_4px_oklch(0_0_0/0.08),inset_0_1px_0_oklch(1_0_0/0.6)] dark:border-white/10"
               exit="exit"
               initial={reduceMotion ? "animate" : "initial"}
-              onClick={(event) => event.stopPropagation()}
               role="dialog"
               style={{
                 transformOrigin,
@@ -114,7 +112,7 @@ export function DispenseRequestModal({
               variants={materializeEnter}
             >
               <div className="flex shrink-0 items-center justify-between border-border/40 border-b bg-card/40 px-4 py-3 backdrop-blur-[8px]">
-                <h2 className="font-semibold text-[14px] tracking-[-0.01em] text-foreground">
+                <h2 className="font-semibold text-[14px] text-foreground tracking-[-0.01em]">
                   Dispense to {requestorLabel(request)}
                 </h2>
                 <Button
@@ -130,16 +128,16 @@ export function DispenseRequestModal({
 
               <div className="min-h-0 flex-1 space-y-3 overflow-auto bg-gradient-to-b from-transparent to-muted/10 p-4">
                 <div className="rounded-xl border border-border/40 bg-card/70 p-3.5 shadow-sm backdrop-blur-sm">
-                  <p className="font-semibold text-[13px] tracking-[-0.01em] text-foreground">
+                  <p className="font-semibold text-[13px] text-foreground tracking-[-0.01em]">
                     {request.medicine}
                   </p>
-                  <p className="mt-1 inline-flex items-center gap-1.5 rounded-full bg-muted px-2 py-0.5 font-mono text-[11px] tracking-[0.02em] text-muted-foreground tabular-nums">
+                  <p className="mt-1 inline-flex items-center gap-1.5 rounded-full bg-muted px-2 py-0.5 font-mono text-[11px] text-muted-foreground tabular-nums tracking-[0.02em]">
                     {request.id} · {request.qty} {request.unit}
                   </p>
                 </div>
 
                 {planQuery.isPending ? (
-                  <p className="rounded-xl border border-border/40 border-dashed bg-card/40 px-3 py-6 text-center text-[12px] tracking-[0.01em] text-muted-foreground">
+                  <p className="rounded-xl border border-border/40 border-dashed bg-card/40 px-3 py-6 text-center text-[12px] text-muted-foreground tracking-[0.01em]">
                     Checking what is on the shelf…
                   </p>
                 ) : null}
@@ -154,10 +152,10 @@ export function DispenseRequestModal({
                       className="mt-0.5 size-4 shrink-0 text-destructive"
                     />
                     <div>
-                      <p className="font-semibold text-[13px] tracking-[-0.01em] text-destructive">
+                      <p className="font-semibold text-[13px] text-destructive tracking-[-0.01em]">
                         Cannot be dispensed now
                       </p>
-                      <p className="mt-1 text-[12px] leading-[1.5] tracking-[0.01em] text-muted-foreground">
+                      <p className="mt-1 text-[12px] text-muted-foreground leading-[1.5] tracking-[0.01em]">
                         {blocked.message}
                       </p>
                     </div>
@@ -167,7 +165,7 @@ export function DispenseRequestModal({
                 {plan?.ok ? (
                   <>
                     <section className="space-y-2 rounded-xl border border-border/40 bg-card/50 p-3 backdrop-blur-sm">
-                      <h3 className="font-semibold text-[11px] tracking-[0.08em] text-muted-foreground uppercase">
+                      <h3 className="font-semibold text-[11px] text-muted-foreground uppercase tracking-[0.08em]">
                         Will come off the shelf — earliest expiry first
                       </h3>
                       <ul className="space-y-2">
@@ -177,21 +175,22 @@ export function DispenseRequestModal({
                             key={take.batch}
                           >
                             <span className="min-w-0">
-                              <span className="block truncate font-semibold text-[12px] tracking-[-0.01em] text-foreground tabular-nums">
+                              <span className="block truncate font-semibold text-[12px] text-foreground tabular-nums tracking-[-0.01em]">
                                 {take.batch}
                               </span>
-                              <span className="block text-[11px] tracking-[0.01em] text-muted-foreground">
+                              <span className="block text-[11px] text-muted-foreground tracking-[0.01em]">
                                 exp {expiryLabel(take.expiry)}
                               </span>
                             </span>
-                            <span className="shrink-0 rounded-full bg-foreground px-2.5 py-1 font-semibold text-[11px] tracking-[0.02em] text-background tabular-nums">
+                            <span className="shrink-0 rounded-full bg-foreground px-2.5 py-1 font-semibold text-[11px] text-background tabular-nums tracking-[0.02em]">
                               {take.qty} {request.unit}
                             </span>
                           </li>
                         ))}
                       </ul>
-                      <p className="text-[11px] tracking-[0.01em] text-muted-foreground tabular-nums">
-                        {plan.plan.leftAfter} {request.unit} left on the shelf afterwards.
+                      <p className="text-[11px] text-muted-foreground tabular-nums tracking-[0.01em]">
+                        {plan.plan.leftAfter} {request.unit} left on the shelf
+                        afterwards.
                       </p>
                     </section>
 
@@ -208,20 +207,25 @@ export function DispenseRequestModal({
                           className="mt-0.5 size-4 shrink-0 text-[var(--warning)]"
                         />
                         <div>
-                          <p className="font-semibold text-[13px] tracking-[-0.01em] text-foreground">
-                            Partial hand-over — {plan.plan.take} of {plan.plan.requested}{" "}
-                            {request.unit}
+                          <p className="font-semibold text-[13px] text-foreground tracking-[-0.01em]">
+                            Partial hand-over — {plan.plan.take} of{" "}
+                            {plan.plan.requested} {request.unit}
                           </p>
-                          <p className="mt-1 text-[12px] leading-[1.5] tracking-[0.01em] text-muted-foreground">
-                            Only {plan.plan.take} {request.unit} can be taken now. The card stays in
-                            Ready to Claim showing {plan.plan.remaining} {request.unit}.
+                          <p className="mt-1 text-[12px] text-muted-foreground leading-[1.5] tracking-[0.01em]">
+                            Only {plan.plan.take} {request.unit} can be taken
+                            now. The card stays in Ready to Claim showing{" "}
+                            {plan.plan.remaining} {request.unit}.
                           </p>
                         </div>
                       </div>
                     ) : (
-                      <p className="flex items-center gap-2 rounded-xl bg-[var(--success)]/8 px-3 py-2.5 text-[12px] tracking-[0.01em] text-muted-foreground">
-                        <CheckCircle2 aria-hidden className="size-4 text-[var(--success)]" />
-                        Everything requested is covered — the card moves to Claimed.
+                      <p className="flex items-center gap-2 rounded-xl bg-[var(--success)]/8 px-3 py-2.5 text-[12px] text-muted-foreground tracking-[0.01em]">
+                        <CheckCircle2
+                          aria-hidden
+                          className="size-4 text-[var(--success)]"
+                        />
+                        Everything requested is covered — the card moves to
+                        Claimed.
                       </p>
                     )}
                   </>
@@ -243,7 +247,9 @@ export function DispenseRequestModal({
                   onClick={handleConfirm}
                   size="sm"
                 >
-                  {partial ? "Dispense what is available" : "Confirm dispensing"}
+                  {partial
+                    ? "Dispense what is available"
+                    : "Confirm dispensing"}
                 </Button>
               </div>
             </motion.div>

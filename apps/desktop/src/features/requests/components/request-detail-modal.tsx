@@ -51,7 +51,7 @@ import { RequestStatusBadge } from "./request-status-badge";
  */
 function SectionHeading({ children }: { children: ReactNode }) {
   return (
-    <h3 className="font-semibold text-[11px] tracking-[0.08em] text-muted-foreground uppercase">
+    <h3 className="font-semibold text-[11px] text-muted-foreground uppercase tracking-[0.08em]">
       {children}
     </h3>
   );
@@ -61,7 +61,7 @@ function StatusHistorySection({ history }: { history: StatusHistoryEntry[] }) {
   return (
     <section className="space-y-3 rounded-xl border border-border/40 bg-card/50 p-3 backdrop-blur-sm">
       <SectionHeading>Status history</SectionHeading>
-      <ol className="relative space-y-0 border-l border-border/40 pl-4">
+      <ol className="relative space-y-0 border-border/40 border-l pl-4">
         {history.map((entry, idx) => (
           <li
             className="relative flex items-start gap-3 pb-4 last:pb-0"
@@ -70,7 +70,7 @@ function StatusHistorySection({ history }: { history: StatusHistoryEntry[] }) {
             <span
               aria-hidden
               className={cn(
-                "absolute -left-[21px] mt-1 size-2.5 shrink-0 rounded-full ring-2 ring-card shadow-[0_0_6px_currentColor]",
+                "absolute -left-[21px] mt-1 size-2.5 shrink-0 rounded-full shadow-[0_0_6px_currentColor] ring-2 ring-card",
                 statusMetaOf(entry.to).accent,
                 idx === history.length - 1 && "animate-pulse"
               )}
@@ -82,13 +82,13 @@ function StatusHistorySection({ history }: { history: StatusHistoryEntry[] }) {
                     ? `${statusMetaOf(entry.from).label} → ${statusMetaOf(entry.to).label}`
                     : "Submitted"}
                 </span>
-                <span className="ml-1.5 rounded-full bg-muted px-1.5 py-0.5 font-mono text-[10px] tracking-[0.02em] text-muted-foreground">
+                <span className="ml-1.5 rounded-full bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground tracking-[0.02em]">
                   {compactDateTimeLabel(entry.at)}
                 </span>
                 <span className="ml-1 text-muted-foreground">· {entry.by}</span>
               </span>
               {entry.note ? (
-                <span className="mt-1 block rounded-lg bg-muted/50 px-2 py-1 text-[12px] leading-[1.4] text-muted-foreground">
+                <span className="mt-1 block rounded-lg bg-muted/50 px-2 py-1 text-[12px] text-muted-foreground leading-[1.4]">
                   {entry.note}
                 </span>
               ) : null}
@@ -125,7 +125,7 @@ function InternalNotesSection({
   return (
     <section className="space-y-3 rounded-xl border border-border/40 bg-card/50 p-3 backdrop-blur-sm">
       <SectionHeading>Internal notes</SectionHeading>
-      <p className="text-[11px] tracking-[0.01em] text-muted-foreground">
+      <p className="text-[11px] text-muted-foreground tracking-[0.01em]">
         Staff-only · never shown to the viewer
       </p>
       {item.notes.length > 0 ? (
@@ -135,17 +135,17 @@ function InternalNotesSection({
               className="rounded-xl border border-border/40 bg-card px-3 py-2.5 shadow-sm"
               key={`${entry.at}-${entry.author}`}
             >
-              <p className="text-[13px] leading-[1.5] tracking-[0.01em] text-foreground">
+              <p className="text-[13px] text-foreground leading-[1.5] tracking-[0.01em]">
                 {entry.text}
               </p>
-              <p className="mt-1 text-[11px] tracking-[0.01em] text-muted-foreground">
+              <p className="mt-1 text-[11px] text-muted-foreground tracking-[0.01em]">
                 {entry.author} · {compactDateTimeLabel(entry.at)}
               </p>
             </li>
           ))}
         </ul>
       ) : null}
-      <label className="block text-[12px] font-medium tracking-[0.01em] text-muted-foreground">
+      <label className="block font-medium text-[12px] text-muted-foreground tracking-[0.01em]">
         Add note
         <textarea
           className="mt-1.5 min-h-[64px] w-full rounded-xl border border-border/60 bg-background px-3 py-2.5 text-[13px] leading-[1.5] shadow-[inset_0_1px_2px_oklch(0_0_0/0.04)] outline-none placeholder:text-muted-foreground/60 focus:border-ring/60 focus:bg-card focus:ring-2 focus:ring-ring/20"
@@ -221,12 +221,15 @@ function DispensingRecordsSection({
             className="rounded-xl border border-border/40 bg-card px-3 py-2.5 shadow-sm"
             key={`${record.at}-${record.batch}`}
           >
-            <p className="text-[13px] font-medium tracking-[-0.01em] text-foreground tabular-nums">
-              {record.batch === "" ? "No batch recorded" : `Batch ${record.batch}`} · {record.qty}{" "}
-              {unit}
+            <p className="font-medium text-[13px] text-foreground tabular-nums tracking-[-0.01em]">
+              {record.batch === ""
+                ? "No batch recorded"
+                : `Batch ${record.batch}`}{" "}
+              · {record.qty} {unit}
             </p>
-            <p className="mt-1 text-[11px] tracking-[0.01em] text-muted-foreground">
-              Dispensed {compactDateTimeLabel(record.at)} by {record.staff} · exp {record.expiry}
+            <p className="mt-1 text-[11px] text-muted-foreground tracking-[0.01em]">
+              Dispensed {compactDateTimeLabel(record.at)} by {record.staff} ·
+              exp {record.expiry}
             </p>
           </li>
         ))}
@@ -247,19 +250,21 @@ function RequestorSection({ item }: { item: RequestItem }) {
   return (
     <section className="space-y-2 rounded-xl border border-border/40 bg-card/50 p-3 backdrop-blur-sm">
       <SectionHeading>Requestor</SectionHeading>
-      <p className="font-semibold text-[14px] tracking-[-0.01em] text-foreground">
+      <p className="font-semibold text-[14px] text-foreground tracking-[-0.01em]">
         {requestorLabel(item)}{" "}
         {id ? (
-          <span className="rounded-full bg-muted px-2 py-0.5 font-mono text-[11px] font-normal tracking-[0.02em] text-muted-foreground">
+          <span className="rounded-full bg-muted px-2 py-0.5 font-mono font-normal text-[11px] text-muted-foreground tracking-[0.02em]">
             {id}
           </span>
         ) : null}
       </p>
       {email ? (
-        <p className="text-[12px] tracking-[0.01em] text-muted-foreground">{email}</p>
+        <p className="text-[12px] text-muted-foreground tracking-[0.01em]">
+          {email}
+        </p>
       ) : null}
       {anonymous ? (
-        <p className="rounded-lg bg-amber-500/8 px-2.5 py-1.5 text-[11px] tracking-[0.01em] text-amber-700 dark:text-amber-300">
+        <p className="rounded-lg bg-amber-500/8 px-2.5 py-1.5 text-[11px] text-amber-700 tracking-[0.01em] dark:text-amber-300">
           Anonymous — no requestor details were recorded.
         </p>
       ) : null}
@@ -274,27 +279,27 @@ function RequestSection({ item }: { item: RequestItem }) {
   return (
     <section className="space-y-2 rounded-xl border border-border/40 bg-card/50 p-3 backdrop-blur-sm">
       <SectionHeading>Request</SectionHeading>
-      <p className="text-[13px] font-medium tracking-[-0.01em] text-foreground">
+      <p className="font-medium text-[13px] text-foreground tracking-[-0.01em]">
         {item.medicine}{" "}
-        <span className="rounded-full border border-border/60 bg-card px-2 py-0.5 text-[11px] tracking-[0.01em] text-muted-foreground">
+        <span className="rounded-full border border-border/60 bg-card px-2 py-0.5 text-[11px] text-muted-foreground tracking-[0.01em]">
           {item.category}
         </span>
       </p>
-      <p className="inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-muted/60 px-2.5 py-1 text-[11px] tracking-[0.01em] text-foreground tabular-nums">
+      <p className="inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-muted/60 px-2.5 py-1 text-[11px] text-foreground tabular-nums tracking-[0.01em]">
         {requestQuantityLabel(item)} · {item.id}
       </p>
-      <p className="text-[12px] leading-[1.5] text-foreground">
+      <p className="text-[12px] text-foreground leading-[1.5]">
         <span className="font-medium">Reason:</span>{" "}
         <span className="text-muted-foreground">{reason || "—"}</span>
       </p>
       {quickDeduct ? (
-        <p className="rounded-lg border border-amber-500/15 bg-amber-500/8 px-2.5 py-1.5 text-[11px] leading-[1.4] tracking-[0.01em] text-amber-700 dark:text-amber-300">
-          {QUICK_DEDUCT_LABEL} — taken straight off the shelf at the counter, outside the approval
-          workflow.
+        <p className="rounded-lg border border-amber-500/15 bg-amber-500/8 px-2.5 py-1.5 text-[11px] text-amber-700 leading-[1.4] tracking-[0.01em] dark:text-amber-300">
+          {QUICK_DEDUCT_LABEL} — taken straight off the shelf at the counter,
+          outside the approval workflow.
         </p>
       ) : null}
       {item.deniedReason ? (
-        <p className="rounded-lg border border-destructive/20 bg-destructive/5 px-2.5 py-1.5 text-[11px] leading-[1.4] tracking-[0.01em] text-destructive">
+        <p className="rounded-lg border border-destructive/20 bg-destructive/5 px-2.5 py-1.5 text-[11px] text-destructive leading-[1.4] tracking-[0.01em]">
           Denied — {item.deniedReason}
           {item.deniedNote ? `: ${item.deniedNote}` : ""}
         </p>
@@ -483,11 +488,13 @@ export function RequestDetailModal({
   }
 
   const transformOrigin = (() => {
-    if (!open || !_originRect) return "center center";
+    if (!(open && _originRect)) {
+      return "center center";
+    }
     const cx = _originRect.left + _originRect.width / 2;
     const cy = _originRect.top + _originRect.height / 2;
-    const vw = typeof window !== "undefined" ? window.innerWidth : 800;
-    const vh = typeof window !== "undefined" ? window.innerHeight : 600;
+    const vw = typeof window === "undefined" ? 800 : window.innerWidth;
+    const vh = typeof window === "undefined" ? 600 : window.innerHeight;
     const ox = ((cx / vw) * 100).toFixed(1);
     const oy = ((cy / vh) * 100).toFixed(1);
     return `${ox}% ${oy}%`;
@@ -506,18 +513,14 @@ export function RequestDetailModal({
             onClick={handleClose}
             transition={{ duration: 0.22 }}
           />
-          <div
-            className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6"
-            onClick={handleClose}
-          >
+          <div className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6">
             <motion.div
               animate="animate"
               aria-label={`Request details for ${requestorLabel(item)}`}
               aria-modal="true"
-              className="surface-frosted relative flex max-h-[86vh] w-full max-w-[520px] flex-col overflow-hidden rounded-[20px] border border-white/20 shadow-[0_8px_32px_oklch(0_0_0/0.12),0_1px_4px_oklch(0_0_0/0.08),inset_0_1px_0_oklch(1_0_0/0.6)] dark:border-white/10"
+              className="surface-frosted pointer-events-auto relative flex max-h-[86vh] w-full max-w-[520px] flex-col overflow-hidden rounded-[20px] border border-white/20 shadow-[0_8px_32px_oklch(0_0_0/0.12),0_1px_4px_oklch(0_0_0/0.08),inset_0_1px_0_oklch(1_0_0/0.6)] dark:border-white/10"
               exit="exit"
               initial={reduceMotion ? "animate" : "initial"}
-              onClick={(event) => event.stopPropagation()}
               role="dialog"
               style={{
                 transformOrigin,
@@ -539,7 +542,7 @@ export function RequestDetailModal({
 
               <div
                 className={cn(
-                  "shrink-0 touch-none border-b border-border/40 bg-card/40 backdrop-blur-[8px]",
+                  "shrink-0 touch-none border-border/40 border-b bg-card/40 backdrop-blur-[8px]",
                   reduceMotion ? "" : "cursor-grab active:cursor-grabbing"
                 )}
                 onPointerDown={handlePointerDown}
@@ -547,13 +550,16 @@ export function RequestDetailModal({
                 onPointerUp={handlePointerUp}
               >
                 <div className="flex justify-center pt-3 pb-1">
-                  <div aria-hidden className="h-1 w-10 rounded-full bg-border/60" />
+                  <div
+                    aria-hidden
+                    className="h-1 w-10 rounded-full bg-border/60"
+                  />
                 </div>
                 <div className="px-5 pb-3">
-                  <h2 className="font-semibold text-[17px] tracking-[-0.02em] text-foreground">
+                  <h2 className="font-semibold text-[17px] text-foreground tracking-[-0.02em]">
                     Request details
                   </h2>
-                  <p className="mt-0.5 text-[12px] tracking-[0.01em] text-muted-foreground">
+                  <p className="mt-0.5 text-[12px] text-muted-foreground tracking-[0.01em]">
                     {item.id} · {statusMetaOf(item.status).label}
                   </p>
                 </div>
@@ -566,7 +572,7 @@ export function RequestDetailModal({
 
                 <section className="space-y-2 rounded-xl border border-border/40 bg-card/50 p-3 backdrop-blur-sm">
                   <SectionHeading>Submitted</SectionHeading>
-                  <p className="font-mono text-[12px] tracking-[0.01em] text-foreground tabular-nums">
+                  <p className="font-mono text-[12px] text-foreground tabular-nums tracking-[0.01em]">
                     {absoluteDateTimeLabel(item.submittedAt)}
                   </p>
                   <RequestStatusBadge size="md" status={item.status} />
@@ -589,18 +595,20 @@ export function RequestDetailModal({
                 ) : null}
 
                 {isPartiallyDispensed(item) ? (
-                  <p className="rounded-xl border border-[var(--warning)]/20 bg-[var(--warning)]/8 px-3 py-2.5 text-[12px] leading-[1.5] tracking-[0.01em] text-amber-700 dark:text-amber-300">
+                  <p className="rounded-xl border border-[var(--warning)]/20 bg-[var(--warning)]/8 px-3 py-2.5 text-[12px] text-amber-700 leading-[1.5] tracking-[0.01em] dark:text-amber-300">
                     Partly dispensed —{" "}
-                    <span className="font-semibold tabular-nums">{dispensedTotal(item)}</span>{" "}
-                    {item.baseUnit ?? item.unit} handed over so far, {requestQuantityLabel(item)}{" "}
-                    still waiting.
+                    <span className="font-semibold tabular-nums">
+                      {dispensedTotal(item)}
+                    </span>{" "}
+                    {item.baseUnit ?? item.unit} handed over so far,{" "}
+                    {requestQuantityLabel(item)} still waiting.
                   </p>
                 ) : null}
 
                 {item.status === "claimed" ? (
-                  <p className="rounded-xl bg-muted/40 px-3 py-2 text-[11px] leading-[1.5] tracking-[0.01em] text-muted-foreground">
-                    Complete — the dispensing record above is the audit source. Corrections go
-                    through the audit log.
+                  <p className="rounded-xl bg-muted/40 px-3 py-2 text-[11px] text-muted-foreground leading-[1.5] tracking-[0.01em]">
+                    Complete — the dispensing record above is the audit source.
+                    Corrections go through the audit log.
                   </p>
                 ) : null}
               </div>
