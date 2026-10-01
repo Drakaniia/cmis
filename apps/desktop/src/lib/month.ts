@@ -49,9 +49,11 @@ export function monthRange(month: string): { end: string; start: string } {
   };
 }
 
+const MONTH_KEY = /^\d{4}-\d{2}$/;
+
 /** `true` if `value` is a valid `YYYY-MM` key. */
 export function isMonthKey(value: string): boolean {
-  return /^\d{4}-\d{2}$/.test(value) && daysInMonth(value) > 0;
+  return MONTH_KEY.test(value) && daysInMonth(value) > 0;
 }
 
 /** Human label for a `YYYY-MM` key — e.g. `2026-09` → `September 2026`. */
