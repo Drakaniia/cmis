@@ -26,6 +26,7 @@ import {
   X,
 } from "lucide-react";
 import { motion, useReducedMotion } from "motion/react";
+import type { MouseEvent } from "react";
 import { useCallback, useMemo, useState } from "react";
 import {
   coerceMonthKey,
@@ -102,9 +103,27 @@ export function DashboardMonthFilter({
     setOpen(false);
   }, [current, onChange]);
 
+  const handleResetClick = useCallback(
+    (event: MouseEvent<HTMLButtonElement>) => {
+      event.stopPropagation();
+      handleReset();
+    },
+    [handleReset]
+  );
+
   const monthGridKeys = useMemo(
     () => MONTHS.map((_, i) => keyFor(visibleYear, i + 1)),
     [visibleYear]
+  );
+
+  // One stable handler per cell, keyed by month key, so the grid buttons don't
+  // get a fresh closure on every render.
+  const monthGridHandlers = useMemo(
+    () =>
+      new Map(
+        monthGridKeys.map((key) => [key, () => handleSelect(key)] as const)
+      ),
+    [handleSelect, monthGridKeys]
   );
 
   const label = monthLabelForKey(safeValue);
@@ -131,10 +150,7 @@ export function DashboardMonthFilter({
           <button
             aria-label="Reset to current month"
             className="ml-0.5 inline-flex size-4 items-center justify-center rounded-full bg-primary/20 hover:bg-primary/30"
-            onClick={(e) => {
-              e.stopPropagation();
-              handleReset();
-            }}
+            onClick={handleResetClick}
             type="button"
           >
             <X aria-hidden className="size-3" />
@@ -220,7 +236,7 @@ export function DashboardMonthFilter({
                       reduceMotion ? undefined : { opacity: 0, scale: 0.96 }
                     }
                     key={key}
-                    onClick={() => handleSelect(key)}
+                    onClick={monthGridHandlers.get(key)}
                     transition={{
                       ...densitySpring,
                       delay: reduceMotion ? 0 : idx * 0.015,
