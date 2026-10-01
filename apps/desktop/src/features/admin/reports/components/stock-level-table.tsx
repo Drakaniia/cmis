@@ -31,6 +31,12 @@ import type {
   StockLevelSortKey,
 } from "../types";
 
+const DOT: Record<StockLevelRow["status"], string> = {
+  "in-stock": "bg-emerald-500",
+  "low-stock": "bg-amber-500",
+  "out-of-stock": "bg-red-500",
+};
+
 interface SortableColumn {
   key: StockLevelSortKey;
   label: string;
@@ -148,17 +154,7 @@ function StatusBadge({ status }: { status: StockLevelRow["status"] }) {
         "shadow-xs"
       )}
     >
-      <span
-        aria-hidden
-        className={cn(
-          "size-1.5 rounded-full",
-          status === "out-of-stock"
-            ? "bg-red-500"
-            : status === "low-stock"
-              ? "bg-amber-500"
-              : "bg-emerald-500"
-        )}
-      />
+      <span aria-hidden className={cn("size-1.5 rounded-full", DOT[status])} />
       {config.label}
     </span>
   );
