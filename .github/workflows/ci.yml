@@ -61,6 +61,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
+      # A local action is resolved from the workspace, so the repo must be
+      # checked out before ./... resolves. The checkout inside the composite
+      # action is too late to help.
+      - uses: actions/checkout@v4
       - uses: ./.github/actions/setup
       - run: pnpm run check
 
@@ -69,6 +73,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
+      # A local action is resolved from the workspace, so the repo must be
+      # checked out before ./... resolves. The checkout inside the composite
+      # action is too late to help.
+      - uses: actions/checkout@v4
       - uses: ./.github/actions/setup
       - run: pnpm run check-types
 
@@ -77,6 +85,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
+      # A local action is resolved from the workspace, so the repo must be
+      # checked out before ./... resolves. The checkout inside the composite
+      # action is too late to help.
+      - uses: actions/checkout@v4
       - uses: ./.github/actions/setup
       - run: pnpm run test
 
@@ -86,5 +98,9 @@ jobs:
     timeout-minutes: 15
     needs: [typecheck]
     steps:
+      # A local action is resolved from the workspace, so the repo must be
+      # checked out before ./... resolves. The checkout inside the composite
+      # action is too late to help.
+      - uses: actions/checkout@v4
       - uses: ./.github/actions/setup
       - run: pnpm run build
