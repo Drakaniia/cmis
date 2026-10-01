@@ -222,22 +222,19 @@ export function StockDetailModal({
             onClick={handleClose}
             transition={reduceMotion ? { duration: 0 } : { duration: 0.18 }}
           />
-          <div
-            className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6"
-            onClick={handleClose}
-          >
+          <div className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6">
             <motion.div
               animate="animate"
               aria-label={label}
               aria-modal="true"
               className={cn(
+                "pointer-events-auto",
                 /* §12 Glass material — the same weight as the other modals */
                 "flex max-h-[86vh] w-full max-w-[600px] flex-col overflow-hidden rounded-2xl",
                 "border border-border/40 bg-card/80 shadow-xl backdrop-blur-2xl"
               )}
               exit="exit"
               initial="initial"
-              onClick={(event) => event.stopPropagation()}
               ref={panelRef}
               role="dialog"
               style={{

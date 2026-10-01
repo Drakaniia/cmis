@@ -119,22 +119,18 @@ export function WizardShell({
             onClick={handleClose}
             transition={reduceMotion ? { duration: 0 } : { duration: 0.18 }}
           />
-          <div
-            className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6"
-            onClick={handleClose}
-          >
+          <div className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6">
             <motion.div
               animate="animate"
               aria-label={title}
               aria-modal="true"
               className={cn(
-                "flex max-h-[86vh] w-full max-w-[560px] flex-col overflow-hidden rounded-2xl",
+                "pointer-events-auto flex max-h-[86vh] w-full max-w-[560px] flex-col overflow-hidden rounded-2xl",
                 /* §12 Glass material: translucent with blur */
                 "border border-border/40 bg-card/80 shadow-xl backdrop-blur-2xl"
               )}
               exit="exit"
               initial="initial"
-              onClick={(event) => event.stopPropagation()}
               role="dialog"
               style={{
                 transformOrigin: "center center",

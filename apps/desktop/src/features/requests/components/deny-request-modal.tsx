@@ -99,18 +99,14 @@ export function DenyRequestModal({
             onClick={handleClose}
             transition={{ duration: 0.18 }}
           />
-          <div
-            className="fixed inset-0 z-[60] flex items-center justify-center p-3 sm:p-6"
-            onClick={handleClose}
-          >
+          <div className="pointer-events-none fixed inset-0 z-[60] flex items-center justify-center p-3 sm:p-6">
             <motion.div
               animate="animate"
               aria-label={`Deny ${count === 1 ? "request" : `${count} requests`}`}
               aria-modal="true"
-              className="surface-frosted flex w-full max-w-[440px] flex-col overflow-hidden rounded-xl border border-border/50 shadow-xl"
+              className="surface-frosted pointer-events-auto flex w-full max-w-[440px] flex-col overflow-hidden rounded-xl border border-border/50 shadow-xl"
               exit="exit"
               initial={reduceMotion ? "animate" : "initial"}
-              onClick={(event) => event.stopPropagation()}
               role="dialog"
               style={{
                 transformOrigin,
