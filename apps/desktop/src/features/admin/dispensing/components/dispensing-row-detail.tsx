@@ -28,14 +28,16 @@ export function DispensingRowDetail({
     <div className="border-border/40 border-t bg-muted/20 px-4 py-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="font-semibold text-[14px] tracking-[-0.01em] text-foreground">
+          <p className="font-semibold text-[14px] text-foreground tracking-[-0.01em]">
             {row.medicine}
           </p>
-          <p className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] tracking-[0.01em] text-muted-foreground">
-            <span className="rounded-full bg-card px-2 py-0.5 font-mono tracking-[0.02em] tabular-nums">
+          <p className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground tracking-[0.01em]">
+            <span className="rounded-full bg-card px-2 py-0.5 font-mono tabular-nums tracking-[0.02em]">
               {row.id}
             </span>
-            <span className="rounded-full bg-card px-2 py-0.5">{row.requestor}</span>
+            <span className="rounded-full bg-card px-2 py-0.5">
+              {row.requestor}
+            </span>
             <span className="font-mono tabular-nums">({row.requestorId})</span>·{" "}
             {absoluteDateTime(row.dispensedAt)}
           </p>
@@ -92,9 +94,9 @@ export function DispensingRowDetail({
       </dl>
 
       {isDenied ? (
-        <p className="mt-3 rounded-xl border border-destructive/20 bg-destructive/5 px-3 py-2.5 text-[12px] leading-[1.5] tracking-[0.01em] text-foreground">
-          <span className="font-semibold">Denied:</span> This request was not fulfilled. The record is
-          retained for audit completeness.
+        <p className="mt-3 rounded-xl border border-destructive/20 bg-destructive/5 px-3 py-2.5 text-[12px] text-foreground leading-[1.5] tracking-[0.01em]">
+          <span className="font-semibold">Denied:</span> This request was not
+          fulfilled. The record is retained for audit completeness.
         </p>
       ) : null}
     </div>
@@ -110,10 +112,10 @@ function DetailRow({
 }) {
   return (
     <div className="grid grid-cols-[0.38fr_1fr] items-center gap-2 border-border/30 border-b px-3 py-2.5 last:border-b-0">
-      <dt className="truncate text-[11px] font-semibold tracking-[0.04em] text-muted-foreground uppercase">
+      <dt className="truncate font-semibold text-[11px] text-muted-foreground uppercase tracking-[0.04em]">
         {label}
       </dt>
-      <dd className="truncate font-mono text-[12px] tracking-[0.01em] text-foreground tabular-nums">
+      <dd className="truncate font-mono text-[12px] text-foreground tabular-nums tracking-[0.01em]">
         {value}
       </dd>
     </div>

@@ -54,33 +54,33 @@ export function RequestCardContent({
     >
       <div className="flex items-start gap-2">
         <span
-          className="min-w-0 flex-1 truncate font-semibold text-[13px] leading-[1.25] tracking-[-0.01em] text-foreground"
+          className="min-w-0 flex-1 truncate font-semibold text-[13px] text-foreground leading-[1.25] tracking-[-0.01em]"
           title={whoId ? `${who} — ${whoId}` : who}
         >
           {who}
         </span>
-        <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 font-medium text-[10px] leading-none tracking-[0.02em] text-muted-foreground tabular-nums">
+        <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 font-medium text-[10px] text-muted-foreground tabular-nums leading-none tracking-[0.02em]">
           {time}
         </span>
       </div>
 
-      <span className="truncate text-[12.5px] leading-[1.35] tracking-[0.01em] text-muted-foreground">
+      <span className="truncate text-[12.5px] text-muted-foreground leading-[1.35] tracking-[0.01em]">
         {item.medicine}
       </span>
 
       <span className="flex flex-wrap items-center gap-1.5 pr-6">
-        <span className="inline-flex items-center rounded-full border border-border/60 bg-muted/80 px-2 py-0.5 font-medium text-[11px] leading-none tracking-[0.01em] text-foreground tabular-nums">
+        <span className="inline-flex items-center rounded-full border border-border/60 bg-muted/80 px-2 py-0.5 font-medium text-[11px] text-foreground tabular-nums leading-none tracking-[0.01em]">
           {requestQuantityLabel(item)}
         </span>
         <RequestStatusBadge status={item.status} />
         {item.source === "quick-deduct" ? (
-          <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-amber-500/20 bg-amber-500/10 px-2 py-0.5 font-medium text-[10px] leading-none tracking-[0.02em] text-amber-700 dark:text-amber-300">
+          <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-amber-500/20 bg-amber-500/10 px-2 py-0.5 font-medium text-[10px] text-amber-700 leading-none tracking-[0.02em] dark:text-amber-300">
             <span className="size-1 rounded-full bg-amber-500" />
             {QUICK_DEDUCT_LABEL}
           </span>
         ) : null}
         {partial ? (
-          <span className="inline-flex items-center gap-1 rounded-full border border-[var(--warning)]/25 bg-[var(--warning)]/10 px-2 py-0.5 font-medium text-[10px] leading-none tracking-[0.02em] text-[var(--warning)]">
+          <span className="inline-flex items-center gap-1 rounded-full border border-[var(--warning)]/25 bg-[var(--warning)]/10 px-2 py-0.5 font-medium text-[10px] text-[var(--warning)] leading-none tracking-[0.02em]">
             <span className="size-1 animate-pulse rounded-full bg-[var(--warning)]" />
             part dispensed
           </span>

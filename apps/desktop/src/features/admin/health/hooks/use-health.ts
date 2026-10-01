@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
-
-import { getDb } from "@/lib/db";
 import type { DbLike } from "@/features/inventory/creation/db-like";
-import { runHealthAction, type HealthActionResult } from "../data/health-actions";
+import { getDb } from "@/lib/db";
+import {
+  type HealthActionResult,
+  runHealthAction,
+} from "../data/health-actions";
 import type { HealthCardData, HealthCardId, PendingSync } from "../types";
 
 /**

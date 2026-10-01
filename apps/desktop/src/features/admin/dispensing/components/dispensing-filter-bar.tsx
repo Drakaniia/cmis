@@ -21,7 +21,7 @@ import { DISPENSING_DATE_PRESETS, DISPENSING_STATUSES } from "../types";
 
 function Chip({ label, onRemove }: { label: string; onRemove: () => void }) {
   return (
-    <span className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border border-border/60 bg-card px-2.5 py-1 font-medium text-[11px] tracking-[0.01em] text-foreground shadow-sm">
+    <span className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border border-border/60 bg-card px-2.5 py-1 font-medium text-[11px] text-foreground tracking-[0.01em] shadow-sm">
       {label}
       <button
         aria-label={`Remove ${label}`}
@@ -255,10 +255,22 @@ export function DispensingFilterBar({
             {filters.staff === "All" ? "Staff" : filters.staff}
             <ChevronDown aria-hidden className="size-3 text-muted-foreground" />
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="max-h-[280px] min-w-[170px]">
-            <ValueOption label="All staff" onSelect={onStaffChange} value="All" />
+          <DropdownMenuContent
+            align="start"
+            className="max-h-[280px] min-w-[170px]"
+          >
+            <ValueOption
+              label="All staff"
+              onSelect={onStaffChange}
+              value="All"
+            />
             {staffList.map((name) => (
-              <ValueOption key={name} label={name} onSelect={onStaffChange} value={name} />
+              <ValueOption
+                key={name}
+                label={name}
+                onSelect={onStaffChange}
+                value={name}
+              />
             ))}
           </DropdownMenuContent>
         </DropdownMenu>
@@ -275,10 +287,22 @@ export function DispensingFilterBar({
             {filters.medicine === "All" ? "Medicine" : filters.medicine}
             <ChevronDown aria-hidden className="size-3 text-muted-foreground" />
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="max-h-[280px] min-w-[200px]">
-            <ValueOption label="All medicines" onSelect={onMedicineChange} value="All" />
+          <DropdownMenuContent
+            align="start"
+            className="max-h-[280px] min-w-[200px]"
+          >
+            <ValueOption
+              label="All medicines"
+              onSelect={onMedicineChange}
+              value="All"
+            />
             {medicines.map((name) => (
-              <ValueOption key={name} label={name} onSelect={onMedicineChange} value={name} />
+              <ValueOption
+                key={name}
+                label={name}
+                onSelect={onMedicineChange}
+                value={name}
+              />
             ))}
           </DropdownMenuContent>
         </DropdownMenu>
@@ -298,7 +322,12 @@ export function DispensingFilterBar({
           <DropdownMenuContent align="start" className="min-w-[170px]">
             <ValueOption label="All" onSelect={onBranchChange} value="All" />
             {branches.map((branch) => (
-              <ValueOption key={branch} label={branch} onSelect={onBranchChange} value={branch} />
+              <ValueOption
+                key={branch}
+                label={branch}
+                onSelect={onBranchChange}
+                value={branch}
+              />
             ))}
           </DropdownMenuContent>
         </DropdownMenu>
@@ -313,7 +342,7 @@ export function DispensingFilterBar({
           Export CSV
         </Button>
 
-        <span className="rounded-full bg-muted px-2.5 py-1 text-[11px] font-medium tracking-[0.02em] text-muted-foreground tabular-nums">
+        <span className="rounded-full bg-muted px-2.5 py-1 font-medium text-[11px] text-muted-foreground tabular-nums tracking-[0.02em]">
           {resultCount} records
         </span>
       </div>
@@ -329,7 +358,7 @@ export function DispensingFilterBar({
             />
           ))}
           <button
-            className="rounded-full border border-border/60 bg-card px-2.5 py-1 font-medium text-[11px] tracking-[0.01em] text-primary shadow-sm hover:bg-accent"
+            className="rounded-full border border-border/60 bg-card px-2.5 py-1 font-medium text-[11px] text-primary tracking-[0.01em] shadow-sm hover:bg-accent"
             onClick={onClearFilters}
             type="button"
           >

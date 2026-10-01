@@ -191,32 +191,32 @@ function DispensingTableRow({
         onKeyDown={handleRowKeyDown}
         tabIndex={0}
       >
-        <td className="whitespace-nowrap font-mono text-[11px] tracking-[0.02em] text-muted-foreground tabular-nums">
+        <td className="whitespace-nowrap font-mono text-[11px] text-muted-foreground tabular-nums tracking-[0.02em]">
           {auditTimestamp(row.dispensedAt)}
         </td>
 
         <td className="min-w-0">
           <span
             className={cn(
-              "block truncate font-semibold text-[13px] tracking-[-0.01em] text-foreground",
+              "block truncate font-semibold text-[13px] text-foreground tracking-[-0.01em]",
               isDenied && "text-destructive/80"
             )}
           >
             {row.medicine}
           </span>
           <span className="mt-0.5 flex flex-wrap items-center gap-1">
-            <span className="font-mono text-[11px] tracking-[0.02em] text-muted-foreground tabular-nums">
+            <span className="font-mono text-[11px] text-muted-foreground tabular-nums tracking-[0.02em]">
               {row.medicineSku}
             </span>
             {isDenied ? (
-              <span className="inline-flex items-center gap-1 rounded-full border border-destructive/20 bg-destructive/10 px-2 py-0.5 text-[10px] font-medium tracking-[0.02em] text-destructive">
+              <span className="inline-flex items-center gap-1 rounded-full border border-destructive/20 bg-destructive/10 px-2 py-0.5 font-medium text-[10px] text-destructive tracking-[0.02em]">
                 <span className="size-1 rounded-full bg-destructive" />
                 Denied
               </span>
             ) : null}
             {row.source === "quick-deduct" ? (
               <span
-                className="inline-flex items-center gap-1 rounded-full border border-amber-500/20 bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium tracking-[0.02em] text-amber-700 dark:text-amber-300"
+                className="inline-flex items-center gap-1 rounded-full border border-amber-500/20 bg-amber-500/10 px-2 py-0.5 font-medium text-[10px] text-amber-700 tracking-[0.02em] dark:text-amber-300"
                 title={DISPENSING_SOURCE_DETAIL["quick-deduct"]}
               >
                 <span className="size-1 rounded-full bg-amber-500" />
@@ -229,7 +229,7 @@ function DispensingTableRow({
         <td className="min-w-0">
           {hasBatch(row) ? (
             <button
-              className="group/batch inline-flex items-center gap-1 rounded-full border border-border/60 bg-card px-2 py-1 font-mono text-[11px] tracking-[0.02em] shadow-sm hover:bg-accent hover:text-foreground tabular-nums"
+              className="group/batch inline-flex items-center gap-1 rounded-full border border-border/60 bg-card px-2 py-1 font-mono text-[11px] tabular-nums tracking-[0.02em] shadow-sm hover:bg-accent hover:text-foreground"
               onClick={handleCopyBatch}
               title="Click to copy"
               type="button"
@@ -241,35 +241,35 @@ function DispensingTableRow({
               />
             </button>
           ) : (
-            <span className="rounded-full bg-muted px-2 py-1 text-[11px] tracking-[0.01em] text-muted-foreground italic">
+            <span className="rounded-full bg-muted px-2 py-1 text-[11px] text-muted-foreground italic tracking-[0.01em]">
               {NO_BATCH_LABEL}
             </span>
           )}
         </td>
 
         <td className="text-right">
-          <span className="inline-flex min-w-[36px] justify-center rounded-full bg-foreground px-2 py-1 font-semibold text-[11px] tracking-[0.02em] text-background tabular-nums">
+          <span className="inline-flex min-w-[36px] justify-center rounded-full bg-foreground px-2 py-1 font-semibold text-[11px] text-background tabular-nums tracking-[0.02em]">
             {row.qty}
           </span>
         </td>
 
         <td className="min-w-0">
-          <span className="block truncate font-medium text-[12px] tracking-[-0.01em] text-foreground">
+          <span className="block truncate font-medium text-[12px] text-foreground tracking-[-0.01em]">
             {row.requestor}
           </span>
-          <span className="block font-mono text-[11px] tracking-[0.02em] text-muted-foreground tabular-nums">
+          <span className="block font-mono text-[11px] text-muted-foreground tabular-nums tracking-[0.02em]">
             {row.requestorId}
           </span>
         </td>
 
-        <td className="truncate text-[12px] tracking-[0.01em] text-muted-foreground">
+        <td className="truncate text-[12px] text-muted-foreground tracking-[0.01em]">
           {row.staff}
         </td>
 
         <td className="min-w-0">
           {requestLink ? (
             <button
-              className="press-feedback inline-flex items-center gap-1 rounded-full border border-primary/15 bg-primary/8 px-2.5 py-1 font-medium text-[11px] tracking-[0.01em] text-primary hover:bg-primary hover:text-primary-foreground"
+              className="press-feedback inline-flex items-center gap-1 rounded-full border border-primary/15 bg-primary/8 px-2.5 py-1 font-medium text-[11px] text-primary tracking-[0.01em] hover:bg-primary hover:text-primary-foreground"
               onClick={handleRequest}
               type="button"
             >
@@ -376,12 +376,19 @@ export function DispensingTable({
           )}
         >
           {SKELETON_COLUMNS.map((column) => (
-            <Skeleton className="h-3.5 w-full max-w-[80px] rounded-full" key={column} />
+            <Skeleton
+              className="h-3.5 w-full max-w-[80px] rounded-full"
+              key={column}
+            />
           ))}
         </div>
         <div className="flex-1 space-y-2 p-3">
           {SKELETON_ROWS.map((row) => (
-            <Skeleton className="w-full rounded-xl" key={row} style={{ height: 56 }} />
+            <Skeleton
+              className="w-full rounded-xl"
+              key={row}
+              style={{ height: 56 }}
+            />
           ))}
         </div>
       </div>
@@ -423,7 +430,7 @@ export function DispensingTable({
         <thead className="block">
           <tr
             className={cn(
-              "sticky top-0 z-[1] grid items-center gap-2 border-border/40 border-b bg-card/80 px-3 py-2 font-medium text-[11px] tracking-[0.04em] text-muted-foreground uppercase backdrop-blur-[12px] backdrop-saturate-[160%]",
+              "sticky top-0 z-[1] grid items-center gap-2 border-border/40 border-b bg-card/80 px-3 py-2 font-medium text-[11px] text-muted-foreground uppercase tracking-[0.04em] backdrop-blur-[12px] backdrop-saturate-[160%]",
               GRID
             )}
           >

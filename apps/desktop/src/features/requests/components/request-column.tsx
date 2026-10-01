@@ -53,10 +53,11 @@ function ColumnHeader({
   return (
     <motion.header
       animate={shaking ? { x: [0, -4, 4, -4, 0] } : { x: 0 }}
-      className="flex shrink-0 items-center gap-2 rounded-t-[14px] border-b border-border/40 bg-card/70 px-3 py-2.5 backdrop-blur-[12px] backdrop-saturate-[160%]"
+      className="flex shrink-0 items-center gap-2 rounded-t-[14px] border-border/40 border-b bg-card/70 px-3 py-2.5 backdrop-blur-[12px] backdrop-saturate-[160%]"
       id={headerId}
       style={{
-        borderTop: "1px solid color-mix(in oklch, var(--card) 60%, transparent)",
+        borderTop:
+          "1px solid color-mix(in oklch, var(--card) 60%, transparent)",
         boxShadow: "inset 0 1px 0 oklch(1 0 0 / 0.35)",
       }}
       transition={
@@ -73,26 +74,26 @@ function ColumnHeader({
         )}
         style={{ color: "inherit" }}
       />
-      <h2 className="min-w-0 truncate font-semibold text-[12px] tracking-[-0.01em] text-foreground">
+      <h2 className="min-w-0 truncate font-semibold text-[12px] text-foreground tracking-[-0.01em]">
         {column.label}
       </h2>
       <span
         className={cn(
-          "shrink-0 rounded-full border px-2 py-0.5 font-semibold text-[10px] leading-none tracking-[0.02em] tabular-nums",
+          "shrink-0 rounded-full border px-2 py-0.5 font-semibold text-[10px] tabular-nums leading-none tracking-[0.02em]",
           column.badgeClass
         )}
       >
         {countLabel}
       </span>
       {refuseChip ? (
-        <span className="shrink-0 truncate rounded-full border border-amber-500/20 bg-amber-500/10 px-2 py-0.5 font-medium text-[10px] tracking-[0.01em] text-amber-700 dark:text-amber-300">
+        <span className="shrink-0 truncate rounded-full border border-amber-500/20 bg-amber-500/10 px-2 py-0.5 font-medium text-[10px] text-amber-700 tracking-[0.01em] dark:text-amber-300">
           Can&apos;t place here
         </span>
       ) : null}
       {onClearClaimed ? (
         <button
           aria-label={`Clear ${total} claimed cards`}
-          className="press-feedback ml-auto inline-flex shrink-0 items-center rounded-full border border-border/60 bg-card px-2.5 py-1 font-medium text-[11px] tracking-[0.01em] text-muted-foreground shadow-sm hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+          className="press-feedback ml-auto inline-flex shrink-0 items-center rounded-full border border-border/60 bg-card px-2.5 py-1 font-medium text-[11px] text-muted-foreground tracking-[0.01em] shadow-sm hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
           disabled={total === 0}
           onClick={onClearClaimed}
           type="button"
@@ -240,10 +241,10 @@ export function RequestColumn({
               column.accent
             )}
           />
-          <span className="font-semibold text-[11px] tracking-[0.02em] text-muted-foreground [writing-mode:vertical-rl]">
+          <span className="font-semibold text-[11px] text-muted-foreground tracking-[0.02em] [writing-mode:vertical-rl]">
             {column.label}
           </span>
-          <span className="rounded-full border border-border bg-card px-1.5 py-0.5 font-semibold text-[10px] leading-none tabular-nums">
+          <span className="rounded-full border border-border bg-card px-1.5 py-0.5 font-semibold text-[10px] tabular-nums leading-none">
             {total}
           </span>
         </button>
@@ -262,7 +263,7 @@ export function RequestColumn({
         highlight
           ? "border-[var(--ring)] border-dashed bg-primary/[0.06] shadow-[0_0_0_1px_var(--ring),0_8px_24px_oklch(0_0_0/0.06)]"
           : "border-border/40 bg-card/55 shadow-[0_1px_3px_oklch(0_0_0/0.04),0_8px_24px_oklch(0_0_0/0.03)]",
-        dimmed && "opacity-40 saturate-50 blur-[0.2px]"
+        dimmed && "opacity-40 blur-[0.2px] saturate-50"
       )}
       ref={columnRef}
       title={column.description}
@@ -288,7 +289,7 @@ export function RequestColumn({
         >
           {items.length === 0 ? (
             <li className="shrink-0 list-none">
-              <p className="rounded-xl border border-border/40 border-dashed bg-card/40 px-3 py-8 text-center text-[12px] leading-[1.4] tracking-[0.01em] text-muted-foreground backdrop-blur-sm">
+              <p className="rounded-xl border border-border/40 border-dashed bg-card/40 px-3 py-8 text-center text-[12px] text-muted-foreground leading-[1.4] tracking-[0.01em] backdrop-blur-sm">
                 {total === 0
                   ? `No ${column.label.toLowerCase()} requests`
                   : "No matches for filters"}

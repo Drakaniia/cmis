@@ -9,7 +9,7 @@ import { INVENTORY_TEMPLATE_HEADERS } from "@/features/inventory/import/csv-pars
 // tests (`isTauriRuntime()` is false), so the stub only has to satisfy the
 // hook's QueryClient requirement.
 vi.mock("@/features/backup/hooks/use-daily-backup", () => ({
-  useBackupActions: () => ({ runManualBackup: vi.fn(), retry: vi.fn() }),
+  useBackupActions: () => ({ retry: vi.fn(), runManualBackup: vi.fn() }),
 }));
 
 const DISPENSING_MONTH = /Dispensing month 2026-08 · from the file name/i;

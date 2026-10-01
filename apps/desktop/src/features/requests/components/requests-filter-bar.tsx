@@ -57,7 +57,7 @@ function ChipItem({
     [chipKey, onRemoveChip]
   );
   return (
-    <span className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border border-border/60 bg-card px-2.5 py-1 font-medium text-[11px] tracking-[0.01em] text-foreground shadow-sm">
+    <span className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border border-border/60 bg-card px-2.5 py-1 font-medium text-[11px] text-foreground tracking-[0.01em] shadow-sm">
       {label}
       <button
         aria-label={`Remove ${label}`}
@@ -195,7 +195,10 @@ export function RequestsFilterBar({
 
         <DropdownMenu>
           <DropdownMenuTrigger className="press-feedback inline-flex h-9 items-center gap-1.5 rounded-full border border-border/60 bg-card px-3.5 font-medium text-[12px] tracking-[0.01em] shadow-sm hover:bg-accent hover:text-accent-foreground">
-            <CalendarRange aria-hidden className="size-3.5 text-muted-foreground" />
+            <CalendarRange
+              aria-hidden
+              className="size-3.5 text-muted-foreground"
+            />
             {dateLabel}
             <ChevronDown className="size-3 text-muted-foreground" />
           </DropdownMenuTrigger>
@@ -256,7 +259,7 @@ export function RequestsFilterBar({
 
       {filters.datePreset === "custom" ? (
         <div className="flex flex-wrap items-center gap-2 border-border/20 border-t bg-muted/20 px-3 py-2.5">
-          <label className="flex items-center gap-2 text-[12px] tracking-[0.01em] text-muted-foreground">
+          <label className="flex items-center gap-2 text-[12px] text-muted-foreground tracking-[0.01em]">
             From
             <AppleDatePicker
               className="h-8 w-[132px] rounded-full"
@@ -266,7 +269,7 @@ export function RequestsFilterBar({
               value={filters.from}
             />
           </label>
-          <label className="flex items-center gap-2 text-[12px] tracking-[0.01em] text-muted-foreground">
+          <label className="flex items-center gap-2 text-[12px] text-muted-foreground tracking-[0.01em]">
             To
             <AppleDatePicker
               className="h-8 w-[132px] rounded-full"
@@ -295,14 +298,16 @@ export function RequestsFilterBar({
             />
           ))}
           <button
-            className="rounded-full border border-border/60 bg-card px-2.5 py-1 font-medium text-[11px] tracking-[0.01em] text-primary shadow-sm hover:bg-accent"
+            className="rounded-full border border-border/60 bg-card px-2.5 py-1 font-medium text-[11px] text-primary tracking-[0.01em] shadow-sm hover:bg-accent"
             onClick={onClearFilters}
             type="button"
           >
             Clear all
           </button>
-          <span className="ml-auto hidden shrink-0 items-center gap-1.5 rounded-full bg-muted/60 px-2.5 py-1 font-medium text-[11px] tracking-[0.01em] text-muted-foreground sm:inline-flex">
-            <span className="rounded bg-card px-1 py-0.5 font-mono text-[10px] shadow-sm">⌘A</span>
+          <span className="ml-auto hidden shrink-0 items-center gap-1.5 rounded-full bg-muted/60 px-2.5 py-1 font-medium text-[11px] text-muted-foreground tracking-[0.01em] sm:inline-flex">
+            <span className="rounded bg-card px-1 py-0.5 font-mono text-[10px] shadow-sm">
+              ⌘A
+            </span>
             select visible
           </span>
         </div>
