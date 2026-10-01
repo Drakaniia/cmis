@@ -590,16 +590,18 @@ export function DesktopMenubar({
         return;
       }
       const ctrl = event.ctrlKey || event.metaKey;
-      if (ctrl || event.key === "F11") {
-        const combo = buildCombo(event);
-        if (TYPE_SENSITIVE_KEYS.has(combo) && acceptsTypedText(event.target)) {
-          return;
-        }
-        if (EDIT_CLIPBOARD_KEYS.has(combo) && acceptsTypedText(event.target)) {
-          return;
-        }
-        runAccelerator(combo, event, dispatchById, setOpenMenuId);
+      if (!ctrl && event.key !== "F11") {
+        return;
       }
+      const combo = buildCombo(event);
+      // Let a focused field keep the keystroke; only chords we own are accelerators.
+      if (
+        acceptsTypedText(event.target) &&
+        (TYPE_SENSITIVE_KEYS.has(combo) || EDIT_CLIPBOARD_KEYS.has(combo))
+      ) {
+        return;
+      }
+      runAccelerator(combo, event, dispatchById, setOpenMenuId);
     };
 
     window.addEventListener("keydown", handler);
