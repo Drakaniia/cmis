@@ -5,6 +5,7 @@ import { AdminHealthRow } from "@/features/dashboard/components/admin-health-row
 import { AlertsBand } from "@/features/dashboard/components/alerts-band";
 import { DashboardMonthFilter } from "@/features/dashboard/components/dashboard-month-filter";
 import { StatGrid } from "@/features/dashboard/components/stat-grid";
+import type { DashboardStats } from "@/features/dashboard/hooks/use-dashboard-stats";
 import {
   useDashboardStats,
   useDispensingVelocity,
@@ -16,6 +17,7 @@ import { NoInventoryEmptyState } from "@/features/inventory/components/no-invent
 import { buildExpiryRows } from "@/features/inventory/domain/expiry";
 import { buildLowStockRows } from "@/features/inventory/domain/low-stock";
 import { useInventoryItems } from "@/features/inventory/hooks/use-inventory-items";
+import type { InventoryItem } from "@/features/inventory/types";
 import { isMonthKey, monthKey } from "@/lib/month";
 
 export interface AdminSearch {
@@ -36,6 +38,82 @@ export const Route = createFileRoute("/admin/")({
 });
 
 const links = dashboardLinks();
+
+const EMPTY_SPARKLINE = [0, 0, 0, 0, 0, 0, 0];
+
+function buildHomeStats(stats: DashboardStats | undefined) {
+  return [
+    {
+      context: `${stats?.sparkline[stats.sparkline.length - 1] ?? 0} this week`,
+      label: "TOTAL ITEMS",
+      link: "inventory" as const,
+      sparkline: stats?.sparkline ?? EMPTY_SPARKLINE,
+      tone: "ok" as const,
+      value: String(stats?.totalItems ?? 0),
+    },
+    {
+      context: `${stats?.lowStock ?? 0} below threshold`,
+      label: "LOW STOCK",
+      link: "lowStock" as const,
+      sparkline: stats?.sparkline ?? EMPTY_SPARKLINE,
+      tone: "warn" as const,
+      value: String(stats?.lowStock ?? 0),
+    },
+    {
+      context: "live from requests",
+      label: "PENDING REQUESTS",
+      link: "requests" as const,
+      sparkline: [0, 0, 0, 0, 0, 0, stats?.pendingRequests ?? 0],
+      tone: "warn" as const,
+      value: String(stats?.pendingRequests ?? 0),
+    },
+    {
+      context: stats?.needsBatch
+        ? `${stats.needsBatch} need batch`
+        : "all have batches",
+      label: "EXPIRING IN 30D",
+      link: "expiry" as const,
+      sparkline: [0, 0, 0, 0, 0, 0, stats?.expiring30d ?? 0],
+      tone: "danger" as const,
+      value: String(stats?.expiring30d ?? 0),
+    },
+  ];
+}
+
+function buildExpiryAlerts(inventory: InventoryItem[] | undefined) {
+  if (!inventory) {
+    return [];
+  }
+  return buildExpiryRows(inventory)
+    .slice(0, 5)
+    .map((r) => ({
+      batch: r.batch.batch,
+      daysUntilExpiry: r.daysUntil,
+      expiry: r.batch.expiry,
+      id: r.batch.batch,
+      medicine: r.item.name,
+      qty: r.batch.qty,
+      unit: "units",
+    }));
+}
+
+function buildLowStockAlerts(inventory: InventoryItem[] | undefined) {
+  if (!inventory) {
+    return [];
+  }
+  return buildLowStockRows(inventory)
+    .filter((r) => r.lowStockStatus !== "in-stock")
+    .slice(0, 5)
+    .map((r) => ({
+      category: r.item.category,
+      id: r.item.id,
+      medicine: r.item.name,
+      qty: r.item.qty,
+      threshold: r.item.threshold,
+      unit: "left",
+      updatedAt: "now",
+    }));
+}
 
 function AdminIndex() {
   const { month } = Route.useSearch();
@@ -68,71 +146,9 @@ function AdminIndex() {
     );
   }
 
-  const homeStats = [
-    {
-      context: `${stats?.sparkline[stats.sparkline.length - 1] ?? 0} this week`,
-      label: "TOTAL ITEMS",
-      link: "inventory" as const,
-      sparkline: stats?.sparkline ?? [0, 0, 0, 0, 0, 0, 0],
-      tone: "ok" as const,
-      value: String(stats?.totalItems ?? 0),
-    },
-    {
-      context: `${stats?.lowStock ?? 0} below threshold`,
-      label: "LOW STOCK",
-      link: "lowStock" as const,
-      sparkline: stats?.sparkline ?? [0, 0, 0, 0, 0, 0, 0],
-      tone: "warn" as const,
-      value: String(stats?.lowStock ?? 0),
-    },
-    {
-      context: "live from requests",
-      label: "PENDING REQUESTS",
-      link: "requests" as const,
-      sparkline: [0, 0, 0, 0, 0, 0, stats?.pendingRequests ?? 0],
-      tone: "warn" as const,
-      value: String(stats?.pendingRequests ?? 0),
-    },
-    {
-      context: stats?.needsBatch
-        ? `${stats.needsBatch} need batch`
-        : "all have batches",
-      label: "EXPIRING IN 30D",
-      link: "expiry" as const,
-      sparkline: [0, 0, 0, 0, 0, 0, stats?.expiring30d ?? 0],
-      tone: "danger" as const,
-      value: String(stats?.expiring30d ?? 0),
-    },
-  ];
-
-  const expiryAlerts = inventory
-    ? buildExpiryRows(inventory)
-        .slice(0, 5)
-        .map((r) => ({
-          batch: r.batch.batch,
-          daysUntilExpiry: r.daysUntil,
-          expiry: r.batch.expiry,
-          id: r.batch.batch,
-          medicine: r.item.name,
-          qty: r.batch.qty,
-          unit: "units",
-        }))
-    : [];
-
-  const lowStockAlerts = inventory
-    ? buildLowStockRows(inventory)
-        .filter((r) => r.lowStockStatus !== "in-stock")
-        .slice(0, 5)
-        .map((r) => ({
-          category: r.item.category,
-          id: r.item.id,
-          medicine: r.item.name,
-          qty: r.item.qty,
-          threshold: r.item.threshold,
-          unit: "left",
-          updatedAt: "now",
-        }))
-    : [];
+  const expiryAlerts = buildExpiryAlerts(inventory);
+  const lowStockAlerts = buildLowStockAlerts(inventory);
+  const homeStats = buildHomeStats(stats);
 
   const dispensingVelocity = velocity ?? {
     categoryBreakdown: [{ color: "bg-muted", count: 0, label: "No data" }],
