@@ -165,6 +165,50 @@ export function validateBatchRows(
   return { errors, warnings };
 }
 
+/** The fields a product cannot be saved without. */
+function collectRequiredErrors(
+  draft: ProductDraft,
+  errors: DraftIssue[]
+): void {
+  if (draft.name.trim() === "") {
+    errors.push({ field: "name", message: "Enter the medicine name." });
+  }
+  if (draft.category.trim() === "") {
+    errors.push({ field: "category", message: "Choose a category." });
+  }
+}
+
+/** The existing product this draft collides with, if any. */
+function findDuplicate(
+  draft: ProductDraft,
+  ctx: ProductContext
+): IdentityMatch | null {
+  for (const key of identityKeysOf(draft)) {
+    const match = ctx.identities?.get(key);
+    if (match) {
+      return match;
+    }
+  }
+  return null;
+}
+
+/** Pack pair rules V1–V6 (V3/V5 are warnings, the rest block). */
+function collectPackIssues(
+  draft: ProductDraft,
+  errors: DraftIssue[],
+  warnings: DraftIssue[]
+): void {
+  const packValidation = validatePackFields(draft);
+  for (const [name, message] of Object.entries(packValidation.errors)) {
+    if (message) {
+      errors.push({ field: name, message });
+    }
+  }
+  for (const message of packValidation.warnings) {
+    warnings.push({ field: "packQty", message });
+  }
+}
+
 export function validateNewProduct(
   draft: ProductDraft,
   ctx: ProductContext
@@ -173,12 +217,7 @@ export function validateNewProduct(
   const errors: DraftIssue[] = [];
   const warnings: DraftIssue[] = [];
 
-  if (draft.name.trim() === "") {
-    errors.push({ field: "name", message: "Enter the medicine name." });
-  }
-  if (draft.category.trim() === "") {
-    errors.push({ field: "category", message: "Choose a category." });
-  }
+  collectRequiredErrors(draft, errors);
 
   const sku = draft.sku.trim();
   if (sku === "") {
@@ -190,14 +229,7 @@ export function validateNewProduct(
     });
   }
 
-  let duplicateOf: IdentityMatch | null = null;
-  for (const key of identityKeysOf(draft)) {
-    const match = ctx.identities?.get(key);
-    if (match) {
-      duplicateOf = match;
-      break;
-    }
-  }
+  const duplicateOf = findDuplicate(draft, ctx);
 
   const rows = activeRows(draft.batches, { allowIncomplete: draft.zeroStock });
   if (rows.length === 0 && !draft.zeroStock) {
@@ -213,6 +245,8 @@ export function validateNewProduct(
   errors.push(...rowValidation.errors);
   warnings.push(...rowValidation.warnings);
 
+  collectPackIssues(draft, errors, warnings);
+
   if (draft.strengthValue.trim() === "" && draft.strengthUnit.trim() === "") {
     warnings.push({
       field: "strength",
@@ -224,16 +258,6 @@ export function validateNewProduct(
   }
   if (draft.packSize.trim() === "") {
     warnings.push({ field: "packSize", message: "Pack size is blank." });
-  }
-  // The pack pair rules V1–V6 (V3/V5 are warnings, the rest block).
-  const packValidation = validatePackFields(draft);
-  for (const [field, message] of Object.entries(packValidation.errors)) {
-    if (message) {
-      errors.push({ field, message });
-    }
-  }
-  for (const message of packValidation.warnings) {
-    warnings.push({ field: "packQty", message });
   }
   if (draft.supplier.trim() === "") {
     warnings.push({ field: "supplier", message: "Supplier is blank." });
