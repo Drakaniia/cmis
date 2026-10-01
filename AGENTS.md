@@ -124,3 +124,26 @@ Biome's linter will catch most issues automatically. Focus your attention on:
 ---
 
 Most formatting and common issues are automatically fixed by Biome. Run `pnpm dlx ultracite fix` before committing to ensure compliance.
+
+---
+
+## Database Migrations - Read Before Editing One
+
+**A migration that has shipped in a release must never be edited, reworded or
+deleted. Not even a comment.** `tauri-plugin-sql` checksums every applied migration
+and panics at startup when a later build ships different bytes, so a one-word comment
+change bricks every install that updates past it: exit code `101`, no window, no log,
+and reinstalling does not help because the break is in the binary, not the installer.
+Release 1.9.1 shipped exactly that and locked its own users out.
+
+Rules:
+
+- **Adding** a migration is always fine and needs no extra bookkeeping.
+- **Editing** a shipped one is never fine. Add a new migration instead.
+- Only correct a shipped migration when it never actually ran anywhere, and change the
+  file and its `apps/desktop/src-tauri/migrations.lock` line in the same commit.
+- When you tag a release, add a line to `migrations.lock` for each new migration.
+- The `published-migrations` CI job enforces this. If it fails, do not work around it.
+
+Full rules, the 1.9.1 post-mortem, and how to recover an already-bricked install:
+**[`docs/database-migrations.md`](docs/database-migrations.md)**.
