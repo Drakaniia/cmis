@@ -14,6 +14,48 @@ permissions:
   contents: read
 
 jobs:
+  # Published migrations are immutable. tauri-plugin-sql stores a checksum per
+  # applied migration and panics at startup when a later build ships a file whose
+  # bytes no longer match ("migration N was previously applied but has been
+  # modified"). A comment-only edit to a migration that already shipped therefore
+  # bricks every install that upgrades past it -- which is what 1.9.1 did to
+  # 0013_vocabulary_terms.sql. migrations.lock records what has shipped; see the
+  # header of that file for the rule.
+  published-migrations:
+    name: published migrations are immutable
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fail if a shipped migration changed
+        run: |
+          set -euo pipefail
+          cd apps/desktop/src-tauri
+          status=0
+          while read -r name expected || [ -n "$name" ]; do
+            # Strip CR so the check cannot be defeated by a CRLF checkout, and
+            # skip blanks and comments.
+            name=${name//$'\r'/}
+            expected=${expected//$'\r'/}
+            case "$name" in ''|\#*) continue ;; esac
+            path="migrations/$name"
+            if [ ! -f "$path" ]; then
+              echo "::error::$name is in migrations.lock but the file is gone. Restore it, or remove the line if the migration was wrongly published."
+              status=1
+              continue
+            fi
+            actual=$(sha256sum "$path" | cut -d' ' -f1)
+            if [ "$actual" != "$expected" ]; then
+              echo "::error::$name changed after shipping."
+              echo "::error::  was $expected"
+              echo "::error::  now $actual"
+              echo "::error::Existing installs panic at startup on update. Add a new migration instead, or - if this corrects a migration that shipped broken - update this line in the same commit."
+              status=1
+            fi
+          done < migrations.lock
+          [ "$status" -eq 0 ] && echo "All published migrations are unchanged."
+          exit "$status"
+
   lint:
     name: lint (ultracite check)
     runs-on: ubuntu-latest

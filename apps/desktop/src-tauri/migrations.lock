@@ -1,0 +1,37 @@
+# Published migration checksums. One line per migration that has shipped in a
+# release:  <file>.sql <sha256 of the file's bytes>
+#
+# Why this exists
+# ---------------
+# tauri-plugin-sql records a checksum for every migration it applies and panics
+# at startup when a later build ships a file whose bytes no longer match
+# ("migration N was previously applied but has been modified"). Editing a
+# migration that has already shipped therefore bricks every install that
+# updates past it, with no UI and no log - just exit code 101. That is not
+# hypothetical: release 1.9.1 changed three SQL *comments* in
+# 0013_vocabulary_terms.sql and every upgrading install stopped opening.
+#
+# The rule
+# --------
+#   Adding a migration is always fine and needs no change here.
+#   Changing or deleting a shipped migration is never fine.
+#   When you tag a release, append a line for each migration added since the
+#   last release. That is what makes it "published".
+#   To correct a migration that shipped broken, change the file AND its line
+#   here in the same commit, so the correction is visible in review.
+#
+# Enforced by the `published-migrations` job in .github/workflows/ci.yml.
+
+0001_request_queue.sql 9660bba9dce4b3b5b77c029532258514c28861f08ff943349555a56f3dd468ee
+0002_inventory.sql fc6d4db1638bb927314fdd58ad26d0c7397723ddf4aaed8b80521b060c120325
+0003_dispensing_events.sql 2a9d9343212c2c0e3ba7c3544887d8a01b28227c07dacafe74b51cb812781e7e
+0004_inventory_creation.sql 7946bd1f3dc33aa7bbcd31d1443f3cc2246190ae0a42a57c265dbfce4b8bf43a
+0005_strength_fields.sql 0c18f7db1387140de12b804eb1494fc4797a2ec16d43146b2ac45c9726030b4b
+0006_categories.sql b0d4c63337da0fdde9e674b1b8c3191658eae6b6b6fee079f2b91b72a9b56b50
+0007_request_queue_dispensing.sql 2def52c72f73772cd641f6668c2dc79eeafa77e165a06f76f538009ece0fb533
+0008_request_source.sql 709688eb01f59434d9077362fcf92fc31d847f018be83f9e97d12b221a5f141f
+0009_request_item_id.sql 4584e21893ae70308fde4ea12ea3dbc565c2167d384ec232b344513caff7717b
+0010_dispensing_events_unique.sql c469cbb0c014745ec1ff2b025edb6f0ac57c455dc38988e8b30d4180133d7e19
+0011_request_queue_board_state.sql dcfb42e5d383dce0b8b30dcb9d6d405a9b50de2e30943462d3935e584fd5ae07
+0012_pack_size_fields.sql ab5ef951c1fb71ac004b93fc415c569336a1b807c28de9fbb7f1142bb79f3ab2
+0013_vocabulary_terms.sql 6f3ed9d8558418e98dd570197b54960f1107f2b37b6c1b158b92957b366ddfaa
