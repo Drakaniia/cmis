@@ -91,39 +91,54 @@ export async function recordDispensing(
   );
 }
 
+// `undefined` means the caller is not carrying a pack pair, so the item's own
+// value stands; `""` is the caller explicitly clearing it.
+function resolvePackQty(
+  incoming: number | "" | undefined,
+  existing: number | null
+): number {
+  if (incoming === undefined) {
+    return existing ?? 0;
+  }
+  return incoming === "" ? 0 : incoming;
+}
+
+/** The row a stock-in targets — by SKU, or by name / display name. */
+async function findItemForStockIn(
+  db: Db,
+  payload: StockInPayload
+): Promise<StockInRow> {
+  const rows = await db.select<StockInRow[]>(
+    "SELECT id, qty, threshold, pack_qty, pack_unit, pack_size FROM inventory_items WHERE sku = ? OR lower(trim(name)) = lower(trim(?)) OR lower(trim(display_name)) = lower(trim(?)) LIMIT 1",
+    [payload.identifier, payload.name, payload.name]
+  );
+  const [item] = rows;
+  if (!item) {
+    throw new Error(`Item not found: ${payload.identifier}`);
+  }
+  return item;
+}
+
+interface StockInRow {
+  id: string;
+  pack_qty: number | null;
+  pack_size: string | null;
+  pack_unit: string | null;
+  qty: number;
+  threshold: number;
+}
+
 export function useStockInMutation() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (payload: StockInPayload) => {
       const db = await getDb();
-      // Find item by sku or name match
-      const rows = await db.select<
-        {
-          id: string;
-          pack_qty: number | null;
-          pack_size: string | null;
-          pack_unit: string | null;
-          qty: number;
-          threshold: number;
-        }[]
-      >(
-        "SELECT id, qty, threshold, pack_qty, pack_unit, pack_size FROM inventory_items WHERE sku = ? OR lower(trim(name)) = lower(trim(?)) OR lower(trim(display_name)) = lower(trim(?)) LIMIT 1",
-        [payload.identifier, payload.name, payload.name]
-      );
-      if (rows.length === 0) {
-        throw new Error(`Item not found: ${payload.identifier}`);
-      }
-      const [item] = rows;
+      const item = await findItemForStockIn(db, payload);
       const newQty = item.qty + payload.qty;
       const newStatus = deriveStatus(newQty, item.threshold);
       // A caller that carries the pack pair overwrites it; one that does not
       // leaves the item's existing pair alone rather than clearing it.
-      const packQty =
-        payload.packQty === undefined
-          ? (item.pack_qty ?? 0)
-          : payload.packQty === ""
-            ? 0
-            : payload.packQty;
+      const packQty = resolvePackQty(payload.packQty, item.pack_qty);
       const packUnit =
         payload.packUnit === undefined
           ? (item.pack_unit ?? "")
