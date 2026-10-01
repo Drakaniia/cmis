@@ -42,6 +42,45 @@ import { VocabularyPicker } from "./vocabulary-picker";
 
 const PACK_SIZE_MAX = 40;
 
+type Db = Awaited<ReturnType<typeof getDb>>;
+
+/**
+ * Writes one corrected batch expiry and audits the before/after. Batches are
+ * corrected independently, so the caller runs these concurrently.
+ */
+async function correctBatchExpiry(
+  db: Db,
+  itemId: string,
+  batchName: string,
+  newExpiry: string
+): Promise<void> {
+  const rows = await db.select<{ expiry: string | null; id: string }[]>(
+    "SELECT id, expiry FROM inventory_batches WHERE item_id = ? AND batch = ? LIMIT 1",
+    [itemId, batchName]
+  );
+  const [row] = rows;
+  if (!row) {
+    return;
+  }
+  const previousExpiry = row.expiry ?? "";
+  await db.execute("UPDATE inventory_batches SET expiry = ? WHERE id = ?", [
+    newExpiry,
+    row.id,
+  ]);
+  await recordAudit(
+    db,
+    {
+      action: "correction",
+      after: { batch: batchName, expiry: newExpiry },
+      before: { batch: batchName, expiry: previousExpiry },
+      detail: `Corrected batch expiry for ${batchName} from ${previousExpiry || "no date"} to ${newExpiry || "no date"}`,
+      targetId: row.id,
+      targetKind: "batch",
+    },
+    { bestEffort: true }
+  );
+}
+
 const FIELD_CLASS =
   "mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-1 focus:ring-ring";
 
@@ -259,36 +298,18 @@ export function ItemEditPanel({
       );
       if (changedBatches.length > 0) {
         const db = await getDb();
-        for (const batch of changedBatches) {
-          const newExpiry = batchExpiries[batch.batch] ?? "";
-          const rows = await db.select<{ id: string; expiry: string | null }[]>(
-            "SELECT id, expiry FROM inventory_batches WHERE item_id = ? AND batch = ? LIMIT 1",
-            [item.id, batch.batch]
-          );
-          const row = rows[0];
-          if (!row) {
-            continue;
-          }
-          const previousExpiry = row.expiry ?? "";
-          await db.execute(
-            "UPDATE inventory_batches SET expiry = ? WHERE id = ?",
-            [newExpiry, row.id]
-          );
-          await recordAudit(
-            db,
-            {
-              action: "correction",
-              after: { batch: batch.batch, expiry: newExpiry },
-              before: { batch: batch.batch, expiry: previousExpiry },
-              detail: `Corrected batch expiry for ${batch.batch} from ${previousExpiry || "no date"} to ${newExpiry || "no date"}`,
-              targetId: row.id,
-              targetKind: "batch",
-            },
-            { bestEffort: true }
-          );
-          qc.invalidateQueries({ queryKey: ["inventory_items"] });
-          qc.invalidateQueries({ queryKey: ["dashboard-stats"] });
-        }
+        await Promise.all(
+          changedBatches.map((batch) =>
+            correctBatchExpiry(
+              db,
+              item.id,
+              batch.batch,
+              batchExpiries[batch.batch] ?? ""
+            )
+          )
+        );
+        qc.invalidateQueries({ queryKey: ["inventory_items"] });
+        qc.invalidateQueries({ queryKey: ["dashboard-stats"] });
       }
       toast.success(`Saved ${draft.name.trim()}`);
       onSaved?.();
@@ -297,7 +318,7 @@ export function ItemEditPanel({
         description: error instanceof Error ? error.message : String(error),
       });
     }
-  }, [batchExpiries, draft, item, items, onSaved, update]);
+  }, [batchExpiries, draft, item, items, onSaved, qc, update]);
 
   const handleCancel = useCallback(() => {
     // The dirty guard is local rather than a modal: the panel already owns the
