@@ -8,27 +8,31 @@
     <!-- Theme sync — must run before first paint so #splash doesn't blink light→dark.
          Mirrors next-themes (storageKey vite-ui-theme, default dark). -->
     <script>
-      (function () {
-        try {
-          var key = "vite-ui-theme";
-          var stored = localStorage.getItem(key);
-          // next-themes stores plain string "dark" | "light" | "system"
-          var theme = stored ? stored.replace(/^"|"$/g, "") : null;
-          var prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-          var isDark =
-            theme === "dark" ||
-            (theme !== "light" && theme !== "system" && !theme && true) ||
-            (theme === "system" && prefersDark) ||
-            (!theme && prefersDark ? false : theme === "dark" ? true : !theme ? true : false);
-          // defaultTheme is "dark" when no stored value
-          if (!theme) isDark = true;
-          else if (theme === "system") isDark = prefersDark;
-          else isDark = theme === "dark";
-          var root = document.documentElement;
-          root.classList.toggle("dark", isDark);
-          root.style.colorScheme = isDark ? "dark" : "light";
-        } catch (_) {}
-      })();
+    "use strict";
+    (() => {
+      const resolveDark = () => {
+        // next-themes stores plain string "dark" | "light" | "system"
+        const stored = localStorage.getItem("vite-ui-theme");
+        const theme = stored ? stored.replace(/^"|"$/g, "") : null;
+        if (theme === "system") {
+          return window.matchMedia("(prefers-color-scheme: dark)").matches;
+        }
+        // defaultTheme is "dark", so anything that isn't an explicit "light"
+        // resolves to dark -- including no stored value at all.
+        return theme !== "light";
+      };
+
+      try {
+        const root = document.documentElement;
+        const isDark = resolveDark();
+        root.classList.toggle("dark", isDark);
+        root.style.colorScheme = isDark ? "dark" : "light";
+      } catch {
+        // localStorage throws in private mode / sandboxed webview. The
+        // prefers-color-scheme rules in the stylesheet below still paint a
+        // sane background without the class.
+      }
+    })();
     </script>
     <!-- Apple splash shell — 0ms first paint before JS/migrations.
          Mirrors AppSplash so there is no flash between static HTML and React.
@@ -84,10 +88,10 @@
       width: 96px;
       height: 96px;
       padding: 12px;
+      overflow: hidden;
       background: var(--card, white);
       border: 1px solid oklch(0 0 0 / 0.08);
       border-radius: 22px;
-      overflow: hidden;
       box-shadow:
         0 1px 3px oklch(0 0 0 / 0.08),
         0 12px 32px oklch(0 0 0 / 0.1);
@@ -102,10 +106,10 @@
       border-color: oklch(0 0 0 / 0.06);
     }
     #splash-icon img {
+      display: block;
       width: 72px;
       height: 72px;
       object-fit: contain;
-      display: block;
       border-radius: 0;
     }
     #splash-icon img:last-child {

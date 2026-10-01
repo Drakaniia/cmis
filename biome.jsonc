@@ -212,6 +212,28 @@
           }
         }
       }
+    },
+    {
+      // The inline splash stylesheet in index.html paints before any JS runs,
+      // so it layers deliberately:
+      //  - every colour is declared twice, hex first then oklch/color-mix, so
+      //    a webview without oklch still gets a background instead of a black
+      //    flash (noDuplicateProperties);
+      //  - prefers-color-scheme rules come first and the .dark/.light class
+      //    rules after them at higher specificity, so the class the theme
+      //    script sets wins over the media query (noDescendingSpecificity).
+      // Both are the point of the file, not accidents.
+      "includes": ["apps/desktop/index.html"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noDescendingSpecificity": "off"
+          },
+          "suspicious": {
+            "noDuplicateProperties": "off"
+          }
+        }
+      }
     }
   ]
 }
