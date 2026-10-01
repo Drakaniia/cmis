@@ -57,6 +57,32 @@ function expiriesFor(item: InventoryItem): string[] {
   return item.expiry.trim() === "" ? [] : [item.expiry];
 }
 
+/**
+ * Which expiry bands an item touches. An item counts once per band, so a
+ * medicine with one expired batch and one far-future batch counts as both.
+ */
+function expiryBands(item: InventoryItem): {
+  expired: boolean;
+  later: boolean;
+  soon: boolean;
+} {
+  const bands = { expired: false, later: false, soon: false };
+  for (const iso of expiriesFor(item)) {
+    if (iso.trim() === "") {
+      continue;
+    }
+    const band = classifyExpiry(daysUntilExpiry(iso));
+    if (band === "expired") {
+      bands.expired = true;
+    } else if (band === "expiring-soon") {
+      bands.soon = true;
+    } else if (band === "expiring-later") {
+      bands.later = true;
+    }
+  }
+  return bands;
+}
+
 export function buildStockSummary(items: InventoryItem[]): StockSummary {
   const categories = new Set<string>();
   let unitsOnHand = 0;
@@ -80,29 +106,14 @@ export function buildStockSummary(items: InventoryItem[]): StockSummary {
       out += 1;
     }
 
-    let soon = false;
-    let later = false;
-    let isExpired = false;
-    for (const iso of expiriesFor(item)) {
-      if (iso.trim() === "") {
-        continue;
-      }
-      const band = classifyExpiry(daysUntilExpiry(iso));
-      if (band === "expired") {
-        isExpired = true;
-      } else if (band === "expiring-soon") {
-        soon = true;
-      } else if (band === "expiring-later") {
-        later = true;
-      }
-    }
-    if (isExpired) {
+    const expiry = expiryBands(item);
+    if (expiry.expired) {
       expired += 1;
     }
-    if (soon) {
+    if (expiry.soon) {
       expiringSoon += 1;
     }
-    if (later) {
+    if (expiry.later) {
       expiringLater += 1;
     }
   }
