@@ -27,7 +27,7 @@ export type LoaderVariant =
   | "percent";
 
 // Terminal-style frame sets — the loaders CLI AI agents cycle through.
-const ASCII_SETS: Record<string, string[]> = {
+const ASCII_SETS: Partial<Record<LoaderVariant, string[]>> = {
   ascii: ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"],
   "ascii-blocks": [
     "▁",
@@ -101,7 +101,7 @@ export function Loader({
       {variant === "dither" && (
         <Dither reduce={reduce} size={size} speed={speed} />
       )}
-      {ASCII_SETS[variant] && (
+      {ASCII_SETS[variant] !== undefined && (
         <Ascii
           frames={ASCII_SETS[variant]}
           reduce={reduce}
@@ -249,7 +249,7 @@ function ngonRadius(ang: number, n: number, phase = 0) {
 
 function morphPath(radiusAt: (ang: number) => number) {
   const parts: string[] = [];
-  for (let i = 0; i < MORPH_POINTS; i++) {
+  for (let i = 0; i < MORPH_POINTS; i += 1) {
     const ang = (i / MORPH_POINTS) * 2 * Math.PI - Math.PI / 2;
     const r = Math.min(1.05, radiusAt(ang));
     const x = (50 + Math.cos(ang) * 46 * r).toFixed(2);
@@ -379,7 +379,7 @@ function Scramble({ size, speed, reduce }: PartProps) {
       () => {
         const reveal = tick % total;
         let s = "";
-        for (let i = 0; i < SCRAMBLE_TARGET.length; i++) {
+        for (let i = 0; i < SCRAMBLE_TARGET.length; i += 1) {
           s +=
             i < reveal
               ? SCRAMBLE_TARGET[i]
@@ -388,7 +388,7 @@ function Scramble({ size, speed, reduce }: PartProps) {
                 ];
         }
         setText(s);
-        tick++;
+        tick += 1;
       },
       (speed / SCRAMBLE_TARGET.length) * 1000 * 0.55
     );
