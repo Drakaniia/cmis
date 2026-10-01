@@ -79,11 +79,9 @@ function App() {
     const tick = () => {
       const elapsed = Date.now() - startedAt;
       // TanStack Router exposes status/pending via state; fallback to false if unknown
-      const state = (
-        router as unknown as {
-          state?: { status?: string; isLoading?: boolean };
-        }
-      ).state;
+      const { state } = router as unknown as {
+        state?: { status?: string; isLoading?: boolean };
+      };
       const isPending =
         state?.status === "pending" || state?.isLoading === true;
       if (elapsed >= minMs && !isPending) {
