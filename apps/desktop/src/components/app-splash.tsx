@@ -5,6 +5,24 @@ interface AppSplashProps {
   visible: boolean;
 }
 
+/**
+ * The four layers of this splash each pick between three animation states, and
+ * they all branch on the same two flags. Resolving it once here keeps each layer
+ * to a flat lookup — and the branches stay in one readable place.
+ */
+function stage<T>(
+  reduceMotion: boolean,
+  visible: boolean,
+  reduced: T,
+  shown: T,
+  hidden: T
+): T {
+  if (reduceMotion) {
+    return reduced;
+  }
+  return visible ? shown : hidden;
+}
+
 export function AppSplash({ visible }: AppSplashProps) {
   const reduceMotion = useReducedMotion() ?? false;
 
@@ -27,13 +45,13 @@ export function AppSplash({ visible }: AppSplashProps) {
         // Ensure splash paints over Tauri's transparent titlebar area too
         paddingTop: "env(titlebar-area-height, 0px)",
       }}
-      transition={
-        reduceMotion
-          ? { duration: 0.2, ease: "easeOut" }
-          : visible
-            ? { duration: 0.35, ease: [0.22, 0.68, 0, 1] }
-            : { duration: 0.45, ease: [0.22, 0.68, 0, 1] }
-      }
+      transition={stage(
+        reduceMotion,
+        visible,
+        { duration: 0.2, ease: "easeOut" },
+        { duration: 0.35, ease: [0.22, 0.68, 0, 1] },
+        { duration: 0.45, ease: [0.22, 0.68, 0, 1] }
+      )}
     >
       {/* Subtle canvas tint — matches page-canvas hierarchy without being translucent */}
       <div
@@ -47,13 +65,13 @@ export function AppSplash({ visible }: AppSplashProps) {
 
       {/* Center stack — spatial consistency: single vertical column, centered anchor */}
       <motion.div
-        animate={
-          reduceMotion
-            ? { opacity: 1 }
-            : visible
-              ? { filter: "blur(0px)", opacity: 1, scale: 1, y: 0 }
-              : { filter: "blur(6px)", opacity: 0, scale: 0.98, y: 8 }
-        }
+        animate={stage(
+          reduceMotion,
+          visible,
+          { opacity: 1 },
+          { filter: "blur(0px)", opacity: 1, scale: 1, y: 0 },
+          { filter: "blur(6px)", opacity: 0, scale: 0.98, y: 8 }
+        )}
         className="relative flex flex-col items-center gap-7 px-6 text-center"
         initial={false}
         transition={
@@ -68,13 +86,13 @@ export function AppSplash({ visible }: AppSplashProps) {
       >
         {/* ── Logo mark — Apple dark-theme card style (like earlier splash) — bigger + spring — will also be used in sidebar ── */}
         <motion.div
-          animate={
-            reduceMotion
-              ? { opacity: 1 }
-              : visible
-                ? { filter: "blur(0px)", opacity: 1, scale: 1 }
-                : { filter: "blur(4px)", opacity: 0, scale: 0.96 }
-          }
+          animate={stage(
+            reduceMotion,
+            visible,
+            { opacity: 1 },
+            { filter: "blur(0px)", opacity: 1, scale: 1 },
+            { filter: "blur(4px)", opacity: 0, scale: 0.96 }
+          )}
           aria-hidden
           className="flex items-center justify-center"
           initial={
@@ -148,13 +166,13 @@ export function AppSplash({ visible }: AppSplashProps) {
 
         {/* ── Helix loader — two-tone: foreground + muted-foreground (theme-aware, never bg-matching) + apple spring ── */}
         <motion.div
-          animate={
-            reduceMotion
-              ? { opacity: 1 }
-              : visible
-                ? { opacity: 1, y: 0 }
-                : { opacity: 0, y: 4 }
-          }
+          animate={stage(
+            reduceMotion,
+            visible,
+            { opacity: 1 },
+            { opacity: 1, y: 0 },
+            { opacity: 0, y: 4 }
+          )}
           className="flex flex-col items-center gap-4 pt-1"
           initial={reduceMotion ? { opacity: 1 } : { opacity: 0, y: 8 }}
           style={
