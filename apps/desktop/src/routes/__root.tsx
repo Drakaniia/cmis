@@ -12,6 +12,7 @@ import { toast } from "sonner";
 
 import { AppSidebar } from "@/components/app-sidebar";
 import Header from "@/components/header";
+import ScrollIndicators from "@/components/scroll-indicator/scroll-indicator";
 import { TitleBar } from "@/components/titlebar";
 import { BackupWarningBanner } from "@/features/backup/components/backup-warning-banner";
 import { FirstRunRestorePrompt } from "@/features/backup/components/first-run-restore-prompt";
@@ -317,6 +318,9 @@ function RootComponent() {
             <ThresholdBackfillNotice />
             <FirstRunRestorePrompt />
             <Toaster position="bottom-right" richColors />
+            {/* Every native scrollbar is hidden globally, so this is the only
+                thing on screen that says a surface scrolls. */}
+            <ScrollIndicators />
           </HelpDialogsProvider>
         </UpdaterProvider>
       </ThemeProvider>
