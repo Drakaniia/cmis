@@ -18,7 +18,7 @@ import {
   CellText,
 } from "../sheet-cells";
 import { formatCount, plural } from "../summary-text";
-import { FIRST_FROZEN_WIDTH, GROUP_TEMPLATE } from "./constants";
+import { BATCH_TEMPLATE } from "./constants";
 import { cellClass, frozenStyle } from "./grid";
 import { groupIssues, IssueChip } from "./issues";
 import type { SheetHandlers } from "./types";
@@ -150,14 +150,12 @@ export function GroupRow({
     // biome-ignore lint/a11y/noNoninteractiveElementInteractions lint/a11y/noStaticElementInteractions: HTML5 drop target; reordering is also offered by the row's Move up/down buttons
     <div
       className={cn(
-        "grid items-center gap-1.5 border-border/60 border-b py-2",
-        highlighted
-          ? "bg-destructive/5 ring-1 ring-destructive/40 ring-inset"
-          : "bg-card"
+        "grid items-center gap-x-2 border-border/60 border-b bg-card px-2 py-2",
+        highlighted && "bg-destructive/5 ring-1 ring-destructive/40 ring-inset"
       )}
       onDragOver={handleDragOver}
       onDrop={handleDrop}
-      style={{ gridTemplateColumns: GROUP_TEMPLATE }}
+      style={{ gridTemplateColumns: BATCH_TEMPLATE }}
     >
       <div className={cellClass(0, "bg-card")} style={frozenStyle(0)}>
         <CellText
@@ -171,8 +169,8 @@ export function GroupRow({
       </div>
 
       <div
-        className="sticky z-[1] flex min-w-0 items-center gap-1.5 bg-card pl-1"
-        style={{ left: FIRST_FROZEN_WIDTH }}
+        className="sticky z-[1] flex min-w-0 items-center gap-1.5 bg-card py-1 pl-1 shadow-[1px_0_0_var(--border)]"
+        style={{ gridColumn: "span 3", ...frozenStyle(1) }}
       >
         <Checkbox
           aria-label={`Select group ${groupIndex + 1}`}
@@ -233,6 +231,7 @@ export function GroupRow({
           label={`Strength unit for group ${groupIndex + 1}`}
           mark={mark("strengthUnit")}
           onChange={handleUnit}
+          placeholder="Unit"
           value={product.strengthUnit}
         />
       </div>
@@ -242,6 +241,7 @@ export function GroupRow({
           label={`Form for group ${groupIndex + 1}`}
           mark={mark("form")}
           onChange={handleForm}
+          placeholder="Form"
           value={product.form}
         />
       </div>
@@ -273,7 +273,7 @@ export function GroupRow({
         />
       </div>
 
-      <div className="flex items-center justify-end gap-1 pr-2">
+      <div className="flex items-center justify-end gap-1">
         <Button
           aria-label={`Add a batch to group ${groupIndex + 1}`}
           className="press-feedback"

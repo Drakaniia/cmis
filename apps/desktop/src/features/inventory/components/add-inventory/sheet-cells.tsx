@@ -145,12 +145,14 @@ export function CellCategory({
   label,
   mark,
   onChange,
+  placeholder = "Category",
   value,
 }: {
   invalid?: boolean;
   label: string;
   mark?: boolean;
   onChange: (value: string) => void;
+  placeholder?: string;
   value: string;
 }) {
   return (
@@ -159,7 +161,7 @@ export function CellCategory({
         aria-label={label}
         invalid={invalid}
         onChange={onChange}
-        placeholder={label}
+        placeholder={placeholder}
         title={label}
         value={value}
         variant="cell"
@@ -183,6 +185,7 @@ export function CellTerm({
   label,
   mark,
   onChange,
+  placeholder,
   value,
 }: {
   invalid?: boolean;
@@ -190,6 +193,7 @@ export function CellTerm({
   label: string;
   mark?: boolean;
   onChange: (value: string) => void;
+  placeholder?: string;
   value: string;
 }) {
   return (
@@ -199,7 +203,7 @@ export function CellTerm({
         invalid={invalid}
         kind={kind}
         onChange={onChange}
-        placeholder={label}
+        placeholder={placeholder ?? label.split(" for ")[0] ?? label}
         title={label}
         value={value}
         variant="cell"
@@ -238,12 +242,14 @@ export function CellDate({
   label,
   min,
   onChange,
+  placeholder = "YYYY-MM-DD",
   value,
 }: {
   invalid?: boolean;
   label: string;
   min?: string;
   onChange: (iso: string) => void;
+  placeholder?: string;
   value: string;
 }) {
   return (
@@ -252,7 +258,7 @@ export function CellDate({
       className={cn("h-8", invalid && "border-destructive")}
       min={min}
       onChange={onChange}
-      placeholder={label}
+      placeholder={placeholder}
       value={value}
     />
   );

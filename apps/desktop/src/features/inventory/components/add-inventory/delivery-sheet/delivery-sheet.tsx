@@ -461,14 +461,14 @@ export function DeliverySheet({
         </div>
       ) : (
         <div
-          className="overflow-auto rounded-xl border border-border bg-card"
+          className="max-h-[60vh] overflow-auto rounded-xl border border-border bg-card"
           ref={scrollRef}
         >
           <div
             style={{ width: Math.max(SHEET_CONTENT_WIDTH + ACTION_WIDTH, 640) }}
           >
             <div
-              className="sticky top-0 z-[2] grid items-center gap-1.5 border-border/60 border-b bg-muted px-0 py-1.5 font-medium text-caption"
+              className="sticky top-0 z-[2] grid items-center gap-x-2 border-border/60 border-b bg-muted/80 px-2 py-2 font-medium text-[11px] text-muted-foreground uppercase tracking-wide backdrop-blur-md"
               role="presentation"
               style={{ gridTemplateColumns: HEADER_TEMPLATE }}
             >
@@ -476,7 +476,8 @@ export function DeliverySheet({
                 <span
                   className={cn(
                     "min-w-0",
-                    column.frozen && "sticky z-[1] bg-muted"
+                    column.frozen &&
+                      "sticky z-[1] bg-muted/80 shadow-[1px_0_0_var(--border)] backdrop-blur-md"
                   )}
                   key={column.key}
                   style={frozenStyle(index)}

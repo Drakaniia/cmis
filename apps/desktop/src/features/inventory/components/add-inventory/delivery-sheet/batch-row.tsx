@@ -87,15 +87,12 @@ export function BatchRow({
   return (
     <div
       className={cn(
-        "grid items-center gap-1.5 border-b",
+        "grid items-center gap-x-2 border-b bg-muted/30 px-2 py-1.5",
         lastInGroup ? "border-border/60" : "border-border/30"
       )}
       style={{ gridTemplateColumns: BATCH_TEMPLATE }}
     >
-      <div
-        className={cn(cellClass(0, tone), "border-primary/30 border-l-2")}
-        style={frozenStyle(0)}
-      >
+      <div className={cellClass(0, tone)} style={frozenStyle(0)}>
         <CellStatic>
           {displayNameOf(product) || product.name || "Untitled"}
         </CellStatic>
@@ -168,7 +165,7 @@ export function BatchRow({
         />
       </div>
 
-      <div className="flex items-center justify-end gap-1 pr-2">
+      <div className="flex items-center justify-end gap-1">
         <Button
           aria-label={`Move ${label} up`}
           disabled={indexInGroup === 0}
