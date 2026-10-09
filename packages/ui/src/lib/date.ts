@@ -29,6 +29,25 @@ export const WEEKDAY_LABELS = [
   "Sa",
 ] as const;
 
+/** Short month names, January first — the month-view cell labels. */
+export const MONTH_LABELS = [
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
+] as const;
+
+const MONTHS_IN_YEAR = 12;
+const YEARS_IN_GRID = 12;
+
 function pad2(value: number): string {
   return String(value).padStart(2, "0");
 }
@@ -108,4 +127,51 @@ export function isoDayOfMonth(value: string): number {
   return Number(value.slice(-2));
 }
 
-export { DAYS_IN_WEEK };
+/** Shift `date` by whole `years`, keeping the day of month. */
+export function shiftYear(date: Date, years: number): Date {
+  const shifted = new Date(date.getTime());
+  shifted.setFullYear(shifted.getFullYear() + years);
+  return shifted;
+}
+
+/** `2026-09` for a Date, read in local time. */
+export function monthKeyOf(date: Date): string {
+  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}`;
+}
+
+/** `2026-09` from an ISO date `2026-09-16`. */
+export function monthKeyFromIso(value: string): string {
+  return value.slice(0, 7);
+}
+
+/** `2026-09-01` — the first day of the given zero-based month. */
+export function monthFirstDayIso(year: number, monthIndex: number): string {
+  return `${year}-${pad2(monthIndex + 1)}-01`;
+}
+
+/** `2026-09-30` — the last calendar day of the given zero-based month. */
+export function monthLastDayIso(year: number, monthIndex: number): string {
+  const last = new Date(year, monthIndex + 1, 0).getDate();
+  return `${year}-${pad2(monthIndex + 1)}-${pad2(last)}`;
+}
+
+/** `["2026-01", …, "2026-12"]` for the given year. */
+export function monthKeysOfYear(year: number): string[] {
+  return Array.from(
+    { length: MONTHS_IN_YEAR },
+    (_, index) => `${year}-${pad2(index + 1)}`
+  );
+}
+
+/** The first year of the 12-year grid containing `year`. */
+export function yearGridStart(year: number): number {
+  return Math.floor(year / YEARS_IN_GRID) * YEARS_IN_GRID;
+}
+
+/** The 12 years shown in the year view, oldest first. */
+export function yearGrid(year: number): number[] {
+  const start = yearGridStart(year);
+  return Array.from({ length: YEARS_IN_GRID }, (_, index) => start + index);
+}
+
+export { DAYS_IN_WEEK, MONTHS_IN_YEAR, YEARS_IN_GRID };

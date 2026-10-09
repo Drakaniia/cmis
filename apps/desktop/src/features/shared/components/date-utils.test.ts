@@ -3,10 +3,17 @@ import {
   fromIsoDate,
   isIsoDate,
   isoDayOfMonth,
+  monthFirstDayIso,
   monthGrid,
+  monthKeyFromIso,
+  monthKeyOf,
+  monthKeysOfYear,
+  monthLastDayIso,
   shiftMonth,
   todayIso,
   toIsoDate,
+  yearGrid,
+  yearGridStart,
 } from "@cmis/ui/lib/date";
 import { describe, expect, it } from "vitest";
 
@@ -53,5 +60,31 @@ describe("iso date helpers", () => {
   it("exposes the day number for a cell and today as ISO", () => {
     expect(isoDayOfMonth("2026-09-06")).toBe(6);
     expect(isIsoDate(todayIso())).toBe(true);
+  });
+
+  it("derives month keys from a Date and an ISO date", () => {
+    expect(monthKeyOf(new Date(2026, 8, 15))).toBe("2026-09");
+    expect(monthKeyOf(new Date(2026, 11, 1))).toBe("2026-12");
+    expect(monthKeyFromIso("2026-09-16")).toBe("2026-09");
+  });
+
+  it("bounds each month and enumerates a year's keys", () => {
+    expect(monthFirstDayIso(2026, 1)).toBe("2026-02-01");
+    expect(monthLastDayIso(2026, 1)).toBe("2026-02-28");
+    expect(monthLastDayIso(2024, 1)).toBe("2024-02-29");
+
+    const keys = monthKeysOfYear(2026);
+    expect(keys).toHaveLength(12);
+    expect(keys[0]).toBe("2026-01");
+    expect(keys[11]).toBe("2026-12");
+  });
+
+  it("builds the 12-year drill-down grid around a year", () => {
+    expect(yearGridStart(2026)).toBe(2016);
+    const years = yearGrid(2026);
+    expect(years).toHaveLength(12);
+    expect(years[0]).toBe(2016);
+    expect(years.at(-1)).toBe(2027);
+    expect(years).toContain(2026);
   });
 });

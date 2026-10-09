@@ -5,7 +5,6 @@ import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 
-const TRIGGER = /choose date/i;
 const NEXT_MONTH = /next month/i;
 
 /**
@@ -98,10 +97,11 @@ describe("AppleDatePicker", () => {
 
   // One mount on purpose: every open popover leaves an animation-frame loop
   // behind in jsdom, so popover coverage stays in a single test.
-  it("picks a day, honours min/max and walks months", () => {
+  it("picks a day, drills month → year, honours min/max and walks months", () => {
     render(<Harness initial="2026-09-15" max="2026-09-20" min="2026-09-10" />);
 
-    click(screen.getByRole("button", { name: TRIGGER }));
+    // Clicking the field itself opens the calendar (not only the icon).
+    click(getField());
     expect(screen.getByText("September 2026")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "2026-09-05" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "2026-09-12" })).toBeEnabled();
@@ -111,11 +111,21 @@ describe("AppleDatePicker", () => {
     expect(screen.getByText("October 2026")).toBeInTheDocument();
     click(screen.getByRole("button", { name: /previous month/i }));
 
+    // Drill up: month grid, then year grid, then back down to the day grid.
+    click(screen.getByRole("button", { name: /choose month/i }));
+    expect(
+      screen.getByRole("button", { name: "September 2026" })
+    ).toBeInTheDocument();
+    click(screen.getByRole("button", { name: /choose year/i }));
+    click(screen.getByRole("button", { name: "2026" }));
+    click(screen.getByRole("button", { name: "September 2026" }));
+    expect(screen.getByText("September 2026")).toBeInTheDocument();
+
     click(screen.getByRole("button", { name: "2026-09-20" }));
     expect(getCommitted()).toHaveTextContent("2026-09-20");
     expect(getField()).toHaveValue("2026-09-20");
 
-    click(screen.getByRole("button", { name: TRIGGER }));
+    click(getField());
     click(screen.getByRole("button", { name: /^clear$/i }));
     expect(getCommitted()).toHaveTextContent("");
     expect(getField()).toHaveValue("");
