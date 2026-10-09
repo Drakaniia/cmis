@@ -94,3 +94,16 @@ export interface MonthActivity {
   dispensed: string;
   received: string;
 }
+
+/**
+ * The raw month-scoped totals a query hands back, tagged with the `month` it was
+ * measured for. The tag is what lets a report refuse to display another month's
+ * numbers while the selected one loads (`resolveMonthActivity`).
+ */
+export interface MonthActivityData {
+  dispensed: number;
+  hasActivity: boolean;
+  /** The `YYYY-MM` these figures describe — never mixed across months. */
+  month: string;
+  received: number;
+}

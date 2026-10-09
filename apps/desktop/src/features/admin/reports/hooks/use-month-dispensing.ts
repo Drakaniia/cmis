@@ -11,6 +11,11 @@ import { daysInMonth } from "@/lib/month";
  * answers the *shape* question the template needs, from the same
  * `dispensing_events` rows. Each array is `daysInMonth(month)` long, indexed by
  * `day - 1`, so a 30-day month never reserves a phantom 31st column (E2/E19).
+ *
+ * No `placeholderData`, for the same reason `useMonthActivity` has none: the
+ * export writes this grid into the month's day columns, and a previous month's
+ * grid under a new month's heading would be a false record. `undefined` means
+ * "not read yet", and the export stays disabled until it resolves.
  */
 
 interface DispensingRow {
@@ -21,7 +26,6 @@ interface DispensingRow {
 
 export function useMonthDispensing(month: string) {
   return useQuery({
-    placeholderData: (previousData) => previousData,
     queryFn: async (): Promise<Map<string, number[]>> => {
       const dayCount = daysInMonth(month);
       if (dayCount <= 0) {

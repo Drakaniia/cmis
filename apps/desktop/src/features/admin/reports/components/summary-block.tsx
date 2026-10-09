@@ -97,8 +97,18 @@ function FigureGroup({
   );
 }
 
-function MonthPill({ label, value }: { label: string; value: string }) {
-  const isDash = value === "—";
+function MonthPill({
+  isLoading = false,
+  label,
+  value,
+}: {
+  isLoading?: boolean;
+  label: string;
+  value: string;
+}) {
+  // A pending month must not borrow the dash styling: the dash means "quiet
+  // month", not "still reading". Loading pulses a neutral bar instead.
+  const isDash = !isLoading && value === "—";
   return (
     <div
       className={cn(
@@ -116,20 +126,27 @@ function MonthPill({ label, value }: { label: string; value: string }) {
         )}
         {label}
       </span>
-      <motion.span
-        animate={{ opacity: 1, y: 0 }}
-        className={cn(
-          "font-semibold tabular-nums leading-none tracking-[-0.015em]",
-          isDash
-            ? "text-muted-foreground/50 text-sm"
-            : "text-[15px] text-foreground"
-        )}
-        initial={{ opacity: 0, y: 4 }}
-        key={`${label}-${value}`}
-        transition={{ damping: 30, stiffness: 380, type: "spring" }}
-      >
-        {value}
-      </motion.span>
+      {isLoading ? (
+        <span
+          aria-hidden
+          className="h-3.5 w-9 animate-pulse rounded-full bg-muted-foreground/25"
+        />
+      ) : (
+        <motion.span
+          animate={{ opacity: 1, y: 0 }}
+          className={cn(
+            "font-semibold tabular-nums leading-none tracking-[-0.015em]",
+            isDash
+              ? "text-muted-foreground/50 text-sm"
+              : "text-[15px] text-foreground"
+          )}
+          initial={{ opacity: 0, y: 4 }}
+          key={`${label}-${value}`}
+          transition={{ damping: 30, stiffness: 380, type: "spring" }}
+        >
+          {value}
+        </motion.span>
+      )}
     </div>
   );
 }
@@ -138,12 +155,14 @@ export function SummaryBlock({
   activity,
   asOf,
   category,
+  isActivityLoading = false,
   monthLabel,
   summary,
 }: {
   activity: MonthActivity;
   asOf: string;
   category: string;
+  isActivityLoading?: boolean;
   monthLabel: string;
   summary: StockSummary;
 }) {
@@ -152,6 +171,7 @@ export function SummaryBlock({
   return (
     <motion.section
       animate={{ opacity: 1, y: 0 }}
+      aria-busy={isActivityLoading}
       aria-label="Month summary"
       className={cn(
         "relative overflow-hidden rounded-2xl border bg-card",
@@ -259,8 +279,16 @@ export function SummaryBlock({
             This month
           </h3>
           <div className="grid gap-2">
-            <MonthPill label="Received" value={activity.received} />
-            <MonthPill label="Dispensed" value={activity.dispensed} />
+            <MonthPill
+              isLoading={isActivityLoading}
+              label="Received"
+              value={activity.received}
+            />
+            <MonthPill
+              isLoading={isActivityLoading}
+              label="Dispensed"
+              value={activity.dispensed}
+            />
             <p className="px-1 text-[11px] text-muted-foreground/70 leading-relaxed tracking-[0.01em]">
               Only this section follows the month picker. Stock stays live.
             </p>

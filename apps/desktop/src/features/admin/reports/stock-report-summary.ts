@@ -17,7 +17,12 @@ import {
 } from "@/features/inventory/domain/expiry";
 import { classifyLowStock } from "@/features/inventory/domain/low-stock";
 import type { InventoryItem } from "@/features/inventory/types";
-import { EM_DASH, type MonthActivity, type StockSummary } from "./types";
+import {
+  EM_DASH,
+  type MonthActivity,
+  type MonthActivityData,
+  type StockSummary,
+} from "./types";
 
 /** An em dash for a month with no inbound and no outbound activity (D15). */
 export function monthFigure(value: number, hasActivity: boolean): string {
@@ -38,6 +43,39 @@ export function buildMonthActivity(input: {
     dispensed: monthFigure(input.dispensed, input.hasActivity),
     received: monthFigure(input.received, input.hasActivity),
   };
+}
+
+/** The figures a report may render, plus whether the month is still loading. */
+export interface ResolvedMonthActivity {
+  activity: MonthActivity;
+  /** `true` while the selected month's own figures have not been read yet. */
+  isPending: boolean;
+}
+
+/**
+ * The only month figures a report is allowed to display.
+ *
+ * Data is accepted only when it was measured for the selected `month`. A month
+ * change therefore reads as *loading* — the two pills pulse — rather than
+ * silently pairing the new month's label with the previous month's numbers, and
+ * no PDF, workbook or print run can be captured mid-switch with the wrong
+ * figures (the report's "no false assumption" rule).
+ */
+export function resolveMonthActivity(
+  month: string,
+  data: MonthActivityData | undefined
+): ResolvedMonthActivity {
+  if (!data || data.month !== month) {
+    return {
+      activity: buildMonthActivity({
+        dispensed: 0,
+        hasActivity: false,
+        received: 0,
+      }),
+      isPending: true,
+    };
+  }
+  return { activity: buildMonthActivity(data), isPending: false };
 }
 
 /** `Stock as of Sep 21, 2026, 3:04 PM` — the stamp that keeps a screenshot honest. */
