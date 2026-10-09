@@ -2,7 +2,7 @@ import { Button } from "@cmis/ui/components/button";
 import { Checkbox } from "@cmis/ui/components/checkbox";
 import { QuantityStepper } from "@cmis/ui/components/quantity-stepper";
 import { useNavigate } from "@tanstack/react-router";
-import { Plus, Trash2, X } from "lucide-react";
+import { PackageMinus, Plus, Trash2, X } from "lucide-react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import {
   type ChangeEvent,
@@ -17,14 +17,27 @@ import {
 } from "react";
 import { toast } from "sonner";
 
-import { toBaseUnits } from "@/features/inventory/domain/pack-size";
-import type { InventoryItem } from "@/features/inventory/types";
+import { describeQuantity } from "@/features/inventory/domain/pack-size";
+import { useQuickDeduct } from "@/features/inventory/hooks/use-quick-deduct";
+import {
+  EXPIRY_THRESHOLDS,
+  type InventoryItem,
+} from "@/features/inventory/types";
 import { materializeEnter, sheetSpring } from "@/lib/motion";
+import {
+  checkRows,
+  type ItemAvailability,
+  itemAvailability,
+  type RowStockCheck,
+  stockMessageFor,
+  UNAVAILABLE_SHORT,
+} from "../domain/request-availability";
 import {
   matchInventoryItem,
   parseQuantity,
   type RequestDraftRow,
   rowProblem,
+  type StockDrift,
   suggestInventoryItems,
   useCreateRequests,
 } from "../hooks/use-create-requests";
@@ -59,13 +72,148 @@ function newRow(): RequestDraftRow {
   return { key: `row-${rowCounter}`, medicine: "", qty: "", unit: "unit" };
 }
 
+/** §5.2 — the live breakdown under a row's quantity grid. Zero segments omitted. */
+function breakdownLine(check: RowStockCheck): string {
+  const fmt = (value: number) => describeQuantity(value, check.pack);
+  const segments = [`${fmt(check.onHand)} on hand`];
+  if (check.dispensable !== check.onHand) {
+    segments.push(`${fmt(check.dispensable)} dispensable`);
+  }
+  if (check.soonExpiring > 0) {
+    segments.push(
+      `${fmt(check.soonExpiring)} expiring soon (≤${EXPIRY_THRESHOLDS.soon}d)`
+    );
+  }
+  if (check.reserved > 0) {
+    segments.push(`${fmt(check.reserved)} reserved`);
+  }
+  return `${segments.join(" · ")}  →  ${fmt(check.available)} available`;
+}
+
+/** §4.3 blocking stock states (the structural `rowProblem` is separate). */
+function isBlocked(check: RowStockCheck | null | undefined): boolean {
+  return check?.state === "pack-unknown" || check?.state === "unavailable";
+}
+
+/** §4.3 warn states — what the acknowledgment gate counts. */
+function isWarn(check: RowStockCheck | null | undefined): boolean {
+  return check?.state === "shortfall" || check?.state === "reserve-dip";
+}
+
+/** §5.4 per-row summary: "Paracetamol — 20 short". */
+function warnSummary(label: string, check: RowStockCheck): string {
+  if (check.state === "shortfall") {
+    return `${label} — ${check.shortBy} short`;
+  }
+  return `${label} — ${check.requestedBaseQty - check.available} into reserved`;
+}
+
+function footerCaption(attention: number, driftCount: number): string {
+  if (attention > 0) {
+    return `${attention} item${attention === 1 ? "" : "s"} need attention`;
+  }
+  if (driftCount > 0) {
+    return "Stock changed — review the rows above";
+  }
+  return "Ctrl/⌘ + Enter to submit";
+}
+
+/** Every displayed number as one string — the key drift is pinned to (§5.6). */
+function checksSignatureOf(checks: Map<string, RowStockCheck>): string {
+  return [...checks.entries()]
+    .map(
+      ([key, check]) =>
+        `${key}:${check.state}:${check.available}:${check.shortBy}:${check.reason ?? ""}`
+    )
+    .join("|");
+}
+
+interface WarnEntry {
+  check: RowStockCheck;
+  row: RequestDraftRow;
+}
+
+interface StockGate {
+  /** True while the current warn signature has been acknowledged. */
+  acked: boolean;
+  /** Structural problems + blocking stock rows. */
+  attention: number;
+  blocked: boolean;
+  cannotSubmit: boolean;
+  warnEntries: WarnEntry[];
+  /** §5.4 — ordered `key:state:shortBy`; any change re-opens the gate. */
+  warnSignature: string;
+  warnSummaries: string[];
+}
+
+/**
+ * The form's whole §4–§5 gate as one pure function: what blocks, what warns,
+ * whether Submit may run, and the signature the acknowledgment keys off.
+ */
+function deriveStockGate(input: {
+  ackedSignature: string | null;
+  checks: Map<string, RowStockCheck>;
+  dbReady: boolean | null;
+  driftCount: number;
+  items: readonly InventoryItem[];
+  rows: readonly RequestDraftRow[];
+  submitting: boolean;
+}): StockGate {
+  const {
+    ackedSignature,
+    checks,
+    dbReady,
+    driftCount,
+    items,
+    rows,
+    submitting,
+  } = input;
+  const problems = rows.filter((row) => rowProblem(row, items) !== null);
+  const blockedRows = rows.filter((row) => isBlocked(checks.get(row.key)));
+  const warnEntries: WarnEntry[] = [];
+  for (const row of rows) {
+    const check = checks.get(row.key);
+    if (check && isWarn(check)) {
+      warnEntries.push({ check, row });
+    }
+  }
+  const warnSignature = warnEntries
+    .map(({ check, row }) => `${row.key}:${check.state}:${check.shortBy}`)
+    .join("|");
+  const attention = problems.length + blockedRows.length;
+  const blocked =
+    problems.length > 0 || blockedRows.length > 0 || rows.length === 0;
+  const acked = ackedSignature === warnSignature;
+  return {
+    acked,
+    attention,
+    blocked,
+    cannotSubmit:
+      blocked ||
+      (warnEntries.length > 0 && !acked) ||
+      driftCount > 0 ||
+      submitting ||
+      dbReady !== true,
+    warnEntries,
+    warnSignature,
+    warnSummaries: warnEntries.map(({ check, row }) =>
+      warnSummary(
+        matchInventoryItem(items, row.medicine)?.displayName ?? row.medicine,
+        check
+      )
+    ),
+  };
+}
+
 /** One autocomplete row. Its own component so the click handler stays stable. */
 function SuggestionOption({
   active,
+  availability,
   item,
   onPick,
 }: {
   active: boolean;
+  availability: ItemAvailability;
   item: InventoryItem;
   onPick: (item: InventoryItem) => void;
 }) {
@@ -73,12 +221,21 @@ function SuggestionOption({
     (event: ReactMouseEvent) => event.preventDefault(),
     []
   );
-  const handleClick = useCallback(() => onPick(item), [item, onPick]);
+  const handleClick = useCallback(() => {
+    if (!availability.disabled) {
+      onPick(item);
+    }
+  }, [availability.disabled, item, onPick]);
 
   return (
     <button
+      aria-disabled={availability.disabled}
       aria-selected={active}
-      className="flex w-full items-center justify-between gap-2 rounded-sm px-2 py-1.5 text-left text-xs hover:bg-accent"
+      className={`flex w-full items-center justify-between gap-2 rounded-sm px-2 py-1.5 text-left text-xs ${
+        availability.disabled
+          ? "pointer-events-none opacity-60"
+          : "hover:bg-accent"
+      }`}
       onClick={handleClick}
       // Keeps focus on the input so the click lands before blur closes the list.
       onMouseDown={handleMouseDown}
@@ -88,7 +245,13 @@ function SuggestionOption({
     >
       <span className="min-w-0 truncate">{item.displayName}</span>
       <span className="shrink-0 text-caption text-muted-foreground tabular-nums">
-        {item.qty} on hand
+        {availability.disabled
+          ? UNAVAILABLE_SHORT[availability.reason ?? "out-of-stock"]
+          : `${availability.available} available${
+              availability.available === item.qty
+                ? ""
+                : ` · ${item.qty} on hand`
+            }`}
       </span>
     </button>
   );
@@ -110,10 +273,29 @@ function MedicineCombobox({
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
   const listId = `${id}-listbox`;
-  const suggestions = useMemo(
-    () => suggestInventoryItems(items, value),
-    [items, value]
-  );
+  // §5.1: requestable first, disabled after — each group alphabetical — with
+  // the item's availability attached for the right-hand figure.
+  const options = useMemo(() => {
+    const withAvailability = suggestInventoryItems(items, value).map(
+      (item) => ({ availability: itemAvailability(item), item })
+    );
+    return [
+      ...withAvailability.filter((option) => !option.availability.disabled),
+      ...withAvailability.filter((option) => option.availability.disabled),
+    ];
+  }, [items, value]);
+  // The active index only ever walks the enabled group (§5.1); a stale index
+  // onto a disabled option falls back to the first enabled one.
+  const activeIndex = useMemo(() => {
+    const firstEnabled = options.findIndex(
+      (option) => !option.availability.disabled
+    );
+    const current = options[active];
+    if (current && !current.availability.disabled) {
+      return active;
+    }
+    return firstEnabled >= 0 ? firstEnabled : 0;
+  }, [active, options]);
 
   const handleChange = useCallback(
     (event: ChangeEvent<HTMLInputElement>) => {
@@ -132,6 +314,28 @@ function MedicineCombobox({
     [onPick]
   );
 
+  // One step from `activeIndex` onto the next/previous enabled option.
+  const moveActive = useCallback(
+    (step: 1 | -1) => {
+      setActive((current) => {
+        const enabled = options
+          .map((option, index) => (option.availability.disabled ? -1 : index))
+          .filter((index) => index >= 0);
+        if (enabled.length === 0) {
+          return 0;
+        }
+        const position = enabled.indexOf(current);
+        if (position === -1) {
+          return step === 1 ? 0 : enabled.length - 1;
+        }
+        return enabled[
+          Math.min(Math.max(position + step, 0), enabled.length - 1)
+        ];
+      });
+    },
+    [options]
+  );
+
   const handleKeyDown = useCallback(
     (event: ReactKeyboardEvent<HTMLInputElement>) => {
       if (event.key === "Escape" && open) {
@@ -140,29 +344,29 @@ function MedicineCombobox({
         setOpen(false);
         return;
       }
-      if (suggestions.length === 0) {
+      if (options.length === 0) {
         return;
       }
       if (event.key === "ArrowDown") {
         event.preventDefault();
         setOpen(true);
-        setActive((index) => Math.min(index + 1, suggestions.length - 1));
+        moveActive(1);
         return;
       }
       if (event.key === "ArrowUp") {
         event.preventDefault();
-        setActive((index) => Math.max(index - 1, 0));
+        moveActive(-1);
         return;
       }
       if (event.key === "Enter" && open) {
-        const chosen = suggestions[active];
-        if (chosen) {
+        const chosen = options[activeIndex];
+        if (chosen && !chosen.availability.disabled) {
           event.preventDefault();
-          handlePick(chosen);
+          handlePick(chosen.item);
         }
       }
     },
-    [active, handlePick, open, suggestions]
+    [activeIndex, handlePick, moveActive, open, options]
   );
 
   const handleBlur = useCallback(() => setOpen(false), []);
@@ -186,18 +390,19 @@ function MedicineCombobox({
         type="text"
         value={value}
       />
-      {open && suggestions.length > 0 ? (
+      {open && options.length > 0 ? (
         // The options are the listbox's own children, as the role requires.
         <div
           className="absolute z-10 mt-1 max-h-52 w-full overflow-auto rounded-md border border-border bg-popover p-1 shadow-lg"
           id={listId}
           role="listbox"
         >
-          {suggestions.map((item, index) => (
+          {options.map((option, index) => (
             <SuggestionOption
-              active={index === active}
-              item={item}
-              key={item.id}
+              active={index === activeIndex}
+              availability={option.availability}
+              item={option.item}
+              key={option.item.id}
               onPick={handlePick}
             />
           ))}
@@ -209,22 +414,35 @@ function MedicineCombobox({
 
 function RequestRow({
   canRemove,
+  check,
+  dispensing,
+  drift,
   items,
   onChange,
+  onDispense,
   onRemove,
   row,
+  startReady,
 }: {
   canRemove: boolean;
+  /** The §4.3 stock check for this row — null while `rowProblem` owns it. */
+  check: RowStockCheck | null;
+  /** True while this row's direct hand-over is in flight. */
+  dispensing: boolean;
+  /** Fresh submit-time numbers that no longer match the display (§5.6). */
+  drift: StockDrift | null;
   items: readonly InventoryItem[];
   onChange: (key: string, patch: Partial<RequestDraftRow>) => void;
+  /** Hands this row's item over at the counter instead of queueing it. */
+  onDispense: (row: RequestDraftRow) => void;
   onRemove: (key: string) => void;
   row: RequestDraftRow;
+  startReady: boolean;
 }) {
   // Hooks must run unconditionally, so generate the ids at the top of the row.
   const id = useId();
   const matched = matchInventoryItem(items, row.medicine);
   const problem = rowProblem(row, items);
-  const qty = parseQuantity(row.qty);
 
   // The item's own units lead; the fixed list is only for a row with no item
   // picked yet (F5/D8). The current value is always kept selectable so editing
@@ -237,24 +455,11 @@ function RequestRow({
     return options;
   }, [matched, row.unit]);
 
-  // The quantity is converted before it is compared, so `2 box` on a 10/box item
-  // warns against 100 sachets, not against 2 (G3/F5).
-  const baseQty =
-    matched && qty !== null
-      ? toBaseUnits(qty, row.unit, {
-          form: matched.form,
-          packQty: matched.packQty ?? 0,
-          packUnit: matched.packUnit ?? "",
-        })
-      : null;
-  const shortfall =
-    matched && qty !== null && baseQty !== null && baseQty > matched.qty
-      ? `${matched.qty} on hand — the hand-over will be partial and the rest stays in Ready to Claim.`
-      : null;
-  const unconvertible =
-    matched && qty !== null && baseQty === null
-      ? `${qty} ${row.unit} cannot be converted — this item has no pack size recorded. Dispense in ${requestUnitsFor(matched)[0]} instead, or set the pack size in Inventory.`
-      : null;
+  // Stock math lives in one place — `checkRows` (§4.3) — so this row renders
+  // exactly what the gate and the submit re-check compare against.
+  const blocked =
+    check?.state === "pack-unknown" || check?.state === "unavailable";
+  const warned = check?.state === "shortfall" || check?.state === "reserve-dip";
 
   const handleMedicineChange = useCallback(
     (medicine: string) => onChange(row.key, { medicine }),
@@ -291,6 +496,14 @@ function RequestRow({
     [onRemove, row.key]
   );
 
+  const handleDispense = useCallback(() => onDispense(row), [onDispense, row]);
+
+  // The streamlined path only appears when the queue's own validations say the
+  // row is requestable *and* the full quantity fits `available` (§4.3 `ok`) —
+  // a shortfall, a threshold dip, a pack block or an unavailable item keeps the
+  // row on the ordinary queue flow.
+  const canDispense = problem === null && check?.state === "ok";
+
   return (
     <li className={ROW_CLASS}>
       <div className="flex items-start gap-2">
@@ -325,7 +538,7 @@ function RequestRow({
           <div className="mt-1">
             <QuantityStepper
               aria-label="Quantity"
-              invalid={problem !== null}
+              invalid={problem !== null || blocked}
               min={1}
               onChange={handleQtyChange}
               value={row.qty}
@@ -357,14 +570,44 @@ function RequestRow({
         </div>
       </div>
 
+      {check ? <p className={HINT_CLASS}>{breakdownLine(check)}</p> : null}
       {problem ? <p className={ERROR_CLASS}>{problem}</p> : null}
-      {problem === null && unconvertible ? (
+      {problem === null && drift ? (
         <p className={ERROR_CLASS} role="alert">
-          {unconvertible}
+          Stock changed while this form was open —{" "}
+          {stockMessageFor(drift.check)}
         </p>
       ) : null}
-      {problem === null && unconvertible === null && shortfall ? (
-        <p className={HINT_CLASS}>{shortfall}</p>
+      {problem === null && drift === null && blocked && check ? (
+        <p className={ERROR_CLASS} role="alert">
+          {stockMessageFor(check)}
+        </p>
+      ) : null}
+      {problem === null && drift === null && warned && check ? (
+        <p className={HINT_CLASS}>
+          {stockMessageFor(check)}
+          {startReady
+            ? ` This card starts in Ready to Claim — only ${describeQuantity(check.available, check.pack)} of ${describeQuantity(check.requestedBaseQty, check.pack)} can be handed over immediately.`
+            : ""}
+        </p>
+      ) : null}
+      {canDispense ? (
+        // §Streamline — the item is on the shelf and the whole quantity fits, so
+        // it can be handed over now instead of queued. The quick-deduct write
+        // path behind it keeps the counter semantics (short refused, no batch
+        // tolerated, an undo window), and a successful hand-over drops the row.
+        <div className="mt-2 flex justify-end">
+          <Button
+            className="press-feedback"
+            disabled={dispensing}
+            onClick={handleDispense}
+            size="xs"
+            variant="outline"
+          >
+            <PackageMinus className="size-3" />
+            {dispensing ? "Dispensing…" : "Dispense now"}
+          </Button>
+        </div>
       ) : null}
     </li>
   );
@@ -379,7 +622,10 @@ export function NewRequestModal({
 }) {
   const reduceMotion = useReducedMotion();
   const navigate = useNavigate();
-  const { create, dbReady, isLoadingItems, items } = useCreateRequests();
+  const { create, dbReady, isLoadingItems, items, refetch } =
+    useCreateRequests();
+  // The one-action counter hand-over (`Ctrl+D`'s write path) reused per row.
+  const { deduct } = useQuickDeduct();
 
   const [rows, setRows] = useState<RequestDraftRow[]>(() => [newRow()]);
   const [name, setName] = useState("");
@@ -388,6 +634,17 @@ export function NewRequestModal({
   const [reason, setReason] = useState("");
   const [startReady, setStartReady] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  /** The row whose direct hand-over is in flight, if any. */
+  const [dispensingKey, setDispensingKey] = useState<string | null>(null);
+  /** §5.4 — acknowledgment, stored as the warn signature it was given so it
+   *  clears itself the moment the signature changes (no reset effect). */
+  const [ackedSignature, setAckedSignature] = useState<string | null>(null);
+  /** §5.6 — fresh numbers that diverged at submit time, pinned to the check
+   *  signature they contradicted; stale the moment the display changes. */
+  const [driftState, setDriftState] = useState<{
+    at: string;
+    entries: StockDrift[];
+  } | null>(null);
 
   const firstFieldRef = useRef<HTMLDivElement | null>(null);
   const returnFocusRef = useRef<HTMLElement | null>(null);
@@ -411,11 +668,21 @@ export function NewRequestModal({
     setReason("");
     setStartReady(false);
     setSubmitting(false);
+    setDispensingKey(null);
+    setAckedSignature(null);
+    setDriftState(null);
     const focusTimer = window.setTimeout(() => {
       firstFieldRef.current?.querySelector("input")?.focus();
     }, 0);
     return () => window.clearTimeout(focusTimer);
   }, [open]);
+
+  // §6.4 — refresh the 30 s inventory cache before the first breakdown paint.
+  useEffect(() => {
+    if (open) {
+      refetch().catch(() => undefined);
+    }
+  }, [open, refetch]);
 
   useEffect(() => {
     if (open) {
@@ -456,24 +723,96 @@ export function NewRequestModal({
     setRows((prev) => [...prev, newRow()]);
   }, []);
 
-  const problems = rows.filter((row) => rowProblem(row, items) !== null);
-  const blocked = problems.length > 0 || rows.length === 0;
+  /**
+   * §Streamline — hands one row over at the counter through the shared
+   * quick-deduct path, then drops the row so the form only holds what is still
+   * to be queued (and a dispensed row can never be submitted as a second card).
+   * The deduction's own toast carries the undo affordance.
+   */
+  const handleDispenseRow = useCallback(
+    async (row: RequestDraftRow) => {
+      const item = matchInventoryItem(items, row.medicine);
+      const qty = parseQuantity(row.qty);
+      if (!(item && qty !== null)) {
+        return;
+      }
+      setDispensingKey(row.key);
+      try {
+        const outcome = await deduct({ item, qty, unit: row.unit });
+        if (!outcome.ok) {
+          toast.error("Could not dispense", { description: outcome.message });
+          return;
+        }
+        setRows((prev) => {
+          const next = prev.filter((entry) => entry.key !== row.key);
+          return next.length > 0 ? next : [newRow()];
+        });
+      } catch {
+        toast.error("Could not dispense", {
+          description: "Nothing was deducted — try again.",
+        });
+      } finally {
+        setDispensingKey(null);
+      }
+    },
+    [deduct, items]
+  );
+
+  const resolvedRows = useMemo(
+    () =>
+      rows.map((row) => ({
+        item: matchInventoryItem(items, row.medicine),
+        key: row.key,
+        qty: parseQuantity(row.qty),
+        unit: row.unit,
+      })),
+    [items, rows]
+  );
+  const checks = useMemo(() => checkRows(resolvedRows), [resolvedRows]);
+  const checkSignature = checksSignatureOf(checks);
+  const drift =
+    driftState && driftState.at === checkSignature ? driftState.entries : [];
+  const gate = useMemo(
+    () =>
+      deriveStockGate({
+        ackedSignature,
+        checks,
+        dbReady,
+        driftCount: drift.length,
+        items,
+        rows,
+        submitting,
+      }),
+    [ackedSignature, checks, dbReady, drift.length, items, rows, submitting]
+  );
   const cannotSave = dbReady === false;
 
   const handleSubmit = useCallback(async () => {
     // `dbReady` is null until the probe finishes — submitting then could write
     // nothing and still report success.
-    if (blocked || submitting || dbReady !== true) {
+    if (gate.cannotSubmit) {
       return;
     }
     setSubmitting(true);
     try {
-      const result = await create({
-        reason: reason.trim(),
-        requestor: { email, id: requestorId, name },
-        rows,
-        startReady,
-      });
+      const result = await create(
+        {
+          reason: reason.trim(),
+          requestor: { email, id: requestorId, name },
+          rows,
+          startReady,
+        },
+        checks
+      );
+      if (result.drift.length > 0) {
+        // §5.6 — nothing was written; the affected rows say what changed and
+        // the refetch repaints the breakdown with fresh numbers (which makes
+        // this entry stale via the check signature).
+        setDriftState({ at: checkSignature, entries: result.drift });
+        setAckedSignature(null);
+        refetch().catch(() => undefined);
+        return;
+      }
       if (result.created.length === 0) {
         toast.error("No requests were created", {
           description: "Check the items and quantities, then try again.",
@@ -481,6 +820,11 @@ export function NewRequestModal({
         return;
       }
       const count = result.created.length;
+      // §5.6 — today's `skipped` is computed but never shown; name it.
+      const skippedNote =
+        result.skipped.length > 0
+          ? ` Skipped: ${result.skipped.map((entry) => entry.message).join(" ")}`
+          : "";
       toast.success(`${count} request${count === 1 ? "" : "s"} created`, {
         action: {
           label: "View on board",
@@ -488,7 +832,7 @@ export function NewRequestModal({
             navigate({ to: "/admin/requests" }).catch(() => undefined);
           },
         },
-        description: result.created.map((item) => item.id).join(", "),
+        description: `${result.created.map((item) => item.id).join(", ")}${skippedNote}`,
       });
       handleClose();
     } catch {
@@ -502,18 +846,19 @@ export function NewRequestModal({
       setSubmitting(false);
     }
   }, [
-    blocked,
+    checks,
+    checkSignature,
     create,
-    dbReady,
     email,
+    gate,
     handleClose,
     navigate,
     name,
     reason,
+    refetch,
     requestorId,
     rows,
     startReady,
-    submitting,
   ]);
 
   const handleSubmitKey = useCallback(
@@ -529,6 +874,13 @@ export function NewRequestModal({
   const handleReadyChange = useCallback(
     (value: boolean | "indeterminate") => setStartReady(value === true),
     []
+  );
+
+  const { warnSignature } = gate;
+  const handleAckChange = useCallback(
+    (value: boolean | "indeterminate") =>
+      setAckedSignature(value === true ? warnSignature : null),
+    [warnSignature]
   );
 
   const handleNameChange = useCallback(
@@ -631,11 +983,18 @@ export function NewRequestModal({
                       {rows.map((row) => (
                         <RequestRow
                           canRemove={count > 1}
+                          check={checks.get(row.key) ?? null}
+                          dispensing={dispensingKey === row.key}
+                          drift={
+                            drift.find((entry) => entry.key === row.key) ?? null
+                          }
                           items={items}
                           key={row.key}
                           onChange={updateRow}
+                          onDispense={handleDispenseRow}
                           onRemove={removeRow}
                           row={row}
+                          startReady={startReady}
                         />
                       ))}
                     </ul>
@@ -716,31 +1075,52 @@ export function NewRequestModal({
                 </label>
               </div>
 
-              <div className="flex shrink-0 items-center justify-between gap-2 border-border/50 border-t px-4 py-3">
-                <p className="text-caption text-muted-foreground">
-                  {blocked
-                    ? `${problems.length} item${problems.length === 1 ? "" : "s"} need attention`
-                    : "Ctrl/⌘ + Enter to submit"}
-                </p>
-                <div className="flex items-center gap-2">
-                  <Button
-                    className="press-feedback"
-                    onClick={handleClose}
-                    size="sm"
-                    variant="ghost"
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    className="press-feedback"
-                    disabled={blocked || submitting || dbReady !== true}
-                    onClick={handleSubmit}
-                    size="sm"
-                  >
-                    {count === 1
-                      ? "Create request"
-                      : `Create ${count} requests`}
-                  </Button>
+              <div className="shrink-0 border-border/50 border-t px-4 py-3">
+                {gate.warnEntries.length > 0 ? (
+                  // §5.4 — the acknowledgment gate: Submit needs this checked
+                  // while any warn row exists.
+                  <label className="mb-2 flex cursor-pointer items-start gap-2 text-sm">
+                    <Checkbox
+                      checked={gate.acked}
+                      onCheckedChange={handleAckChange}
+                    />
+                    <span>
+                      I understand{" "}
+                      <strong>
+                        {gate.warnEntries.length} item
+                        {gate.warnEntries.length === 1 ? "" : "s"}
+                      </strong>{" "}
+                      will be partial or dip into reserved stock
+                      <span className={HINT_CLASS}>
+                        {gate.warnSummaries.join(" · ")}
+                      </span>
+                    </span>
+                  </label>
+                ) : null}
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-caption text-muted-foreground">
+                    {footerCaption(gate.attention, drift.length)}
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      className="press-feedback"
+                      onClick={handleClose}
+                      size="sm"
+                      variant="ghost"
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      className="press-feedback"
+                      disabled={gate.cannotSubmit}
+                      onClick={handleSubmit}
+                      size="sm"
+                    >
+                      {count === 1
+                        ? "Create request"
+                        : `Create ${count} requests`}
+                    </Button>
+                  </div>
                 </div>
               </div>
             </motion.div>
