@@ -404,8 +404,9 @@ const REQUEST_COLUMNS_IN_ORDER = [
 
 /**
  * Refreshed on upsert, mirroring the previous `ON CONFLICT` list plus the two
- * 0011 columns. A request's identity and its submission facts never change, so
- * they are not in the update set.
+ * 0011 columns and the requestor fields the Edit Requestor Details form writes.
+ * A request's id and its submission facts (`submitted_at`, the medicine it was
+ * created for) never change, so they are not in the update set.
  */
 const MUTABLE_REQUEST_COLUMNS = new Set<string>([
   "archived_at",
@@ -414,6 +415,9 @@ const MUTABLE_REQUEST_COLUMNS = new Set<string>([
   "denied_reason",
   "item_id",
   "qty",
+  "requestor_email",
+  "requestor_id",
+  "requestor_name",
   "source",
   "status",
 ]);

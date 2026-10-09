@@ -12,13 +12,16 @@ import {
   CalendarRange,
   Check,
   ChevronDown,
+  PackageMinus,
   Plus,
   Search,
   X,
 } from "lucide-react";
 import { type ChangeEvent, type KeyboardEvent, useCallback } from "react";
+import type { RequestorDirectory } from "../requestors";
 import type { RequestDatePreset, RequestFilters } from "../types";
 import { REQUEST_DATE_PRESETS } from "../types";
+import { RequestorsPopover } from "./requestors-popover";
 
 type ChipKey = "category" | "datePreset" | "requestor" | "search";
 
@@ -81,18 +84,27 @@ export function RequestsFilterBar({
   filters,
   onCategoryChange,
   onClearFilters,
+  onDispenseDirect,
   onNewRequest,
   onRemoveChip,
   onRequestorChange,
   onSearchChange,
+  onSelectRequestor,
   onSetCustomRange,
   onSetDatePreset,
+  requestors,
 }: {
   activeChips: { key: ChipKey; label: string }[];
   categories: string[];
   filters: RequestFilters;
   onCategoryChange: (value: string) => void;
   onClearFilters: () => void;
+  /**
+   * §Streamline — opens the one-action hand-over (the same surface `Ctrl+D`
+   * opens): search an item, check it, deduct it directly. The fastest path when
+   * nothing needs the approval workflow, without leaving the queue.
+   */
+  onDispenseDirect?: () => void;
   /**
    * Opens the New Request form. The same dialog `Ctrl+N` opens — a button here
    * because a shortcut is not a discoverable interface (F1).
@@ -101,8 +113,12 @@ export function RequestsFilterBar({
   onRemoveChip: (key: ChipKey) => void;
   onRequestorChange: (value: string) => void;
   onSearchChange: (value: string) => void;
+  /** Applies the requestor filter for the requestor picked from the list. */
+  onSelectRequestor: (value: string) => void;
   onSetCustomRange: (from: string, to: string) => void;
   onSetDatePreset: (preset: RequestDatePreset) => void;
+  /** Every distinct requestor on the board — the complete list. */
+  requestors: RequestorDirectory;
 }) {
   const dateLabel =
     REQUEST_DATE_PRESETS.find((preset) => preset.value === filters.datePreset)
@@ -193,6 +209,12 @@ export function RequestsFilterBar({
           />
         </div>
 
+        <RequestorsPopover
+          directory={requestors}
+          onSelect={onSelectRequestor}
+          selected={filters.requestor}
+        />
+
         <DropdownMenu>
           <DropdownMenuTrigger className="press-feedback inline-flex h-9 items-center gap-1.5 rounded-full border border-border/60 bg-card px-3.5 font-medium text-[12px] tracking-[0.01em] shadow-sm hover:bg-accent hover:text-accent-foreground">
             <CalendarRange
@@ -245,15 +267,30 @@ export function RequestsFilterBar({
           </DropdownMenuContent>
         </DropdownMenu>
 
-        {onNewRequest ? (
-          <Button
-            className="press-feedback ml-auto rounded-full shadow-[0_1px_3px_oklch(0_0_0/0.08)] hover:shadow-[0_2px_8px_oklch(0_0_0/0.12)]"
-            onClick={onNewRequest}
-            size="sm"
-          >
-            <Plus className="size-3.5" />
-            New request
-          </Button>
+        {onNewRequest || onDispenseDirect ? (
+          <div className="ml-auto flex items-center gap-2">
+            {onDispenseDirect ? (
+              <Button
+                className="press-feedback rounded-full"
+                onClick={onDispenseDirect}
+                size="sm"
+                variant="outline"
+              >
+                <PackageMinus className="size-3.5" />
+                Dispense
+              </Button>
+            ) : null}
+            {onNewRequest ? (
+              <Button
+                className="press-feedback rounded-full shadow-[0_1px_3px_oklch(0_0_0/0.08)] hover:shadow-[0_2px_8px_oklch(0_0_0/0.12)]"
+                onClick={onNewRequest}
+                size="sm"
+              >
+                <Plus className="size-3.5" />
+                New request
+              </Button>
+            ) : null}
+          </div>
         ) : null}
       </div>
 
