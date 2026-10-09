@@ -5,6 +5,7 @@ import { type ChangeEvent, useCallback } from "react";
 
 import { FIELD_CLASS } from "../constants";
 import type { QuantityUnitControl } from "../types";
+import { ValidationMessage } from "./validation-message";
 
 /**
  * One option of the quantity cell's unit toggle (F4/D12), styled like the other
@@ -69,8 +70,10 @@ export function StepBatch({
   onQtyChange: (value: string) => void;
   onNotesChange: (value: string) => void;
 }) {
-  // Soft warnings: batch/qty only after attempted Next (don't show on pristine empty),
-  // expiry warns immediately when a past date is picked (not when empty pristine)
+  // Quantity is the one hard-required field on this step, so it turns red like
+  // the other required fields once Next has been tried. Batch and expiry stay
+  // soft warnings: an empty batch is auto-generated and a past expiry is only
+  // flagged, so neither blocks.
   const batchMissing = showErrors && batchNo.trim().length === 0;
   const qtyInvalid = showErrors && (!qty || Number(qty) < 1);
   const expiryInPast =
@@ -150,21 +153,15 @@ export function StepBatch({
           Quantity
           <QuantityStepper
             aria-label="Quantity"
-            className={cn(
-              "mt-1 h-9",
-              qtyInvalid && "border-[var(--warning)]/50"
-            )}
-            invalid={false}
+            className={cn("mt-1 h-9", qtyInvalid && "border-destructive")}
+            invalid={qtyInvalid}
             min={1}
             onChange={handleQtyStep}
             placeholder="0"
             value={qty}
           />
           {qtyInvalid ? (
-            <span className="mt-1 block text-[var(--warning)] text-caption">
-              Warning: quantity must be 1 or more — please correct before
-              confirming.
-            </span>
+            <ValidationMessage message="Quantity must be 1 or more." />
           ) : null}
         </label>
         {/* F4/D12 — a delivery may be written in packs, so the unit is chosen

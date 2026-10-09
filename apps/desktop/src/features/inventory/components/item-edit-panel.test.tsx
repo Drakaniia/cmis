@@ -113,7 +113,9 @@ describe("ItemEditPanel", () => {
     // A picker, not a `<select>`: the category is a stored row, and the panel
     // can add or rename one without leaving the edit.
     expect(screen.getByLabelText(/^Category/)).toHaveTextContent("Analgesic");
-    expect(screen.getByLabelText(/Quantity/)).toHaveValue(40);
+    // Quantity is an `<output>`, not an input: still labelled, no longer
+    // something the operator can type over.
+    expect(screen.getByLabelText(/Quantity/)).toHaveTextContent("40");
     expect(screen.getByLabelText(/Low-stock alert level/)).toHaveValue(50);
     expect(screen.getByLabelText(/Supplier/)).toHaveValue("PharmaCorp");
   });
@@ -152,15 +154,15 @@ describe("ItemEditPanel", () => {
     expect(mutate).toHaveBeenCalledTimes(1);
   });
 
-  it("refuses a negative quantity", async () => {
-    const user = userEvent.setup();
+  it("keeps quantity read-only and points at Stock In / Stock Out", () => {
     renderPanel();
 
-    await user.clear(screen.getByLabelText(/Quantity/));
-    await user.type(screen.getByLabelText(/Quantity/), "-5");
-    await user.click(screen.getByRole("button", { name: SAVE }));
-
-    expect(mutate).not.toHaveBeenCalled();
+    // No input, no spinbutton to nudge the count with.
+    expect(screen.queryByRole("spinbutton", { name: /Quantity/ })).toBeNull();
+    expect(screen.getByLabelText(/Quantity/)).toHaveTextContent("40");
+    expect(
+      screen.getByText(/stock moves through Stock In and Stock Out/)
+    ).toBeInTheDocument();
   });
 
   it("saves with the strength fields left blank, flagging the details incomplete", async () => {
@@ -181,15 +183,19 @@ describe("ItemEditPanel", () => {
     });
   });
 
-  it("recomputes status from the quantity and threshold it saves", async () => {
+  it("recomputes status from the threshold it saves", async () => {
     const user = userEvent.setup();
     renderPanel();
 
-    await user.clear(screen.getByLabelText(/Quantity/));
-    await user.type(screen.getByLabelText(/Quantity/), "0");
+    await user.clear(screen.getByLabelText(/Low-stock alert level/));
+    await user.type(screen.getByLabelText(/Low-stock alert level/), "60");
     await user.click(screen.getByRole("button", { name: SAVE }));
 
-    expect(mutate.mock.calls[0]?.[0]).toMatchObject({ qty: 0, status: "out" });
+    // Quantity stays at its stored 40; 40 < 60 flips the row to "low".
+    expect(mutate.mock.calls[0]?.[0]).toMatchObject({
+      qty: 40,
+      status: "low",
+    });
   });
 
   it("warns about a rename only once the name changes", async () => {
@@ -203,18 +209,11 @@ describe("ItemEditPanel", () => {
     expect(screen.getByText(RENAME_WARNING)).toBeInTheDocument();
   });
 
-  it("calls out when the quantity is not the sum of the item's batches", async () => {
-    const user = userEvent.setup();
+  it("leaves batch expiries to the Expiry page", () => {
     renderPanel();
 
-    // 25 + 15 = 40, which matches, so nothing is claimed up front.
-    expect(screen.queryByText(/not the sum of this item's batches/)).toBeNull();
-
-    await user.clear(screen.getByLabelText(/Quantity/));
-    await user.type(screen.getByLabelText(/Quantity/), "12");
-    expect(
-      screen.getByText(/not the sum of this item's batches/)
-    ).toBeInTheDocument();
+    expect(screen.queryByText(/Batch expiries/)).toBeNull();
+    expect(screen.queryByPlaceholderText("Select expiry date")).toBeNull();
   });
 
   it("reports a saved item back so the modal can refresh and close", async () => {

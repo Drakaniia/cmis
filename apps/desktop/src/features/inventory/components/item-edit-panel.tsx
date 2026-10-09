@@ -1,7 +1,5 @@
-import { AppleDatePicker } from "@cmis/ui/components/apple-date-picker";
 import { Button } from "@cmis/ui/components/button";
 import { cn } from "@cmis/ui/lib/utils";
-import { useQueryClient } from "@tanstack/react-query";
 import {
   type ChangeEvent,
   useCallback,
@@ -10,10 +8,7 @@ import {
   useState,
 } from "react";
 import { toast } from "sonner";
-import { recordAudit } from "@/features/admin/audit/write-audit";
-import { getDb } from "@/lib/db";
 import {
-  batchQuantityTotal,
   buildItemUpdate,
   draftFromItem,
   type ItemDraftErrors,
@@ -30,9 +25,16 @@ import { VocabularyPicker } from "./vocabulary-picker";
 /**
  * The Edit form (spec §8.3, decision 16).
  *
- * "Full edit flow" means name, category and the four strength fields; SKU, supplier,
- * quantity and threshold are exposed too because they are already part of the
- * draft the save computes from — hiding them would make the payload opaque.
+ * "Full edit flow" means name, category and the four strength fields; SKU,
+ * supplier and the low-stock alert level are exposed too because they are
+ * already part of the draft the save computes from — hiding them would make
+ * the payload opaque.
+ *
+ * Quantity is display-only on purpose: stock only moves through Stock In and
+ * Stock Out, which record the movement and its audit trail, so a number typed
+ * here would silently desync the ledger. Batch expiries are not edited here
+ * either — expiry corrections live on the Expiry page, next to the movements
+ * they describe.
  *
  * All four strength fields are optional and never block a save. A row saved with
  * a blank part is legal and simply keeps the "details incomplete" flag, which is
@@ -41,45 +43,6 @@ import { VocabularyPicker } from "./vocabulary-picker";
  */
 
 const PACK_SIZE_MAX = 40;
-
-type Db = Awaited<ReturnType<typeof getDb>>;
-
-/**
- * Writes one corrected batch expiry and audits the before/after. Batches are
- * corrected independently, so the caller runs these concurrently.
- */
-async function correctBatchExpiry(
-  db: Db,
-  itemId: string,
-  batchName: string,
-  newExpiry: string
-): Promise<void> {
-  const rows = await db.select<{ expiry: string | null; id: string }[]>(
-    "SELECT id, expiry FROM inventory_batches WHERE item_id = ? AND batch = ? LIMIT 1",
-    [itemId, batchName]
-  );
-  const [row] = rows;
-  if (!row) {
-    return;
-  }
-  const previousExpiry = row.expiry ?? "";
-  await db.execute("UPDATE inventory_batches SET expiry = ? WHERE id = ?", [
-    newExpiry,
-    row.id,
-  ]);
-  await recordAudit(
-    db,
-    {
-      action: "correction",
-      after: { batch: batchName, expiry: newExpiry },
-      before: { batch: batchName, expiry: previousExpiry },
-      detail: `Corrected batch expiry for ${batchName} from ${previousExpiry || "no date"} to ${newExpiry || "no date"}`,
-      targetId: row.id,
-      targetKind: "batch",
-    },
-    { bestEffort: true }
-  );
-}
 
 const FIELD_CLASS =
   "mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-1 focus:ring-ring";
@@ -189,17 +152,10 @@ export function ItemEditPanel({
   const [draft, setDraft] = useState<ItemEditDraft>(() => draftFromItem(item));
   const [attempted, setAttempted] = useState(false);
   const [confirmDiscard, setConfirmDiscard] = useState(false);
-  const qc = useQueryClient();
   const update = useItemUpdateMutation();
-  const [batchExpiries, setBatchExpiries] = useState<Record<string, string>>(
-    () => Object.fromEntries(item.batches.map((b) => [b.batch, b.expiry]))
-  );
 
   useEffect(() => {
     setDraft(draftFromItem(item));
-    setBatchExpiries(
-      Object.fromEntries(item.batches.map((b) => [b.batch, b.expiry]))
-    );
     setAttempted(false);
     setConfirmDiscard(false);
   }, [item]);
@@ -215,18 +171,12 @@ export function ItemEditPanel({
     packQty: draft.packQty,
     packUnit: draft.packUnit,
   });
-  const batchDirty = useMemo(
-    () => item.batches.some((b) => batchExpiries[b.batch] !== b.expiry),
-    [batchExpiries, item.batches]
-  );
-
   const dirty = useMemo(() => {
     const initial = draftFromItem(item);
-    const draftDirty = (Object.keys(initial) as (keyof ItemEditDraft)[]).some(
+    return (Object.keys(initial) as (keyof ItemEditDraft)[]).some(
       (key) => initial[key] !== draft[key]
     );
-    return draftDirty || batchDirty;
-  }, [draft, item, batchDirty]);
+  }, [draft, item]);
 
   const patch = useCallback((values: Partial<ItemEditDraft>) => {
     setDraft((previous) => ({ ...previous, ...values }));
@@ -276,13 +226,6 @@ export function ItemEditPanel({
     [patch]
   );
 
-  const handleBatchExpiryChange = useCallback(
-    (batchName: string, value: string) => {
-      setBatchExpiries((previous) => ({ ...previous, [batchName]: value }));
-    },
-    []
-  );
-
   const handleSave = useCallback(async () => {
     setAttempted(true);
     if (Object.keys(validateItemDraft(draft, items, item.id)).length > 0) {
@@ -293,24 +236,6 @@ export function ItemEditPanel({
         ...buildItemUpdate(item, draft),
         id: item.id,
       });
-      const changedBatches = item.batches.filter(
-        (b) => (batchExpiries[b.batch] ?? "") !== (b.expiry ?? "")
-      );
-      if (changedBatches.length > 0) {
-        const db = await getDb();
-        await Promise.all(
-          changedBatches.map((batch) =>
-            correctBatchExpiry(
-              db,
-              item.id,
-              batch.batch,
-              batchExpiries[batch.batch] ?? ""
-            )
-          )
-        );
-        qc.invalidateQueries({ queryKey: ["inventory_items"] });
-        qc.invalidateQueries({ queryKey: ["dashboard-stats"] });
-      }
       toast.success(`Saved ${draft.name.trim()}`);
       onSaved?.();
     } catch (error) {
@@ -318,7 +243,7 @@ export function ItemEditPanel({
         description: error instanceof Error ? error.message : String(error),
       });
     }
-  }, [batchExpiries, draft, item, items, onSaved, qc, update]);
+  }, [draft, item, items, onSaved, update]);
 
   const handleCancel = useCallback(() => {
     // The dirty guard is local rather than a modal: the panel already owns the
@@ -329,8 +254,6 @@ export function ItemEditPanel({
     }
     onCancel();
   }, [confirmDiscard, dirty, onCancel]);
-
-  const stockDivergence = batchQuantityTotal(item) !== draft.qty;
 
   return (
     <form
@@ -449,61 +372,6 @@ export function ItemEditPanel({
           </div>
         </fieldset>
 
-        {item.batches.length > 0 ? (
-          <fieldset className="space-y-2 rounded-md border border-border/50 p-3">
-            <legend className="px-1 text-caption text-muted-foreground">
-              Batch expiries — edit expiry dates (past dates warn, not block)
-            </legend>
-            <div className="space-y-2">
-              {[...item.batches]
-                .sort(
-                  (a, b) =>
-                    new Date(a.expiry).getTime() - new Date(b.expiry).getTime()
-                )
-                .map((batch) => {
-                  const current = batchExpiries[batch.batch] ?? "";
-                  const isPast =
-                    current !== "" &&
-                    new Date(current) <=
-                      new Date(new Date().setHours(0, 0, 0, 0));
-                  const isChanged = current !== batch.expiry;
-                  return (
-                    <div
-                      className="flex flex-col gap-1 rounded-md border border-border bg-card px-2.5 py-2"
-                      key={batch.batch}
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="font-medium text-caption">
-                          {batch.batch}
-                        </span>
-                        <span className="text-caption text-muted-foreground">
-                          Qty {batch.qty}
-                        </span>
-                        {isChanged ? (
-                          <span className="font-medium text-[10px] text-[var(--warning)]">
-                            modified
-                          </span>
-                        ) : null}
-                      </div>
-                      <AppleDatePicker
-                        onChange={(value) =>
-                          handleBatchExpiryChange(batch.batch, value)
-                        }
-                        placeholder="Select expiry date"
-                        value={current}
-                      />
-                      {isPast ? (
-                        <span className="text-[var(--warning)] text-caption">
-                          Warning: expiry is in the past (not blocked).
-                        </span>
-                      ) : null}
-                    </div>
-                  );
-                })}
-            </div>
-          </fieldset>
-        ) : null}
-
         <div className="grid grid-cols-2 gap-3">
           <Field label="Supplier">
             <input
@@ -512,16 +380,17 @@ export function ItemEditPanel({
               value={draft.supplier}
             />
           </Field>
-          <Field error={attempted ? errors.qty : undefined} label="Quantity">
-            <input
-              className={cn(
-                FIELD_CLASS,
-                attempted && errors.qty && "border-destructive"
-              )}
-              onChange={numberHandler("qty")}
-              type="number"
-              value={Number.isNaN(draft.qty) ? "" : draft.qty}
-            />
+          {/* Read-only by design: `<output>` is labelable, so the label still
+              names the value for assistive tech, but nothing here can rewrite
+              the count — Stock In / Stock Out own the ledger. */}
+          <Field
+            error={attempted ? errors.qty : undefined}
+            hint="Read-only — stock moves through Stock In and Stock Out, which record each movement."
+            label="Quantity"
+          >
+            <output className="mt-1 block rounded-md border border-border/50 bg-muted/40 px-3 py-2 font-medium text-foreground text-sm tabular-nums">
+              {item.qty}
+            </output>
           </Field>
           <Field
             error={attempted ? errors.threshold : undefined}
@@ -539,14 +408,6 @@ export function ItemEditPanel({
             />
           </Field>
         </div>
-
-        {stockDivergence ? (
-          <p className="text-caption text-muted-foreground">
-            Quantity is not the sum of this item's batches (
-            {batchQuantityTotal(item)} across {item.batches.length}). Saving
-            keeps the batches as they are — only the quantity changes.
-          </p>
-        ) : null}
       </div>
 
       <div className="flex shrink-0 items-center gap-2 border-border/40 border-t bg-card/50 px-4 py-2 backdrop-blur-md">

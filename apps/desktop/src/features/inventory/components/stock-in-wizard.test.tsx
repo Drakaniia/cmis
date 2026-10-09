@@ -278,7 +278,7 @@ describe("StockInWizard — supplier UI removed, still proceed without it", () =
     );
   });
 
-  it("category placeholder blocks Next until selected", async () => {
+  it("shows a red required indicator on an empty category after Next", async () => {
     const user = userEvent.setup();
     render(
       <StockInWizard items={[]} onConfirm={vi.fn()} onOpenChange={noop} open />
@@ -290,11 +290,32 @@ describe("StockInWizard — supplier UI removed, still proceed without it", () =
       screen.getByPlaceholderText(/e\.g\., Paracetamol/i),
       "Item Z"
     );
-    // category still placeholder ""
-    const nextBtn = screen.getByRole("button", { name: /Next/i });
-    expect(nextBtn).toBeDisabled();
+    // category still placeholder "", but Next is clickable so the gap is shown
+    // rather than hidden behind a dead button.
+    await user.click(screen.getByRole("button", { name: /Next/i }));
+    expect(screen.getByText(/Step 2 — Item Details/i)).toBeInTheDocument();
+    expect(screen.getByText(/Category is required\./i)).toBeInTheDocument();
     await chooseCategory(user, "Supplement");
-    await waitFor(() => expect(nextBtn).toBeEnabled());
+    expect(screen.queryByText(/Category is required\./i)).toBeNull();
+    await user.click(screen.getByRole("button", { name: /Next/i }));
+    await screen.findByText(/Step 3 — Batch Info/i);
+  });
+
+  it("does not advance past Step 3 when the quantity is empty, and flags it", async () => {
+    const user = userEvent.setup();
+    render(
+      <StockInWizard items={[]} onConfirm={vi.fn()} onOpenChange={noop} open />
+    );
+    await reachBatchStep(user, { category: "Analgesic", name: "Ibuprofen" });
+    await user.click(screen.getByRole("button", { name: /Next/i }));
+    expect(screen.getByText(/Step 3 — Batch Info/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Quantity must be 1 or more\./i)
+    ).toBeInTheDocument();
+    // Fill the quantity and the step finally advances.
+    await user.type(screen.getByPlaceholderText("0"), "5");
+    await user.click(screen.getByRole("button", { name: /Next/i }));
+    await screen.findByText(/Step 4 — Review/i);
   });
 
   it("offers the canonical strength vocabularies and never blocks Next on them", async () => {
@@ -339,7 +360,7 @@ describe("StockInWizard — supplier UI removed, still proceed without it", () =
     );
   });
 
-  it("hardcode removal: category init is placeholder and supplier init null (Next disabled initially on step2/3)", async () => {
+  it("required indicators appear on Step 2 only after Next is tried", async () => {
     const user = userEvent.setup();
     render(
       <StockInWizard items={[]} onConfirm={vi.fn()} onOpenChange={noop} open />
@@ -347,14 +368,23 @@ describe("StockInWizard — supplier UI removed, still proceed without it", () =
     await user.type(screen.getByPlaceholderText(/Scan barcode/i), "SKU-005");
     await user.click(screen.getByRole("button", { name: /Next/i }));
     await screen.findByText(/Step 2 — Item Details/i);
-    // step2 category is placeholder "" -> Next disabled
-    expect(screen.getByRole("button", { name: /Next/i })).toBeDisabled();
+    // Nothing is flagged on a pristine step.
+    expect(screen.queryByText(/Name required\./i)).toBeNull();
+    expect(screen.queryByText(/Category is required\./i)).toBeNull();
+
+    await user.click(screen.getByRole("button", { name: /Next/i }));
+    // Both empty required fields are flagged, and the step does not advance.
+    expect(screen.getByText(/Step 2 — Item Details/i)).toBeInTheDocument();
+    expect(screen.getByText(/Name required\./i)).toBeInTheDocument();
+    expect(screen.getByText(/Category is required\./i)).toBeInTheDocument();
+
     await user.type(
       screen.getByPlaceholderText(/e\.g\., Paracetamol/i),
       "New Item"
     );
-    // still disabled because category missing
-    expect(screen.getByRole("button", { name: /Next/i })).toBeDisabled();
+    // Typing clears the field's own indicator as it is filled.
+    expect(screen.queryByText(/Name required\./i)).toBeNull();
+    expect(screen.getByText(/Category is required\./i)).toBeInTheDocument();
   });
 });
 
@@ -492,7 +522,12 @@ describe("StockInWizard — pack pair and pack-to-base conversion", () => {
     expect(
       screen.getByText(/Enter how many base units one pack holds/i)
     ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Next/i })).toBeDisabled();
+    // Next is clickable, but the broken pack pair keeps the step in place.
+    await user.click(screen.getByRole("button", { name: /Next/i }));
+    expect(screen.getByText(/Step 2 — Item Details/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Enter how many base units one pack holds/i)
+    ).toBeInTheDocument();
   });
 
   it("resets the pack pair when the wizard is pointed at another item", async () => {
@@ -672,14 +707,145 @@ describe("StockInWizard — Step 1 identity barcode", () => {
     ).toBeInTheDocument();
   });
 
-  it("still blocks Next when truly empty and no item is resolved", async () => {
+  it("flags the identifier as required when Next is tried while empty", async () => {
+    const user = userEvent.setup();
     render(
       <StockInWizard items={[]} onConfirm={vi.fn()} onOpenChange={noop} open />
     );
-    expect(screen.getByRole("button", { name: /Next/i })).toBeDisabled();
     const input = (await screen.findByLabelText(
       /Barcode \/ SKU/i
     )) as HTMLInputElement;
     expect(input.placeholder).toBe("Scan barcode or type SKU");
+    expect(screen.queryByText(/Identifier is required\./i)).toBeNull();
+
+    await user.click(screen.getByRole("button", { name: /Next/i }));
+    // Still on step 1, with the missing identifier flagged.
+    expect(screen.getByText(/Step 1 — Identify/i)).toBeInTheDocument();
+    expect(screen.getByText(/Identifier is required\./i)).toBeInTheDocument();
+  });
+});
+
+/**
+ * A delivery usually holds more than one item, so after a successful submit the
+ * wizard stays open on a success screen and offers "Stock In Another Item"
+ * (multi-item-stock-in) instead of closing. The next run starts blank — no
+ * prefill from the item just saved — so the next delivery can be anything.
+ */
+describe("StockInWizard — stock in another item", () => {
+  /** A brand new item taken all the way to a submitted delivery. */
+  async function stockInNewItem(
+    user: ReturnType<typeof userEvent.setup>,
+    opts: { category: string; name: string; qty: string }
+  ) {
+    await reachBatchStep(user, { category: opts.category, name: opts.name });
+    await fillBatchStep(user, opts.qty);
+    await user.click(screen.getByRole("button", { name: /Next/i }));
+    await user.click(screen.getByRole("button", { name: /Confirm Stock In/i }));
+    await screen.findByText(/Step 5 — Done/i);
+  }
+
+  it("stays open on a success screen that offers the next item", async () => {
+    const onConfirm = vi.fn();
+    const onOpenChange = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <StockInWizard
+        items={[]}
+        onConfirm={onConfirm}
+        onOpenChange={onOpenChange}
+        open
+      />
+    );
+
+    await stockInNewItem(user, {
+      category: "Analgesic",
+      name: "Ibuprofen",
+      qty: "5",
+    });
+
+    expect(screen.getByText(/Stocked in/i)).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /Stock In Another Item/i })
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Done$/ })).toBeInTheDocument();
+    expect(onConfirm).toHaveBeenCalledTimes(1);
+    // The wizard must not close itself; the operator chooses whether to finish.
+    expect(onOpenChange).not.toHaveBeenCalledWith(false);
+  });
+
+  it("resets to a blank Step 1 when Stock In Another Item is pressed", async () => {
+    const user = userEvent.setup();
+    render(
+      <StockInWizard items={[]} onConfirm={vi.fn()} onOpenChange={noop} open />
+    );
+
+    await stockInNewItem(user, {
+      category: "Analgesic",
+      name: "Ibuprofen",
+      qty: "5",
+    });
+    await user.click(
+      screen.getByRole("button", { name: /Stock In Another Item/i })
+    );
+
+    await screen.findByText(/Step 1 — Identify/i);
+    const input = screen.getByLabelText(/Barcode \/ SKU/i) as HTMLInputElement;
+    expect(input.value).toBe("");
+    expect(screen.queryByText(/Step 5 — Done/i)).toBeNull();
+  });
+
+  it("logs two deliveries in a row without leaving the wizard", async () => {
+    const onConfirm = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <StockInWizard
+        items={[]}
+        onConfirm={onConfirm}
+        onOpenChange={noop}
+        open
+      />
+    );
+
+    await stockInNewItem(user, {
+      category: "Analgesic",
+      name: "Ibuprofen",
+      qty: "5",
+    });
+    await user.click(
+      screen.getByRole("button", { name: /Stock In Another Item/i })
+    );
+    await screen.findByText(/Step 1 — Identify/i);
+    await stockInNewItem(user, {
+      category: "Antibiotic",
+      name: "Cefalexin",
+      qty: "7",
+    });
+
+    expect(onConfirm).toHaveBeenCalledTimes(2);
+    expect(onConfirm).toHaveBeenLastCalledWith(
+      expect.objectContaining({ name: "Cefalexin", qty: 7 })
+    );
+  });
+
+  it("closes the wizard when Done is pressed", async () => {
+    const onOpenChange = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <StockInWizard
+        items={[]}
+        onConfirm={vi.fn()}
+        onOpenChange={onOpenChange}
+        open
+      />
+    );
+
+    await stockInNewItem(user, {
+      category: "Analgesic",
+      name: "Ibuprofen",
+      qty: "5",
+    });
+    await user.click(screen.getByRole("button", { name: /^Done$/ }));
+
+    expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 });

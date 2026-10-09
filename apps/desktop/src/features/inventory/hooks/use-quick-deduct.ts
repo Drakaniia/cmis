@@ -35,7 +35,10 @@ import {
   saveRequest,
 } from "@/features/requests/persistence";
 import { reserveRequestIds } from "@/features/requests/request-id";
-import { defaultUnitForItem } from "@/features/requests/request-units";
+import {
+  defaultUnitForItem,
+  toRequestUnit,
+} from "@/features/requests/request-units";
 import type { RequestItem } from "@/features/requests/types";
 import { getDb } from "@/lib/db";
 
@@ -67,6 +70,12 @@ export function dispensableItems(
 export interface QuickDeductInput {
   item: InventoryItem;
   qty: number;
+  /**
+   * The unit the quantity is written in. Omitted by the modal, which always
+   * hand-overs in the item's base unit; the request form passes its row's unit
+   * so a pack-worded row (`3 box`) deducts 30 base units, not 3.
+   */
+  unit?: string;
 }
 
 export type QuickDeductOutcome =
@@ -192,13 +201,19 @@ export function useQuickDeduct() {
   );
 
   const deduct = useCallback(
-    async ({ item, qty }: QuickDeductInput): Promise<QuickDeductOutcome> => {
+    async ({
+      item,
+      qty,
+      unit: requestedUnit,
+    }: QuickDeductInput): Promise<QuickDeductOutcome> => {
       const at = new Date().toISOString();
       const [id] = await reserveRequestIds(1, new Date(at));
       if (!id) {
         return { message: "Could not reserve a request reference.", ok: false };
       }
-      const unit = defaultUnitForItem(item);
+      const unit = requestedUnit?.trim()
+        ? toRequestUnit(requestedUnit)
+        : defaultUnitForItem(item);
 
       // Stock first, card second: the reverse is exactly the bug this fixes.
       const result = await deductStock(
