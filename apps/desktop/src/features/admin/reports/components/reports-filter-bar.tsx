@@ -1,4 +1,13 @@
 import { Button } from "@cmis/ui/components/button";
+import { Calendar } from "@cmis/ui/components/calendar";
+import {
+  Popover,
+  PopoverPopup,
+  PopoverPortal,
+  PopoverPositioner,
+  PopoverTrigger,
+} from "@cmis/ui/components/popover";
+import { monthKeyFromIso, todayIso } from "@cmis/ui/lib/date";
 import { cn } from "@cmis/ui/lib/utils";
 import {
   ChevronLeft,
@@ -8,7 +17,7 @@ import {
   Printer,
 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 
 import { CategoryPicker } from "@/features/inventory/components/category-picker";
 
@@ -21,17 +30,31 @@ import { CategoryPicker } from "@/features/inventory/components/category-picker"
  */
 function MonthStepper({
   isCurrentMonth,
+  month,
   monthLabel,
   onCurrentMonth,
+  onSelectMonth,
   onStepBack,
   onStepForward,
 }: {
   isCurrentMonth: boolean;
+  month: string;
   monthLabel: string;
   onCurrentMonth: () => void;
+  onSelectMonth: (month: string) => void;
   onStepBack: () => void;
   onStepForward: () => void;
 }) {
+  const [open, setOpen] = useState(false);
+
+  const handleSelect = useCallback(
+    (iso: string) => {
+      onSelectMonth(monthKeyFromIso(iso));
+      setOpen(false);
+    },
+    [onSelectMonth]
+  );
+
   return (
     <div className="flex items-center gap-1.5">
       <span className="mr-1 hidden font-semibold text-[11px] text-muted-foreground/70 uppercase tracking-[0.06em] sm:inline">
@@ -47,28 +70,43 @@ function MonthStepper({
         >
           <ChevronLeft aria-hidden className="size-3.5" />
         </button>
-        {/* §8 hint in direction: month label cross-fades toward new value, not hard swap */}
-        <span
-          aria-live="polite"
-          className="relative grid min-w-[132px] place-items-center overflow-hidden px-1 text-center"
-        >
-          <AnimatePresence initial={false} mode="popLayout">
-            <motion.span
-              animate={{ opacity: 1, x: 0 }}
-              className="col-start-1 row-start-1 font-medium text-[13px] tabular-nums tracking-[-0.01em]"
-              exit={{ opacity: 0, x: -8 }}
-              initial={{ opacity: 0, x: 8 }}
-              key={monthLabel}
-              transition={{
-                damping: 30,
-                stiffness: 400,
-                type: "spring",
-              }}
-            >
-              {monthLabel}
-            </motion.span>
-          </AnimatePresence>
-        </span>
+        {/* §8 hint in direction: month label cross-fades toward new value, not hard swap.
+            Clicking it opens the full calendar to jump to any month or year. */}
+        <Popover onOpenChange={setOpen} open={open}>
+          <PopoverTrigger
+            aria-label={`Month, currently ${monthLabel}. Press to choose a date.`}
+            className="press-feedback relative grid min-w-[132px] place-items-center overflow-hidden px-1 text-center"
+            render={<button type="button" />}
+          >
+            <AnimatePresence initial={false} mode="popLayout">
+              <motion.span
+                animate={{ opacity: 1, x: 0 }}
+                className="col-start-1 row-start-1 font-medium text-[13px] tabular-nums tracking-[-0.01em]"
+                exit={{ opacity: 0, x: -8 }}
+                initial={{ opacity: 0, x: 8 }}
+                key={monthLabel}
+                transition={{
+                  damping: 30,
+                  stiffness: 400,
+                  type: "spring",
+                }}
+              >
+                {monthLabel}
+              </motion.span>
+            </AnimatePresence>
+          </PopoverTrigger>
+          <PopoverPortal>
+            <PopoverPositioner align="start" sideOffset={6}>
+              <PopoverPopup className="surface-frosted w-64">
+                <Calendar
+                  max={todayIso()}
+                  onSelect={handleSelect}
+                  value={`${month}-01`}
+                />
+              </PopoverPopup>
+            </PopoverPositioner>
+          </PopoverPortal>
+        </Popover>
         <button
           aria-label="Next month"
           className="press-feedback flex size-7 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground active:scale-[0.96] disabled:pointer-events-none disabled:opacity-30"
@@ -105,12 +143,14 @@ export function ReportsFilterBar({
   category,
   isCurrentMonth,
   isSavingPdf,
+  month,
   monthLabel,
   onCategoryChange,
   onCurrentMonth,
   onExport,
   onPrint,
   onSavePdf,
+  onSelectMonth,
   onStepBack,
   onStepForward,
 }: {
@@ -120,12 +160,14 @@ export function ReportsFilterBar({
   category: string;
   isCurrentMonth: boolean;
   isSavingPdf: boolean;
+  month: string;
   monthLabel: string;
   onCategoryChange: (category: string) => void;
   onCurrentMonth: () => void;
   onExport: () => void;
   onPrint: () => void;
   onSavePdf: () => void;
+  onSelectMonth: (month: string) => void;
   onStepBack: () => void;
   onStepForward: () => void;
 }) {
@@ -154,8 +196,10 @@ export function ReportsFilterBar({
       <div className="flex flex-wrap items-center gap-2 px-3 py-2.5 sm:px-4 sm:py-3">
         <MonthStepper
           isCurrentMonth={isCurrentMonth}
+          month={month}
           monthLabel={monthLabel}
           onCurrentMonth={onCurrentMonth}
+          onSelectMonth={onSelectMonth}
           onStepBack={onStepBack}
           onStepForward={onStepForward}
         />

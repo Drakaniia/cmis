@@ -4,6 +4,7 @@ import {
   buildMonthActivity,
   buildStockSummary,
   formatAsOf,
+  resolveMonthActivity,
 } from "./stock-report-summary";
 
 function item(overrides: Partial<InventoryItem> = {}): InventoryItem {
@@ -116,6 +117,37 @@ describe("buildMonthActivity", () => {
     });
     expect(activity.received).toBe("12");
     expect(activity.dispensed).toBe("0");
+  });
+});
+
+describe("resolveMonthActivity", () => {
+  it("accepts figures measured for the selected month", () => {
+    const { activity, isPending } = resolveMonthActivity("2026-02", {
+      dispensed: 4,
+      hasActivity: true,
+      month: "2026-02",
+      received: 12,
+    });
+    expect(isPending).toBe(false);
+    expect(activity).toEqual({ dispensed: "4", received: "12" });
+  });
+
+  it("refuses the previous month's figures while the next month loads", () => {
+    // The exact bug: February selected, January's totals still in the cache.
+    const { activity, isPending } = resolveMonthActivity("2026-02", {
+      dispensed: 99,
+      hasActivity: true,
+      month: "2026-01",
+      received: 99,
+    });
+    expect(isPending).toBe(true);
+    expect(activity).toEqual({ dispensed: "—", received: "—" });
+  });
+
+  it("treats absent data as pending, not as a quiet month", () => {
+    const { activity, isPending } = resolveMonthActivity("2026-02", undefined);
+    expect(isPending).toBe(true);
+    expect(activity).toEqual({ dispensed: "—", received: "—" });
   });
 });
 

@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 
 import { getDb } from "@/lib/db";
 import { monthRange } from "@/lib/month";
+import type { MonthActivityData } from "../types";
 
 /**
  * This month's received and dispensed units, category-filtered (F2).
@@ -15,13 +16,13 @@ import { monthRange } from "@/lib/month";
  * `hasActivity` counts rows rather than units: a month whose only movement was a
  * zero-unit row has happened, and it should read `0` rather than an em dash
  * (F2, D15).
+ *
+ * There is deliberately no `placeholderData`: React Query would keep serving the
+ * previous month's (or previous category's) totals while the new key loads, and
+ * a report that pairs February's label with January's figures is simply wrong.
+ * `undefined` now means "not read yet", and each result is tagged with the month
+ * it describes so `resolveMonthActivity` can enforce that.
  */
-
-export interface MonthActivityData {
-  dispensed: number;
-  hasActivity: boolean;
-  received: number;
-}
 
 const INBOUND_ALL = `SELECT COALESCE(SUM(CAST(json_extract(a.after_json, '$.received') AS INTEGER)), 0) AS total,
           COUNT(*) AS rows
@@ -47,7 +48,6 @@ interface ActivityRow {
 export function useMonthActivity(month: string, category: string) {
   const filtered = category !== "All";
   return useQuery({
-    placeholderData: (previousData) => previousData,
     queryFn: async (): Promise<MonthActivityData> => {
       try {
         const db = await getDb();
@@ -65,12 +65,13 @@ export function useMonthActivity(month: string, category: string) {
         return {
           dispensed,
           hasActivity: (inbound?.rows ?? 0) > 0 || (outbound?.rows ?? 0) > 0,
+          month,
           received,
         };
       } catch {
         // No audit table or no JSON1 on this build — report no activity rather
         // than taking the summary down.
-        return { dispensed: 0, hasActivity: false, received: 0 };
+        return { dispensed: 0, hasActivity: false, month, received: 0 };
       }
     },
     queryKey: ["reports-month-activity", month, category],

@@ -30,9 +30,9 @@ import {
   stockReportPdfFileName,
 } from "../stock-report-pdf";
 import {
-  buildMonthActivity,
   buildStockSummary,
   formatAsOf,
+  resolveMonthActivity,
 } from "../stock-report-summary";
 import type { StockLevelSort, StockLevelSortKey } from "../types";
 import { ReportsFilterBar } from "./reports-filter-bar";
@@ -94,6 +94,7 @@ export function ReportsPage() {
     isCurrentMonth,
     month,
     monthLabel,
+    setMonth,
     stepBack,
     stepForward,
   } = useReportMonth();
@@ -119,12 +120,14 @@ export function ReportsPage() {
 
   const rows = useMemo(() => buildStockLevelRows(items), [items]);
   const summary = useMemo(() => buildStockSummary(items), [items]);
-  const activityFigures = useMemo(
-    () =>
-      buildMonthActivity(
-        activity ?? { dispensed: 0, hasActivity: false, received: 0 }
-      ),
-    [activity]
+  /**
+   * The month figures the document may show. `resolveMonthActivity` refuses
+   * data measured for a different month, so a month switch reads as loading and
+   * can never pair February's label with January's numbers.
+   */
+  const { activity: activityFigures, isPending: isActivityPending } = useMemo(
+    () => resolveMonthActivity(month, activity),
+    [activity, month]
   );
   const asOf = useMemo(() => formatAsOf(new Date()), []);
   const generatedAt = useMemo(() => new Date().toLocaleString(), []);
@@ -180,7 +183,15 @@ export function ReportsPage() {
     );
   }, []);
 
-  const canExport = rows.length > 0 && visibleRows.length > 0;
+  const isGridPending = dailyByItem === undefined;
+  const canExport =
+    rows.length > 0 &&
+    visibleRows.length > 0 &&
+    !(isActivityPending || isGridPending);
+  // Print and PDF both draw the same document, whose month figures are only
+  // trustworthy once the selected month has resolved.
+  const canPrint = rows.length > 0 && !isActivityPending;
+  const canSavePdf = rows.length > 0 && !isActivityPending;
 
   const handleExport = useCallback(async () => {
     try {
@@ -339,7 +350,7 @@ export function ReportsPage() {
     <div className="flex h-full flex-col overflow-hidden print:block print:h-auto print:overflow-visible">
       {/* Print path (F8/F9): on paper the document is the only thing that
           renders — the interactive screen below carries `print:hidden`. */}
-      {rows.length > 0 ? (
+      {rows.length > 0 && !isActivityPending ? (
         <div className="hidden print:block">
           <StockReportDocument {...documentProps} />
         </div>
@@ -347,17 +358,19 @@ export function ReportsPage() {
 
       <ReportsFilterBar
         canExport={canExport}
-        canPrint={rows.length > 0}
-        canSavePdf={rows.length > 0}
+        canPrint={canPrint}
+        canSavePdf={canSavePdf}
         category={category}
         isCurrentMonth={isCurrentMonth}
         isSavingPdf={isSavingPdf}
+        month={month}
         monthLabel={monthLabel}
         onCategoryChange={setCategory}
         onCurrentMonth={goToCurrentMonth}
         onExport={handleExport}
         onPrint={handlePrint}
         onSavePdf={handleSavePdf}
+        onSelectMonth={setMonth}
         onStepBack={stepBack}
         onStepForward={stepForward}
       />
@@ -401,6 +414,7 @@ export function ReportsPage() {
               activity={activityFigures}
               asOf={asOf}
               category={category}
+              isActivityLoading={isActivityPending}
               monthLabel={monthLabel}
               summary={summary}
             />

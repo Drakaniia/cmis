@@ -50,6 +50,8 @@ export function useReportMonth() {
     isCurrentMonth,
     month,
     monthLabel,
+    /** Jump straight to a `YYYY-MM` month (clamped at the current month). */
+    setMonth: commit,
     stepBack,
     stepForward,
   };
