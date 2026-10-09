@@ -47,6 +47,7 @@ export function WizardShell({
   children,
   direction = 1,
   dirty = false,
+  footer,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -64,6 +65,11 @@ export function WizardShell({
   children: ReactNode;
   direction?: 1 | -1;
   dirty?: boolean;
+  /**
+   * Replaces the footer's button row, keeping its frosted bar. Used by the
+   * success screen, whose terminal actions are not Cancel/Back/Next.
+   */
+  footer?: ReactNode;
 }) {
   const [confirmDiscard, setConfirmDiscard] = useState(false);
   const reduceMotion = useReducedMotion();
@@ -248,34 +254,38 @@ export function WizardShell({
                *   Back   = outline (secondary, visible but not dominant)
                *   Next   = confirm (primary CTA, solid fill) */}
               <div className="flex items-center justify-between border-border/30 border-t px-4 py-3">
-                <Button
-                  className="press-feedback"
-                  onClick={onCancel}
-                  size="sm"
-                  variant="ghost"
-                >
-                  Cancel
-                </Button>
-                <div className="flex gap-2">
-                  <Button
-                    className="press-feedback"
-                    disabled={!canBack || step === 1}
-                    onClick={onBack}
-                    size="sm"
-                    variant="outline"
-                  >
-                    {backLabel}
-                  </Button>
-                  <Button
-                    className="press-feedback"
-                    disabled={!canNext}
-                    onClick={onNext}
-                    size="sm"
-                    variant="confirm"
-                  >
-                    {nextLabel}
-                  </Button>
-                </div>
+                {footer ?? (
+                  <>
+                    <Button
+                      className="press-feedback"
+                      onClick={onCancel}
+                      size="sm"
+                      variant="ghost"
+                    >
+                      Cancel
+                    </Button>
+                    <div className="flex gap-2">
+                      <Button
+                        className="press-feedback"
+                        disabled={!canBack || step === 1}
+                        onClick={onBack}
+                        size="sm"
+                        variant="outline"
+                      >
+                        {backLabel}
+                      </Button>
+                      <Button
+                        className="press-feedback"
+                        disabled={!canNext}
+                        onClick={onNext}
+                        size="sm"
+                        variant="confirm"
+                      >
+                        {nextLabel}
+                      </Button>
+                    </div>
+                  </>
+                )}
               </div>
             </motion.div>
           </div>

@@ -263,8 +263,3 @@ export function buildItemUpdate(
 export function isRename(item: InventoryItem, draft: ItemEditDraft): boolean {
   return item.name.trim() !== draft.name.trim();
 }
-
-/** §10.3 — the divergence the form has to show before it saves. */
-export function batchQuantityTotal(item: InventoryItem): number {
-  return item.batches.reduce((sum, batch) => sum + batch.qty, 0);
-}

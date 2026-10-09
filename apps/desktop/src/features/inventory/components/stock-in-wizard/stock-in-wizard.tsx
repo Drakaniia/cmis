@@ -1,3 +1,4 @@
+import { Button } from "@cmis/ui/components/button";
 import { useReducedMotion } from "motion/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -15,6 +16,7 @@ import { StepBatch } from "./steps/step-batch";
 import { StepDetails } from "./steps/step-details";
 import { StepIdentify } from "./steps/step-identify";
 import { StepReview } from "./steps/step-review";
+import { StepSuccess } from "./steps/step-success";
 import type {
   InventoryCategory,
   QuantityUnit,
@@ -80,37 +82,58 @@ export function StockInWizard({
   const [notes, setNotes] = useState("");
 
   const [attemptedNext, setAttemptedNext] = useState(false);
+  // The terminal screen after a submitted delivery: what was just logged, from
+  // which the operator can start the next item without leaving the wizard.
+  const [confirmed, setConfirmed] = useState<{
+    itemLabel: string;
+    qtyLabel: string;
+  } | null>(null);
+  // Set the moment a delivery is submitted and cleared when the dialog closes.
+  // While it is set the open-effect must not re-run: the parent refetches and
+  // reselects the just-saved item, and re-prefilling here would clobber both the
+  // success screen and the blank Step 1 of a "Stock In Another Item" run.
+  const [submitted, setSubmitted] = useState(false);
   const reduceMotion = useReducedMotion();
 
   useEffect(() => {
-    if (open) {
+    if (!open) {
+      // Clear the terminal state too, so reopening shows a fresh Step 1 rather
+      // than the last run's success screen for a frame.
+      setSubmitted(false);
+      setConfirmed(null);
       setStep(1);
-      setDirection(1);
-      setAttemptedNext(false);
-      const found = initialItemId
-        ? (items.find((i) => i.id === initialItemId) ?? null)
-        : null;
-      setFoundItem(found);
-      setIsNew(false);
-      // Identity text is never prefilled: the SKU/barcode shows as a greyed
-      // placeholder (F1) so the field reads empty but Next can fall back to it.
-      setIdentifier("");
-      const details = found ? detailsFromItem(found) : EMPTY_DETAILS;
-      setCategory(details.category);
-      setForm(details.form);
-      setName(details.name);
-      setPackQty(details.packQty);
-      setPackSize(details.packSize);
-      setPackUnit(details.packUnit);
-      setStrengthUnit(details.strengthUnit);
-      setStrengthValue(details.strengthValue);
-      setBatch("");
-      setExpiry("");
-      setQty("");
-      setQtyUnit("base");
-      setNotes("");
+      return;
     }
-  }, [open, initialItemId, items]);
+    if (submitted) {
+      return;
+    }
+    setConfirmed(null);
+    setStep(1);
+    setDirection(1);
+    setAttemptedNext(false);
+    const found = initialItemId
+      ? (items.find((i) => i.id === initialItemId) ?? null)
+      : null;
+    setFoundItem(found);
+    setIsNew(false);
+    // Identity text is never prefilled: the SKU/barcode shows as a greyed
+    // placeholder (F1) so the field reads empty but Next can fall back to it.
+    setIdentifier("");
+    const details = found ? detailsFromItem(found) : EMPTY_DETAILS;
+    setCategory(details.category);
+    setForm(details.form);
+    setName(details.name);
+    setPackQty(details.packQty);
+    setPackSize(details.packSize);
+    setPackUnit(details.packUnit);
+    setStrengthUnit(details.strengthUnit);
+    setStrengthValue(details.strengthValue);
+    setBatch("");
+    setExpiry("");
+    setQty("");
+    setQtyUnit("base");
+    setNotes("");
+  }, [open, initialItemId, items, submitted]);
 
   const packItem = useMemo(
     () => ({ form: form.trim(), packQty, packUnit: packUnit.trim() }),
@@ -151,7 +174,6 @@ export function StockInWizard({
       "",
     [identifier, foundItem]
   );
-  const canAdvanceStep1 = effectiveIdentifier.length > 0;
   const identifyPlaceholder = foundItem
     ? foundItem.sku?.trim() ||
       foundItem.barcode?.trim() ||
@@ -208,13 +230,10 @@ export function StockInWizard({
 
   const goNext = useCallback(
     (force = false) => {
-      // Step 3 is soft: batch/expiry/qty warnings never hard-block Next
-      if (step === 3 && !force) {
-        setAttemptedNext(false);
-        setDirection(1);
-        setStep((s) => s + 1);
-        return;
-      }
+      // Every step blocks on its required fields; step 3's batch/expiry stay
+      // soft, with only the quantity hard-required. A failed check raises the
+      // per-field indicators rather than leaving a disabled Next with no
+      // explanation, so the operator can see what is still empty.
       const valid = validateStep(step, draft);
       if (!(valid || force)) {
         setAttemptedNext(true);
@@ -235,14 +254,49 @@ export function StockInWizard({
       const finalDraft: StockInDraft = draft.batch.trim()
         ? draft
         : { ...draft, batch: autoBatchCode() };
+      const itemLabel = name || effectiveIdentifier;
+      const qtyLabel = describeQuantity(finalDraft.qty, packItem);
       onConfirm(finalDraft);
-      toast.success(
-        `Logged: ${name || effectiveIdentifier} +${describeQuantity(finalDraft.qty, packItem)}`
-      );
-      onOpenChange(false);
+      // Stay open on a success screen rather than closing: a delivery usually
+      // holds several items, so the operator is offered the next one instead of
+      // having to reopen the wizard and restart from Step 1.
+      setSubmitted(true);
+      setConfirmed({ itemLabel, qtyLabel });
+      setDirection(1);
+      setStep(5);
+      toast.success(`Logged: ${itemLabel} +${qtyLabel}`);
     },
-    [draft, effectiveIdentifier, name, onConfirm, onOpenChange, packItem, step]
+    [draft, effectiveIdentifier, name, onConfirm, packItem, step]
   );
+
+  /**
+   * "Stock In Another Item" — blank Step 1 in place, with no prefill from the
+   * item just saved, so the next delivery can be anything (a scan re-resolves an
+   * existing item on its own). The `submitted` flag stays set so a background
+   * refetch of the inventory cannot re-prefill this fresh run.
+   */
+  const startAnother = useCallback(() => {
+    setConfirmed(null);
+    setStep(1);
+    setDirection(1);
+    setIdentifier("");
+    setFoundItem(null);
+    setIsNew(false);
+    setCategory(EMPTY_DETAILS.category);
+    setForm(EMPTY_DETAILS.form);
+    setName(EMPTY_DETAILS.name);
+    setPackQty(EMPTY_DETAILS.packQty);
+    setPackSize(EMPTY_DETAILS.packSize);
+    setPackUnit(EMPTY_DETAILS.packUnit);
+    setStrengthUnit(EMPTY_DETAILS.strengthUnit);
+    setStrengthValue(EMPTY_DETAILS.strengthValue);
+    setBatch("");
+    setExpiry("");
+    setQty("");
+    setQtyUnit("base");
+    setNotes("");
+    setAttemptedNext(false);
+  }, []);
 
   const lookup = useCallback(() => {
     const typed = identifier.trim();
@@ -316,23 +370,38 @@ export function StockInWizard({
   const handleNext = useCallback(() => goNext(), [goNext]);
 
   const dirty = Boolean(identifier || name || batch || qty || notes || packQty);
-  // Step 1 is fallback-aware (F4 Option A): validator stays pure, the call
-  // site allows empty input when an item is resolved. Step 3 soft as before.
-  let stepValid = validateStep(step, draft);
-  if (step === 1) {
-    stepValid = canAdvanceStep1;
-  }
-  if (step === 3) {
-    stepValid = true;
-  }
+
+  // The success screen's terminal actions, replacing Cancel/Back/Next (§8: the
+  // primary CTA stays in the footer). "Done" closes, "Stock In Another Item"
+  // resets in place.
+  const successFooter = confirmed ? (
+    <>
+      <Button
+        className="press-feedback"
+        onClick={handleCancel}
+        size="sm"
+        variant="outline"
+      >
+        Done
+      </Button>
+      <Button
+        className="press-feedback"
+        onClick={startAnother}
+        size="sm"
+        variant="confirm"
+      >
+        Stock In Another Item
+      </Button>
+    </>
+  ) : undefined;
 
   return (
     <WizardShell
       backLabel="Back"
       canBack={step > 1}
-      canNext={stepValid}
       direction={direction}
-      dirty={dirty}
+      dirty={confirmed ? false : dirty}
+      footer={successFooter}
       nextLabel={step === 4 ? "Confirm Stock In" : "Next →"}
       onBack={goBack}
       onCancel={handleCancel}
@@ -342,8 +411,15 @@ export function StockInWizard({
       originRect={originRect}
       step={step}
       title="Stock In"
-      totalSteps={4}
+      totalSteps={confirmed ? 5 : 4}
     >
+      {confirmed ? (
+        <StepSuccess
+          itemLabel={confirmed.itemLabel}
+          qtyLabel={confirmed.qtyLabel}
+        />
+      ) : null}
+
       {step === 1 ? (
         <StepIdentify
           code={identifier}

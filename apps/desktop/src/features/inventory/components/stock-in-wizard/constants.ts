@@ -1,10 +1,15 @@
 import type { StepDetailsState } from "./types";
 
-/** Apple Design §6: field shake — 4px spring, damping 0.6 / response 0.25s */
+/**
+ * Apple Design §6: field shake — 4px, damping 0.6 / response 0.25s.
+ *
+ * Motion only supports two keyframes on a spring, so the multi-step shake is a
+ * tween at the spring's response time rather than a spring across eight frames.
+ */
 export const shakeVariants = {
   idle: { x: 0 },
   shake: {
-    transition: { damping: 0.6, duration: 0.25, type: "spring" as const },
+    transition: { duration: 0.25, ease: "easeInOut" as const },
     x: [0, -4, 4, -3, 3, -1, 1, 0],
   },
 };

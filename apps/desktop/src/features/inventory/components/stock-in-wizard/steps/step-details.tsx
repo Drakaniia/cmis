@@ -134,6 +134,7 @@ export function StepDetails({
   onStrengthValueChange: (value: string) => void;
 }) {
   const nameMissing = showErrors && itemName.trim().length === 0;
+  const categoryMissing = showErrors && category.trim().length === 0;
   // The pair's own text, when it has one (D24) — what the column will store.
   const derivedPackSize = packSizeText({ packQty, packUnit });
   const packTooLong =
@@ -184,6 +185,8 @@ export function StepDetails({
       {/* The list is editable from here, so a delivery that introduces a new
           grouping does not have to be recorded as the wrong one (§7.3). */}
       <CategoryPicker
+        error={categoryMissing ? "Category is required." : undefined}
+        invalid={categoryMissing}
         label="Category"
         name="stock-in-category"
         onChange={handleCategoryChange}
