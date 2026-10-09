@@ -11,7 +11,10 @@
  */
 import {
   type ButtonHTMLAttributes,
+  cloneElement,
   createContext,
+  isValidElement,
+  type ReactElement,
   type ReactNode,
   useCallback,
   useContext,
@@ -47,10 +50,22 @@ export function Popover({
 
 export function PopoverTrigger({
   children,
+  nativeButton: _nativeButton,
+  render,
   ...props
-}: ButtonHTMLAttributes<HTMLButtonElement>) {
+}: ButtonHTMLAttributes<HTMLButtonElement> & {
+  nativeButton?: boolean;
+  render?: ReactElement;
+}) {
   const { open, setOpen } = useContext(OpenContext);
   const handleClick = useCallback(() => setOpen(!open), [open, setOpen]);
+  if (isValidElement(render)) {
+    return cloneElement(
+      render as ReactElement<Record<string, unknown>>,
+      { onClick: handleClick, ...props },
+      children
+    );
+  }
   return (
     <button onClick={handleClick} type="button" {...props}>
       {children}
