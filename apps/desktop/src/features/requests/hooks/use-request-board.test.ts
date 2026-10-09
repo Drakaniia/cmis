@@ -594,4 +594,71 @@ describe("useRequestBoard", () => {
       ).toBe("pending");
     });
   });
+
+  describe("updateRequestor", () => {
+    it("replaces the requestor on the matching card", () => {
+      const { result } = renderHook(() => useRequestBoard(ITEMS));
+      let ok = false;
+      act(() => {
+        ok = result.current.updateRequestor("REQ-001", {
+          email: "",
+          id: "",
+          name: "Walk-in",
+        });
+      });
+      expect(ok).toBe(true);
+      expect(
+        result.current.items.find((found) => found.id === "REQ-001")?.requestor
+      ).toEqual({ email: "", id: "", name: "Walk-in" });
+    });
+
+    it("leaves the other cards untouched", () => {
+      const { result } = renderHook(() => useRequestBoard(ITEMS));
+      act(() => {
+        result.current.updateRequestor("REQ-001", {
+          email: "",
+          id: "",
+          name: "Ana Reyes",
+        });
+      });
+      expect(
+        result.current.items.find((found) => found.id === "REQ-002")?.requestor
+          .name
+      ).toBe("Maria Santos");
+    });
+
+    it("persists the updated card", () => {
+      const persist = vi.fn();
+      const { result } = renderHook(() => useRequestBoard(ITEMS, persist));
+      act(() => {
+        result.current.updateRequestor("REQ-001", {
+          email: "a@b.co",
+          id: "STU-1",
+          name: "Ana Reyes",
+        });
+      });
+      expect(persist).toHaveBeenCalledTimes(1);
+      expect(persist).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: "REQ-001",
+          requestor: { email: "a@b.co", id: "STU-1", name: "Ana Reyes" },
+        })
+      );
+    });
+
+    it("reports false and writes nothing for an unknown id", () => {
+      const persist = vi.fn();
+      const { result } = renderHook(() => useRequestBoard(ITEMS, persist));
+      let ok = true;
+      act(() => {
+        ok = result.current.updateRequestor("NOPE", {
+          email: "",
+          id: "",
+          name: "",
+        });
+      });
+      expect(ok).toBe(false);
+      expect(persist).not.toHaveBeenCalled();
+    });
+  });
 });

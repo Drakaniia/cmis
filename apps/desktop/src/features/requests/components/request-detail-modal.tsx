@@ -1,6 +1,6 @@
 import { Button } from "@cmis/ui/components/button";
 import { cn } from "@cmis/ui/lib/utils";
-import { X } from "lucide-react";
+import { Pencil, X } from "lucide-react";
 import {
   AnimatePresence,
   motion,
@@ -241,15 +241,38 @@ function DispensingRecordsSection({
 /**
  * The requestor block. An anonymous request is a first-class answer, not a blank
  * (D23): the name reads "Walk-in" and the empty fields are simply absent.
+ *
+ * `onEdit` opens the Edit Requestor Details form — the only place these fields
+ * change, since requestor details are embedded on the request rather than held
+ * in a directory.
  */
-function RequestorSection({ item }: { item: RequestItem }) {
+function RequestorSection({
+  item,
+  onEdit,
+}: {
+  item: RequestItem;
+  onEdit: (item: RequestItem) => void;
+}) {
   const id = item.requestor.id.trim();
   const email = item.requestor.email.trim();
   const anonymous = item.requestor.name.trim() === "";
 
+  const handleEdit = useCallback(() => onEdit(item), [item, onEdit]);
+
   return (
     <section className="space-y-2 rounded-xl border border-border/40 bg-card/50 p-3 backdrop-blur-sm">
-      <SectionHeading>Requestor</SectionHeading>
+      <div className="flex items-center justify-between gap-2">
+        <SectionHeading>Requestor</SectionHeading>
+        <Button
+          className="press-feedback h-6 gap-1 rounded-full px-2 text-[11px]"
+          onClick={handleEdit}
+          size="sm"
+          variant="ghost"
+        >
+          <Pencil aria-hidden className="size-3" />
+          Edit
+        </Button>
+      </div>
       <p className="font-semibold text-[14px] text-foreground tracking-[-0.01em]">
         {requestorLabel(item)}{" "}
         {id ? (
@@ -375,6 +398,7 @@ export function RequestDetailModal({
   item,
   onAction,
   onAddNote,
+  onEditRequestor,
   onOpenChange,
   open,
   originRect: _originRect,
@@ -382,6 +406,7 @@ export function RequestDetailModal({
   item: RequestItem | null;
   onAction: (item: RequestItem, action: RequestAction) => void;
   onAddNote: (id: string, text: string) => void;
+  onEditRequestor: (item: RequestItem) => void;
   onOpenChange: (open: boolean) => void;
   open: boolean;
   originRect: DOMRect | null;
@@ -566,7 +591,7 @@ export function RequestDetailModal({
               </div>
 
               <div className="min-h-0 flex-1 space-y-3 overflow-auto bg-gradient-to-b from-transparent to-muted/10 p-4">
-                <RequestorSection item={item} />
+                <RequestorSection item={item} onEdit={onEditRequestor} />
 
                 <RequestSection item={item} />
 

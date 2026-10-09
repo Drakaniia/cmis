@@ -2,6 +2,7 @@ import { useNavigate, useSearch } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
+import { useQuickDeductDialog } from "@/features/inventory/quick-deduct-dialog-context";
 import { useDensity } from "@/hooks/use-density";
 import { acceptsTypedText } from "@/lib/typed-text";
 import type { RefusalActionId } from "../drag-rules";
@@ -26,9 +27,10 @@ import {
   requestsSearchEquals,
   searchFromFilters,
 } from "../request-search";
+import { collectRequestors } from "../requestors";
 import type { BatchAction, RequestAction } from "../transitions";
 import { batchActions, canMove } from "../transitions";
-import type { RequestItem, RequestStatus } from "../types";
+import type { RequestItem, Requestor, RequestStatus } from "../types";
 import { REQUEST_COLUMNS, statusMetaOf } from "../types";
 import { CancelRequestModal } from "./cancel-request-modal";
 import { ClearClaimedModal } from "./clear-claimed-modal";
@@ -36,6 +38,7 @@ import { DenyRequestModal } from "./deny-request-modal";
 import { DispenseBatchModal } from "./dispense-batch-modal";
 import { DispenseRequestModal } from "./dispense-request-modal";
 import { DragOverlayLayer } from "./drag-overlay";
+import { EditRequestorModal } from "./edit-requestor-modal";
 import { RequestBoard } from "./request-board";
 import { RequestDetailModal } from "./request-detail-modal";
 import { RequestsBatchToolbar } from "./requests-batch-toolbar";
@@ -86,6 +89,9 @@ export function RequestsPage({ to }: { to: "/admin/requests" }) {
   // The same dialog Ctrl+N opens — the board offers it as a button so creating a
   // request does not require knowing the shortcut (F1).
   const { openNewRequest } = useNewRequestDialog();
+  // §Streamline — the one-action hand-over Ctrl+D opens, surfaced on the queue
+  // so a walk-in that is available now can be dispensed without queueing it.
+  const { openQuickDeduct } = useQuickDeductDialog();
 
   // Deep-linked filters seed the initial state; later edits flow back to the URL.
   const [initialFilters] = useState(() => filtersFromSearch(search));
@@ -104,6 +110,13 @@ export function RequestsPage({ to }: { to: "/admin/requests" }) {
     visibleItems,
   } = useRequestFilters(board.items, now, initialFilters);
 
+  // The complete requestor list is a projection of every loaded request —
+  // independent of the live filters, so browsing it never narrows itself.
+  const requestorDirectory = useMemo(
+    () => collectRequestors(board.items),
+    [board.items]
+  );
+
   const [deniedCollapsed, setDeniedCollapsed] = useState(true);
   const [clearOpen, setClearOpen] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
@@ -113,6 +126,7 @@ export function RequestsPage({ to }: { to: "/admin/requests" }) {
     label: string;
   } | null>(null);
   const [cancelTarget, setCancelTarget] = useState<RequestItem | null>(null);
+  const [editRequestorId, setEditRequestorId] = useState<string | null>(null);
   const [dispenseId, setDispenseId] = useState<string | null>(null);
   const [batchDispenseOpen, setBatchDispenseOpen] = useState(false);
   const [announcement, setAnnouncement] = useState("");
@@ -283,6 +297,8 @@ export function RequestsPage({ to }: { to: "/admin/requests" }) {
   );
 
   const openItem = board.items.find((item) => item.id === openId) ?? null;
+  const editRequestorItem =
+    board.items.find((item) => item.id === editRequestorId) ?? null;
   const dispenseItem =
     board.items.find((item) => item.id === dispenseId) ?? null;
 
@@ -655,6 +671,37 @@ export function RequestsPage({ to }: { to: "/admin/requests" }) {
     }
   }, []);
 
+  /**
+   * Edit Requestor Details — the detail modal closes and the form opens over
+   * the board, the same hand-off Deny and Dispense use.
+   */
+  const handleEditRequestor = useCallback((item: RequestItem) => {
+    setOpenId(null);
+    setEditRequestorId(item.id);
+  }, []);
+
+  const handleEditRequestorOpenChange = useCallback((next: boolean) => {
+    if (!next) {
+      setEditRequestorId(null);
+    }
+  }, []);
+
+  const handleSaveRequestor = useCallback(
+    (id: string, requestor: Requestor) => {
+      setEditRequestorId(null);
+      if (!board.updateRequestor(id, requestor)) {
+        toast.error("Could not save the requestor details", {
+          description: "This request is no longer on the board.",
+        });
+        return;
+      }
+      const label = requestor.name === "" ? "Walk-in" : requestor.name;
+      setAnnouncement(`Requestor details updated — ${label}.`);
+      toast.success("Requestor details updated", { description: label });
+    },
+    [board]
+  );
+
   const handleDenyOpenChange = useCallback((next: boolean) => {
     if (!next) {
       setDenyTarget(null);
@@ -675,12 +722,15 @@ export function RequestsPage({ to }: { to: "/admin/requests" }) {
         filters={filters}
         onCategoryChange={setCategory}
         onClearFilters={clearFilters}
+        onDispenseDirect={openQuickDeduct}
         onNewRequest={openNewRequest}
         onRemoveChip={removeChip}
         onRequestorChange={setRequestor}
         onSearchChange={setSearch}
+        onSelectRequestor={setRequestor}
         onSetCustomRange={setCustomRange}
         onSetDatePreset={setDatePreset}
+        requestors={requestorDirectory}
       />
 
       {/* Live region — every structural change is announced (Apple §16). */}
@@ -741,9 +791,17 @@ export function RequestsPage({ to }: { to: "/admin/requests" }) {
         item={openItem}
         onAction={handleAction}
         onAddNote={board.addNote}
+        onEditRequestor={handleEditRequestor}
         onOpenChange={handleDetailOpenChange}
         open={openId !== null}
         originRect={originRect}
+      />
+
+      <EditRequestorModal
+        item={editRequestorItem}
+        onOpenChange={handleEditRequestorOpenChange}
+        onSave={handleSaveRequestor}
+        open={editRequestorId !== null}
       />
 
       <ClearClaimedModal

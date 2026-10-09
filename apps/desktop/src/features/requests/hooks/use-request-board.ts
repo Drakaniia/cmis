@@ -5,6 +5,7 @@ import type {
   DenyReason,
   DispensingRecord,
   RequestItem,
+  Requestor,
   RequestStatus,
   StatusHistoryEntry,
 } from "../types";
@@ -488,6 +489,28 @@ export function useRequestBoard(
   );
 
   /**
+   * Edit Requestor Details — replaces the requestor on one card.
+   *
+   * The requestor is contact metadata, not a status, so this earns no history
+   * entry: `StatusHistoryEntry` records what the request *became*, and no
+   * status moved. Returns false for an unknown id so the caller can report an
+   * honest failure rather than a silent no-op.
+   */
+  const updateRequestor = useCallback(
+    (id: string, requestor: Requestor): boolean => {
+      const current = items.find((item) => item.id === id);
+      if (!current) {
+        return false;
+      }
+      const next: RequestItem = { ...current, requestor };
+      setItems((prev) => prev.map((item) => (item.id === id ? next : item)));
+      persist([next]);
+      return true;
+    },
+    [items, persist]
+  );
+
+  /**
    * Undo the last structural move — Apple §16 Agency: easy undo for slips.
    * Dispense and Deny are excluded: both write audit records, and a dispense has
    * moved real stock off the shelf as well (D12).
@@ -541,5 +564,6 @@ export function useRequestBoard(
     selectMany,
     toggleSelect,
     undoLastMove,
+    updateRequestor,
   } as const;
 }
