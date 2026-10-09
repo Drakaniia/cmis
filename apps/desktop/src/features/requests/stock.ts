@@ -29,6 +29,10 @@ import {
   toBaseUnits,
 } from "@/features/inventory/domain/pack-size";
 import { getDb } from "@/lib/db";
+import {
+  type ItemAvailability,
+  itemAvailability,
+} from "./domain/request-availability";
 
 /**
  * A dispensable batch: FEFO order, expired and empty batches already removed.
@@ -175,6 +179,89 @@ export async function onHandForAsync(medicine: string): Promise<number> {
     medicineMatchParams(medicine)
   );
   return rows[0]?.qty ?? 0;
+}
+
+/**
+ * Fresh availability for the submit-time re-check (spec §5.6/§6.2) — a direct
+ * DB read, never the 30 s `useInventoryItems` cache. Two queries by id; missing
+ * tables read as empty (the same half-migrated tolerance as `batchRowsFor`).
+ * An id absent from the result no longer exists on file.
+ */
+export async function fetchItemAvailability(
+  ids: readonly string[]
+): Promise<Map<string, ItemAvailability>> {
+  const availability = new Map<string, ItemAvailability>();
+  if (ids.length === 0) {
+    return availability;
+  }
+  const db = await getDb();
+  const placeholders = ids.map(() => "?").join(", ");
+
+  let itemRows: { id: string; qty: number; threshold: number }[] = [];
+  try {
+    itemRows = await db.select<
+      { id: string; qty: number; threshold: number }[]
+    >(
+      `SELECT id, qty, threshold FROM inventory_items WHERE id IN (${placeholders})`,
+      [...ids]
+    );
+  } catch {
+    return availability;
+  }
+
+  let batchRows: {
+    batch: string;
+    expiry: string | null;
+    item_id: string;
+    qty: number;
+  }[] = [];
+  try {
+    batchRows = await db.select<
+      {
+        batch: string;
+        expiry: string | null;
+        item_id: string;
+        qty: number;
+      }[]
+    >(
+      `SELECT item_id, batch, expiry, qty FROM inventory_batches WHERE item_id IN (${placeholders})`,
+      [...ids]
+    );
+  } catch {
+    batchRows = [];
+  }
+
+  const batchesByItem = new Map<
+    string,
+    { batch: string; expiry: string; qty: number; supplier: string }[]
+  >();
+  for (const row of batchRows) {
+    const list = batchesByItem.get(row.item_id) ?? [];
+    list.push({
+      batch: row.batch,
+      expiry: row.expiry ?? "",
+      qty: row.qty,
+      supplier: "",
+    });
+    batchesByItem.set(row.item_id, list);
+  }
+
+  const now = Date.now();
+  for (const row of itemRows) {
+    availability.set(
+      row.id,
+      itemAvailability(
+        {
+          batches: batchesByItem.get(row.id) ?? [],
+          id: row.id,
+          qty: row.qty,
+          threshold: row.threshold,
+        },
+        now
+      )
+    );
+  }
+  return availability;
 }
 
 /**

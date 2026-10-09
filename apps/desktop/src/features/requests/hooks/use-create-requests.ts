@@ -3,9 +3,15 @@ import { useCallback, useEffect, useState } from "react";
 import { useInventoryItems } from "@/features/inventory/hooks/use-inventory-items";
 import type { InventoryItem } from "@/features/inventory/types";
 import { getDb } from "@/lib/db";
+import {
+  checkRows,
+  type ResolvedRow,
+  type RowStockCheck,
+} from "../domain/request-availability";
 import { notifyRequestsChanged, saveRequests } from "../persistence";
 import { reserveRequestIds } from "../request-id";
 import { toRequestUnit } from "../request-units";
+import { fetchItemAvailability } from "../stock";
 import type { RequestItem, StatusHistoryEntry } from "../types";
 
 /**
@@ -42,8 +48,23 @@ export interface SkippedRow {
   message: string;
 }
 
+/**
+ * A row whose fresh numbers (§5.6) no longer match what the form is displaying.
+ * Non-empty `drift` in the result means nothing was written.
+ */
+export interface StockDrift {
+  /** Fresh state is `unavailable` (or the item vanished from the database). */
+  blocking: boolean;
+  /** The fresh numbers. */
+  check: RowStockCheck;
+  /** `RequestDraftRow.key`. */
+  key: string;
+}
+
 export interface CreateRequestsResult {
   created: RequestItem[];
+  /** Non-empty ⇒ nothing was written. */
+  drift: StockDrift[];
   skipped: SkippedRow[];
 }
 
@@ -196,6 +217,65 @@ export function buildRequestItems(
 }
 
 /**
+ * §5.6 — diff the fresh checks against what the form displayed. Every
+ * difference is drift: nothing gets written until the form re-acknowledges.
+ * A missing fresh entry means the item's row is gone from the database.
+ */
+function collectDrift(
+  resolved: readonly ResolvedRow[],
+  expected: Map<string, RowStockCheck>,
+  freshChecks: Map<string, RowStockCheck>
+): StockDrift[] {
+  const drift: StockDrift[] = [];
+  for (const row of resolved) {
+    if (!(row.item && row.qty !== null)) {
+      continue;
+    }
+    const shown = expected.get(row.key);
+    const fresh = freshChecks.get(row.key);
+    if (!fresh) {
+      // The item's row no longer exists — everything displayed is stale.
+      if (shown) {
+        drift.push({
+          blocking: true,
+          check: {
+            ...shown,
+            available: 0,
+            coreAvailable: 0,
+            disabled: true,
+            dispensable: 0,
+            onHand: 0,
+            reason: "out-of-stock",
+            shortBy: shown.requestedBaseQty,
+            soonExpiring: 0,
+            state: "unavailable",
+          },
+          key: row.key,
+        });
+      }
+      continue;
+    }
+    if (!shown) {
+      // Not displayed, so there is nothing to contradict — defensive only.
+      continue;
+    }
+    if (
+      fresh.state !== shown.state ||
+      fresh.available !== shown.available ||
+      fresh.shortBy !== shown.shortBy ||
+      fresh.reason !== shown.reason
+    ) {
+      drift.push({
+        blocking: fresh.state === "unavailable",
+        check: fresh,
+        key: row.key,
+      });
+    }
+  }
+  return drift;
+}
+
+/**
  * The form's data layer: the inventory list the autocomplete reads, whether this
  * build can actually save (E15), and the submit that reserves references and
  * writes the cards.
@@ -225,7 +305,10 @@ export function useCreateRequests() {
   const items = inventory.data ?? [];
 
   const create = useCallback(
-    async (input: NewRequestInput): Promise<CreateRequestsResult> => {
+    async (
+      input: NewRequestInput,
+      expected: Map<string, RowStockCheck>
+    ): Promise<CreateRequestsResult> => {
       // Checked here as well as in the UI: without a database the writes below
       // are silent no-ops, and a form that reports three created requests that
       // nobody can ever read back is worse than a refusal (E15).
@@ -244,6 +327,28 @@ export function useCreateRequests() {
         } else {
           valid.push(row);
         }
+      }
+
+      // §5.6 — re-read the DB by id (bypassing the 30 s cache), recompute the
+      // same checks, and diff them against what the form displayed. Any drift
+      // aborts the write: the form must re-acknowledge fresh numbers first.
+      const resolved: ResolvedRow[] = valid.map((row) => ({
+        item: matchInventoryItem(items, row.medicine),
+        key: row.key,
+        qty: parseQuantity(row.qty),
+        unit: row.unit,
+      }));
+      const itemIds = [
+        ...new Set(resolved.flatMap((row) => (row.item ? [row.item.id] : []))),
+      ];
+      const freshChecks = checkRows(
+        resolved,
+        Date.now(),
+        await fetchItemAvailability(itemIds)
+      );
+      const drift = collectDrift(resolved, expected, freshChecks);
+      if (drift.length > 0) {
+        return { created: [], drift, skipped };
       }
 
       const ids = await reserveRequestIds(valid.length);
@@ -265,7 +370,7 @@ export function useCreateRequests() {
         );
       }
       notifyRequestsChanged();
-      return { created, skipped };
+      return { created, drift: [], skipped };
     },
     [items]
   );
@@ -275,5 +380,8 @@ export function useCreateRequests() {
     dbReady,
     isLoadingItems: inventory.isLoading,
     items,
+    // The modal's open-effect calls this so the 30 s stale cache refreshes
+    // before the first breakdown paint (§6.4).
+    refetch: inventory.refetch,
   } as const;
 }
