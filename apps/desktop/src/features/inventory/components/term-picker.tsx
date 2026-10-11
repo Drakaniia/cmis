@@ -737,6 +737,11 @@ export interface TermPickerProps {
    */
   clearLabel?: string;
   copy: TermCopy;
+  /**
+   * Locks the field: the trigger stops opening and reads as unavailable. Used
+   * where a choice made elsewhere makes this list inapplicable (V4).
+   */
+  disabled?: boolean;
   entries: TermEntry[];
   /** Field-level message rendered under the trigger. */
   error?: string | null;
@@ -771,6 +776,7 @@ export function TermPicker({
   className,
   clearLabel,
   copy,
+  disabled,
   entries,
   error,
   hasError,
@@ -816,8 +822,12 @@ export function TermPicker({
         </span>
       )}
 
-      <Popover onOpenChange={handleOpenChange} open={open}>
+      <Popover
+        onOpenChange={disabled ? undefined : handleOpenChange}
+        open={disabled ? false : open}
+      >
         <PopoverTrigger
+          aria-disabled={disabled ? true : undefined}
           aria-invalid={rejected ? true : undefined}
           aria-label={
             label === undefined ? (ariaLabel ?? copy.triggerName) : undefined
@@ -825,8 +835,10 @@ export function TermPicker({
           aria-labelledby={label === undefined ? undefined : labelId}
           className={cn(
             TRIGGER_CLASS[variant],
-            rejected && "border-destructive"
+            rejected && "border-destructive",
+            disabled && "cursor-not-allowed opacity-50"
           )}
+          disabled={disabled}
           id={name}
           title={title}
           type="button"
