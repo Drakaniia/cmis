@@ -1,6 +1,7 @@
 import { useRouterState } from "@tanstack/react-router";
 import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useEffect, useState } from "react";
+import { SyncSettingsPanel } from "@/components/sync/sync-settings";
 import { BackupTab } from "@/features/backup/components/backup-tab";
 import { branchCrossfadeMs } from "@/lib/motion";
 import { useSettings } from "../hooks/use-settings";
@@ -93,6 +94,7 @@ export function SettingsPage() {
               {tab === "audit" ? <AuditTab /> : null}
               {tab === "data" ? <DataTab /> : null}
               {tab === "health" ? <HealthTab /> : null}
+              {tab === "sync" ? <SyncSettingsPanel /> : null}
               {tab === "backup" ? <BackupTab /> : null}
               {tab === "updates" ? <UpdatesTab /> : null}
             </motion.div>

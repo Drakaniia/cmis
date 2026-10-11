@@ -6,6 +6,13 @@ import { defineConfig } from "vite";
 import { previewSql } from "./dev/preview-sql";
 
 export default defineConfig({
+  // Cloud sync reads its configuration from the build environment with the
+  // spec's names (`docs/cloud-sync-spec.md` §1): `SYNC_API_ENDPOINT`,
+  // `SYNC_INTERVAL_MS`, `SYNC_OFFLINE_QUEUE_MAX_SIZE`, `SYNC_TOKEN`. Vite only
+  // exposes `VITE_`-prefixed variables by default, so the prefix is widened here
+  // and nothing else — `lib/sync/sync-settings.ts` decides which of the exposed
+  // names it actually reads.
+  envPrefix: ["VITE_", "SYNC_"],
   plugins: [
     tailwindcss(),
     tanstackRouter({

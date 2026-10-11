@@ -17,6 +17,7 @@ export type SettingsTabId =
   | "audit"
   | "data"
   | "health"
+  | "sync"
   | "backup"
   | "updates";
 
@@ -61,6 +62,11 @@ export const SETTINGS_TABS: SettingsTabMeta[] = [
     description: "DB status, sync status and system metrics",
     id: "health",
     label: "System Health",
+  },
+  {
+    description: "Cloud endpoint, interval and last sync status",
+    id: "sync",
+    label: "Cloud Sync",
   },
   {
     description: "Automatic daily copies, location and restore",

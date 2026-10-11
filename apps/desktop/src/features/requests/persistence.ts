@@ -16,6 +16,7 @@
 // the same shape at runtime so the module stays inert on the web.
 import type Database from "@tauri-apps/plugin-sql";
 import { baseUnitFor } from "@/features/inventory/domain/pack-size";
+import { scheduleSync } from "@/lib/sync/schedule";
 import type {
   DenyReason,
   DispensingRecord,
@@ -307,6 +308,9 @@ export async function deleteRequest(id: string): Promise<boolean> {
   }
   try {
     await db.execute("DELETE FROM requests WHERE id = $1", [id]);
+    // The delete's tombstone (migration 0014) is what the sync sends; this is
+    // only the prompt to send it now rather than at the next interval.
+    scheduleSync();
     return true;
   } catch (error) {
     console.error("[persistence] deleteRequest failed", error);
@@ -337,6 +341,7 @@ export async function archiveRequests(
       `UPDATE requests SET archived_at = $1 WHERE id IN (${placeholders})`,
       [at, ...ids]
     );
+    scheduleSync();
     return true;
   } catch (error) {
     console.error("[persistence] archiveRequests failed", error);
@@ -597,6 +602,12 @@ export async function saveRequest(item: RequestItem): Promise<void> {
         )
       )
     );
+
+    // Cloud sync's "on save" trigger (spec §5). The write itself is what sync
+    // reads — every row above was stamped by migration 0014's triggers — so this
+    // only decides *when* to send it. Debounced, so a board drag that saves ten
+    // times is one request.
+    scheduleSync();
   } catch (error) {
     console.error("[persistence] saveRequest failed", error);
     throw error;

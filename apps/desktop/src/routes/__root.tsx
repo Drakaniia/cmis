@@ -38,6 +38,7 @@ import { QuickDeductDialogProvider } from "@/features/inventory/quick-deduct-dia
 import { StockItemDetailDialogProvider } from "@/features/inventory/stock-item-detail-dialog-context";
 import { NewRequestDialogProvider } from "@/features/requests/new-request-dialog-context";
 import { UpdaterProvider } from "@/features/updater/use-updater";
+import { SyncProvider } from "@/lib/sync/use-sync";
 
 import "../index.css";
 
@@ -271,57 +272,62 @@ function RootComponent() {
         storageKey="vite-ui-theme"
       >
         <UpdaterProvider>
-          <HelpDialogsProvider>
-            {/* New Request (Ctrl+N) and Quick Deduct (Ctrl+D) are both
+          {/* Cloud sync is app-wide: its provider owns the periodic, focus,
+              post-write and manual triggers, and the title-bar indicator is
+              rendered from inside it. It is inert until an endpoint is set. */}
+          <SyncProvider>
+            <HelpDialogsProvider>
+              {/* New Request (Ctrl+N) and Quick Deduct (Ctrl+D) are both
                 app-wide, so their dialogs are mounted once here rather than
                 owned by a route. */}
-            <QuickDeductDialogProvider>
-              {/* The palette's stock detail is app-wide too (D22), so its host
+              <QuickDeductDialogProvider>
+                {/* The palette's stock detail is app-wide too (D22), so its host
                   sits beside Quick Deduct rather than inside the palette. */}
-              <StockItemDetailDialogProvider>
-                <NewRequestDialogProvider>
-                  {isDocsRoute ? (
-                    <div className="flex h-svh flex-col overflow-hidden overflow-x-hidden">
-                      <TitleBar onToggleSidebar={handleToggle} />
-                      <DocsHeader />
-                      <main className="page-canvas flex-1 overflow-y-auto">
-                        <Outlet />
-                      </main>
-                    </div>
-                  ) : (
-                    <div className="flex h-svh flex-col overflow-hidden overflow-x-hidden">
-                      <TitleBar onToggleSidebar={handleToggle} />
-                      <BackupWarningBanner />
-                      {/* The rail fills the full column height and its footer
+                <StockItemDetailDialogProvider>
+                  <NewRequestDialogProvider>
+                    {isDocsRoute ? (
+                      <div className="flex h-svh flex-col overflow-hidden overflow-x-hidden">
+                        <TitleBar onToggleSidebar={handleToggle} />
+                        <DocsHeader />
+                        <main className="page-canvas flex-1 overflow-y-auto">
+                          <Outlet />
+                        </main>
+                      </div>
+                    ) : (
+                      <div className="flex h-svh flex-col overflow-hidden overflow-x-hidden">
+                        <TitleBar onToggleSidebar={handleToggle} />
+                        <BackupWarningBanner />
+                        {/* The rail fills the full column height and its footer
                           (version) stays pinned to the bottom; the header lives
                           in the content column so the page title never sits over
                           the sidebar as the rail springs between widths. */}
-                      <div className="flex min-h-0 flex-1 overflow-hidden overflow-x-hidden">
-                        <AppSidebar
-                          collapsed={sidebarCollapsed}
-                          onToggle={handleToggle}
-                        />
-                        <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-                          <Header />
-                          <main className="page-canvas min-h-0 flex-1 overflow-y-auto">
-                            <Outlet />
-                          </main>
+                        <div className="flex min-h-0 flex-1 overflow-hidden overflow-x-hidden">
+                          <AppSidebar
+                            collapsed={sidebarCollapsed}
+                            onToggle={handleToggle}
+                          />
+                          <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+                            <Header />
+                            <main className="page-canvas min-h-0 flex-1 overflow-y-auto">
+                              <Outlet />
+                            </main>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  )}
-                </NewRequestDialogProvider>
-              </StockItemDetailDialogProvider>
-            </QuickDeductDialogProvider>
-            <StrengthBackfillNotice />
-            <PackBackfillNotice />
-            <ThresholdBackfillNotice />
-            <FirstRunRestorePrompt />
-            <Toaster position="bottom-right" richColors />
-            {/* Every native scrollbar is hidden globally, so this is the only
+                    )}
+                  </NewRequestDialogProvider>
+                </StockItemDetailDialogProvider>
+              </QuickDeductDialogProvider>
+              <StrengthBackfillNotice />
+              <PackBackfillNotice />
+              <ThresholdBackfillNotice />
+              <FirstRunRestorePrompt />
+              <Toaster position="bottom-right" richColors />
+              {/* Every native scrollbar is hidden globally, so this is the only
                 thing on screen that says a surface scrolls. */}
-            <ScrollIndicators />
-          </HelpDialogsProvider>
+              <ScrollIndicators />
+            </HelpDialogsProvider>
+          </SyncProvider>
         </UpdaterProvider>
       </ThemeProvider>
     </>
