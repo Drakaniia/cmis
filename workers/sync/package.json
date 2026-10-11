@@ -1,0 +1,16 @@
+{
+  "name": "cmis-sync-worker",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Cloudflare Worker sync API for CMIS — D1-backed pull/push endpoint",
+  "type": "module",
+  "scripts": {
+    "deploy": "wrangler deploy",
+    "dev": "wrangler dev",
+    "tail": "wrangler tail",
+    "test": "vitest run --config vitest.config.ts"
+  },
+  "devDependencies": {
+    "wrangler": "^4.149.0"
+  }
+}
