@@ -307,6 +307,9 @@ export function UpdaterProvider({ children }: { children: React.ReactNode }) {
         // Downloaded, not installed. The app keeps running on the current
         // version until the user picks one of the two answers.
         setState((s) => ({ ...s, progress: 100, status: "ready" }));
+        // A custom toast cannot replace the loading one in place — without a
+        // dismiss first the stale "99% downloaded" card stays stacked behind.
+        dismissUpdaterToast();
         presentReady();
       }
     };

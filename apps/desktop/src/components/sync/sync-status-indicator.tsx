@@ -112,7 +112,12 @@ export function SyncStatusIndicator({ className }: { className?: string }) {
             onClick={close}
             type="button"
           />
-          <div className="relative flex max-h-[80vh] w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-border bg-card shadow-xl">
+          <div
+            aria-label="Cloud sync"
+            aria-modal="true"
+            className="relative flex max-h-[80vh] w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-border bg-card shadow-xl"
+            role="dialog"
+          >
             <div className="flex items-center justify-between border-border/60 border-b px-4 py-3">
               <h2 className="font-semibold text-foreground text-sm">
                 Cloud sync

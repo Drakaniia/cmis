@@ -188,9 +188,8 @@ export function ReportsPage() {
     rows.length > 0 &&
     visibleRows.length > 0 &&
     !(isActivityPending || isGridPending);
-  // Print and PDF both draw the same document, whose month figures are only
-  // trustworthy once the selected month has resolved.
-  const canPrint = rows.length > 0 && !isActivityPending;
+  // Print (inside the PDF preview) and PDF both draw the same document, whose
+  // month figures are only trustworthy once the selected month has resolved.
   const canSavePdf = rows.length > 0 && !isActivityPending;
 
   const handleExport = useCallback(async () => {
@@ -358,7 +357,6 @@ export function ReportsPage() {
 
       <ReportsFilterBar
         canExport={canExport}
-        canPrint={canPrint}
         canSavePdf={canSavePdf}
         category={category}
         isCurrentMonth={isCurrentMonth}
@@ -368,7 +366,6 @@ export function ReportsPage() {
         onCategoryChange={setCategory}
         onCurrentMonth={goToCurrentMonth}
         onExport={handleExport}
-        onPrint={handlePrint}
         onSavePdf={handleSavePdf}
         onSelectMonth={setMonth}
         onStepBack={stepBack}

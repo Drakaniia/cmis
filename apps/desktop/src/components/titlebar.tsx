@@ -2,6 +2,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Copy, Minus, Square, X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { DesktopMenubar } from "./menubar/menubar";
+import { SyncButton } from "./sync/sync-button";
 import { SyncStatusIndicator } from "./sync/sync-status-indicator";
 
 /**
@@ -196,8 +197,9 @@ export function TitleBar({
       {/* Right — sync status then window controls (functional inside Tauri,
           no-op in browser). The indicator sits in the chrome so "is my data
           safe in the cloud?" is answerable without opening Settings. */}
-      <div className="flex shrink-0 items-center">
+      <div className="flex shrink-0 items-center gap-1">
         <SyncStatusIndicator />
+        <SyncButton size="icon-sm" variant="ghost" />
         <button
           aria-label="Minimize"
           className="flex size-8 items-center justify-center text-muted-foreground transition-colors hover:bg-black/[0.06] hover:text-foreground dark:hover:bg-white/[0.08]"

@@ -157,9 +157,17 @@ export function SyncSettingsPanel({ className }: { className?: string }) {
 
   const onEnabledChange = useCallback(
     (event: ChangeEvent<HTMLInputElement>) => {
-      sync.update({ enabled: event.target.checked }).catch(() => undefined);
+      const { checked } = event.target;
+      // Enabling also saves what the fields show: the checkbox must work off
+      // the visible endpoint, not the last saved one, or a typed-but-unsaved
+      // URL leaves it dead with no explanation.
+      sync
+        .update(
+          checked ? { enabled: true, endpoint, token } : { enabled: false }
+        )
+        .catch(() => undefined);
     },
-    [sync]
+    [endpoint, sync, token]
   );
 
   const onIntervalChange = useCallback(
@@ -241,7 +249,7 @@ export function SyncSettingsPanel({ className }: { className?: string }) {
             <input
               checked={sync.enabled}
               className="accent-primary"
-              disabled={sync.endpoint === ""}
+              disabled={endpoint.trim() === ""}
               onChange={onEnabledChange}
               type="checkbox"
             />

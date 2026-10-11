@@ -9,13 +9,7 @@ import {
 } from "@cmis/ui/components/popover";
 import { monthKeyFromIso, todayIso } from "@cmis/ui/lib/date";
 import { cn } from "@cmis/ui/lib/utils";
-import {
-  ChevronLeft,
-  ChevronRight,
-  Download,
-  FileDown,
-  Printer,
-} from "lucide-react";
+import { ChevronLeft, ChevronRight, Download, FileDown } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useState } from "react";
 
@@ -138,7 +132,6 @@ function MonthStepper({
 
 export function ReportsFilterBar({
   canExport,
-  canPrint,
   canSavePdf,
   category,
   isCurrentMonth,
@@ -148,14 +141,12 @@ export function ReportsFilterBar({
   onCategoryChange,
   onCurrentMonth,
   onExport,
-  onPrint,
   onSavePdf,
   onSelectMonth,
   onStepBack,
   onStepForward,
 }: {
   canExport: boolean;
-  canPrint: boolean;
   canSavePdf: boolean;
   category: string;
   isCurrentMonth: boolean;
@@ -165,13 +156,11 @@ export function ReportsFilterBar({
   onCategoryChange: (category: string) => void;
   onCurrentMonth: () => void;
   onExport: () => void;
-  onPrint: () => void;
   onSavePdf: () => void;
   onSelectMonth: (month: string) => void;
   onStepBack: () => void;
   onStepForward: () => void;
 }) {
-  const handlePrint = useCallback(() => onPrint(), [onPrint]);
   const handleExport = useCallback(() => onExport(), [onExport]);
   const handleSavePdf = useCallback(() => onSavePdf(), [onSavePdf]);
 
@@ -231,16 +220,6 @@ export function ReportsFilterBar({
             <Download aria-hidden className="size-3.5" />
             <span className="hidden sm:inline">Export</span>
             <span className="sm:hidden">XLSX</span>
-          </Button>
-          <Button
-            className="press-feedback rounded-full shadow-xs"
-            disabled={!canPrint}
-            onClick={handlePrint}
-            size="sm"
-            variant="outline"
-          >
-            <Printer aria-hidden className="size-3.5" />
-            Print
           </Button>
           <Button
             className="press-feedback rounded-full shadow-sm"

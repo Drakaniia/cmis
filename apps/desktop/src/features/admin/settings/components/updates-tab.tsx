@@ -235,7 +235,12 @@ export function UpdatesTab() {
             onClick={closeNotes}
             type="button"
           />
-          <div className="relative max-h-[70vh] w-full max-w-xl overflow-auto rounded-xl border border-border bg-card p-4 shadow-xl">
+          <div
+            aria-label="Release notes"
+            aria-modal="true"
+            className="relative max-h-[70vh] w-full max-w-xl overflow-auto rounded-xl border border-border bg-card p-4 shadow-xl"
+            role="dialog"
+          >
             <h3 className="font-semibold text-foreground text-sm">
               Release notes
             </h3>
