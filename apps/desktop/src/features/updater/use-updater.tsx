@@ -555,9 +555,14 @@ export function UpdaterProvider({ children }: { children: React.ReactNode }) {
       }));
 
       if (silent && nextSettings.autoDownload) {
-        // Auto-download stays silent AND stays put. The idle effect below starts
-        // the download the moment the user stops working — a background check
-        // must never turn into a download under someone's hands.
+        // A launch check with the preference on is the one path that fetches
+        // the installer on its own. Downloading writes to a cache and shows a
+        // progress toast — it does not touch the running app or the database —
+        // so it does not need to wait for the idle gate. Installing still does:
+        // that stays behind the ready card, where someone chooses it.
+        // Not awaited: `checkNow` is a check, and a caller waiting on it
+        // should not be held for the length of the download.
+        doDownload().catch(() => undefined);
         return;
       }
       showAvailableToast(update.version, {
@@ -597,11 +602,13 @@ export function UpdaterProvider({ children }: { children: React.ReactNode }) {
     return startIdleTracking();
   }, [settings.autoDownload]);
 
-  // An automatic download waits for the app to go quiet. Re-checks on every
-  // idle transition, and on mount for the case where the app was already idle
-  // before an update was found.
+  // An automatic download waits for the app to go quiet. This is the path for
+  // an update found by a check the user did not ask for — the launch check
+  // starts its own download straight away (see `checkNow`). The status guard
+  // keeps a staged or dismissed update from being fetched a second time on the
+  // next idle transition.
   useEffect(() => {
-    if (!settings.autoDownload) {
+    if (!settings.autoDownload || state.status !== "available") {
       return;
     }
     const downloadIfIdle = () => {
@@ -611,7 +618,7 @@ export function UpdaterProvider({ children }: { children: React.ReactNode }) {
     };
     downloadIfIdle();
     return subscribeIdle(downloadIfIdle);
-  }, [doDownload, settings.autoDownload]);
+  }, [doDownload, settings.autoDownload, state.status]);
 
   // Launch check 5s after mount (spec §3.1)
   // biome-ignore lint/correctness/useExhaustiveDependencies: runs once after version/settings become available; checkNow intentionally not a dep to avoid loop

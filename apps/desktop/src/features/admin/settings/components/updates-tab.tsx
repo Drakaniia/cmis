@@ -220,8 +220,9 @@ export function UpdatesTab() {
             />
           </label>
           <p className="text-muted-foreground text-xs">
-            Automatic downloads only start after five minutes without any mouse
-            or keyboard activity, and never install on their own.
+            A startup check downloads the update straight away and shows its
+            progress. A check you run yourself downloads once you stop using the
+            app for five minutes. Installing is never automatic.
           </p>
         </div>
       </SettingsCard>

@@ -57,6 +57,11 @@ export function SyncStatusIndicator({ className }: { className?: string }) {
     if (phase === "offline") {
       return pending > 0 ? `Offline · ${pending} waiting` : "Offline";
     }
+    // Not `offline`: the server answered, just not inside the budget. Saying
+    // "offline" here is what sent the last investigation after the network.
+    if (phase === "timeout") {
+      return pending > 0 ? `Timed out · ${pending} waiting` : "Timed out";
+    }
     if (phase === "error") {
       return "Sync error";
     }
@@ -73,7 +78,7 @@ export function SyncStatusIndicator({ className }: { className?: string }) {
     if (phase === "offline") {
       return <CloudOff aria-hidden className="size-3.5" />;
     }
-    if (phase === "error") {
+    if (phase === "timeout" || phase === "error") {
       return <TriangleAlert aria-hidden className="size-3.5" />;
     }
     if (phase === "disabled") {

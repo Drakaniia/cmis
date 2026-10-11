@@ -41,7 +41,7 @@ import type {
   SyncTableName,
 } from "./types";
 
-export type SyncFailureKind = "offline" | "protocol" | "server";
+export type SyncFailureKind = "offline" | "protocol" | "server" | "timeout";
 
 export class SyncFailure extends Error {
   readonly kind: SyncFailureKind;
@@ -98,7 +98,18 @@ export interface PullApplyOutcome {
   skipped: number;
 }
 
-const DEFAULT_TIMEOUT_MS = 20_000;
+/**
+ * Per-request budget.
+ *
+ * Generous on purpose. A push is not one round trip: the Worker applies it a row
+ * at a time, and each row costs a handful of sequential D1 queries (parent
+ * check, local timestamp, tombstone, write, tombstone cleanup — see
+ * `changes.ts`). A few hundred queued rows is therefore ~1000 serial D1
+ * round-trips, which measures at tens of seconds against a healthy Worker. A
+ * tight budget reports that healthy-but-busy server as a failed sync and, worse,
+ * re-sends the same backlog every interval. Raise it here, not per call site.
+ */
+export const DEFAULT_TIMEOUT_MS = 120_000;
 const DEFAULT_MAX_PAGES = 10;
 
 function resolveFetch(options: SyncEndpointOptions): typeof fetch {
@@ -142,12 +153,29 @@ async function request<T>(
   } catch (error) {
     // A `fetch` rejection is "the request never completed": offline, DNS, TLS,
     // CORS, or the timeout above. Nothing is lost — the cursors have not moved.
-    const reason = error instanceof Error ? error.message : String(error);
+    // Our own signal is the only thing that can abort here, so check the signal
+    // rather than the message: engines word it differently (Firefox "The
+    // operation was aborted.", WebKit/WebView2 "signal is aborted without
+    // reason"), and a timeout must not read as "server unreachable".
+    //
+    // A timeout is its own kind, not `offline`: the Worker applying a large
+    // page spends one D1 round trip per row per guard (see `changes.ts`), so a
+    // healthy server routinely answers slower than the budget. Reporting that
+    // as "offline" told the operator to go and fix a network that was fine.
+    if (controller.signal.aborted) {
+      // biome-ignore lint/style/useErrorCause: SyncFailure forwards this cause to Error's options; Biome cannot see through the custom constructor's fourth parameter
+      throw new SyncFailure(
+        "The sync request timed out — the server is reachable but slow to answer this batch",
+        "timeout",
+        null,
+        error
+      );
+    }
     // biome-ignore lint/style/useErrorCause: SyncFailure forwards this cause to Error's options; Biome cannot see through the custom constructor's fourth parameter
     throw new SyncFailure(
-      reason === "The operation was aborted."
-        ? "The sync request timed out"
-        : `Could not reach the sync server (${reason})`,
+      `Could not reach the sync server (${
+        error instanceof Error ? error.message : String(error)
+      })`,
       "offline",
       null,
       error

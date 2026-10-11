@@ -10,6 +10,7 @@ import { ensureDeviceId, readCursors, writePullCursors } from "./offline-queue";
 import { SCHEMA_VERSION } from "./schema";
 import {
   applyPullResponse,
+  DEFAULT_TIMEOUT_MS,
   fetchSyncStatus,
   pullRemoteChanges,
   pushLocalChanges,
@@ -109,6 +110,28 @@ describe("the client", () => {
     // Nothing moved: the same rows are still owed to the server, so the next
     // successful run sends them rather than skipping them.
     await expect(readCursors(harness.sync)).resolves.toEqual(before);
+  });
+
+  it("reports a timeout as a timeout, not as an unreachable server", async () => {
+    insertItem(harness.db);
+    // What WebKit/WebView2 actually rejects with when our own controller
+    // aborts — the message is engine-specific, so only the signal can say.
+    const hanging: typeof fetch = ((_url: string, init: RequestInit) =>
+      new Promise((_resolve, reject) => {
+        init.signal?.addEventListener("abort", () => {
+          reject(new DOMException("signal is aborted without reason", "AbortError"));
+        });
+      })) as unknown as typeof fetch;
+    const options = await baseOptions(harness, hanging);
+
+    // `timeout`, not `offline`: the Worker was reachable and busy. Reporting it
+    // as offline told the operator to debug a network that was working.
+    await expect(
+      fetchSyncStatus({ ...options, fetchImpl: hanging, timeoutMs: 5 })
+    ).rejects.toMatchObject({ kind: "timeout" });
+    await expect(
+      fetchSyncStatus({ ...options, fetchImpl: hanging, timeoutMs: 5 })
+    ).rejects.toThrow("The sync request timed out");
   });
 
   it("classifies an HTTP error as a server failure and keeps the status", async () => {
@@ -278,6 +301,36 @@ describe("the client", () => {
     expect(result.appliedRows).toBe(0);
     expect(result.appliedDeletes).toBe(0);
     expect(result.moreToPush).toBe(false);
+  });
+
+  it("gives a first full-table push a budget the server can actually answer", async () => {
+    // The regression this pins: a device with no push cursors yet sends every
+    // row it owns in ONE request, and the Worker applies it a row at a time —
+    // several sequential D1 round trips per row. Under a 20s budget a healthy
+    // Worker was reported as an unreachable server and the backlog never moved.
+    for (let index = 0; index < 174; index += 1) {
+      insertItem(harness.db, `item-${index}`);
+    }
+    const { fetchImpl } = stubFetch((url) =>
+      url.endsWith("/sync/push")
+        ? {
+            body: {
+              applied: { inventory_items: 174 },
+              conflicts: [],
+              ok: true,
+              serverTime: AT,
+              skipped: {},
+            },
+          }
+        : { body: { deletedCursor: "", hasMore: false, ok: true, tables: [] } }
+    );
+    // Deliberately no `timeoutMs`: the default is what the app ships with, and
+    // this is the number that has to be big enough.
+    const options = await baseOptions(harness, fetchImpl);
+    const result = await runSync({ ...options, limit: 1000 });
+
+    expect(result.pushedRows).toBe(174);
+    expect(DEFAULT_TIMEOUT_MS).toBeGreaterThanOrEqual(120_000);
   });
 
   it("only moves a pull cursor forward, never back to the rewound bound", async () => {

@@ -44,6 +44,7 @@ import {
   fetchSyncStatus,
   runSync,
   SyncFailure,
+  type SyncFailureKind,
   type SyncRunResult,
 } from "./sync-client";
 import {
@@ -54,7 +55,13 @@ import {
 } from "./sync-settings";
 import type { SyncDatabase, SyncStatusResponse } from "./types";
 
-export type SyncPhase = "disabled" | "error" | "idle" | "offline" | "syncing";
+export type SyncPhase =
+  | "disabled"
+  | "error"
+  | "idle"
+  | "offline"
+  | "syncing"
+  | "timeout";
 
 export interface SyncContextValue extends SyncSettings {
   /** `null` until a sync has run in this session. */
@@ -198,23 +205,40 @@ async function reportSyncSuccess(
   await handlers.refreshServerStatus().catch(() => undefined);
 }
 
+/**
+ * How a failure reads in the UI. A slow server is not an offline device, and the
+ * panel must not say it is: "offline" sends the operator to look at a network
+ * that is working fine, when the real cause is a batch the Worker is still
+ * chewing through.
+ */
+const FAILURE_PRESENTATION: Record<
+  SyncFailureKind,
+  { phase: SyncPhase; toast: string }
+> = {
+  offline: { phase: "offline", toast: "Offline — changes are queued" },
+  protocol: { phase: "error", toast: "Sync failed" },
+  server: { phase: "error", toast: "Sync failed" },
+  timeout: { phase: "timeout", toast: "Sync timed out — changes are queued" },
+};
+
 async function reportSyncFailure(
   error: unknown,
   silent: boolean,
   handlers: SyncReportHandlers
 ): Promise<void> {
   const failure = asSyncFailure(error);
-  handlers.setPhase(failure.kind === "offline" ? "offline" : "error");
+  const shown = FAILURE_PRESENTATION[failure.kind];
+  handlers.setPhase(shown.phase);
   handlers.setSettingsBoth(
     await saveSyncSettings({ lastError: failure.message })
   );
   if (silent) {
     return;
   }
-  toast.error(
-    failure.kind === "offline" ? "Offline — changes are queued" : "Sync failed",
-    { description: failure.message, id: "sync-error" }
-  );
+  toast.error(shown.toast, {
+    description: failure.message,
+    id: "sync-error",
+  });
 }
 
 export function SyncProvider({ children }: { children: React.ReactNode }) {

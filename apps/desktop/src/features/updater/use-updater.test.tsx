@@ -266,38 +266,55 @@ describe("useUpdater", () => {
 });
 
 describe("automatic updates and activity", () => {
-  it("holds the automatic download while the app is in use", async () => {
-    vi.useFakeTimers();
-    try {
-      const u = await mount();
-      check.mockResolvedValue(downloadingUpdate());
-      await act(async () => {
-        await u.checkNow({ silent: true });
-      });
+  it("starts the download from the launch check without waiting for idle", async () => {
+    // Held open so the progress toast is still on screen to be looked at; the
+    // stock mock finishes every event in one tick.
+    let finish: () => void = () => undefined;
+    const stalled = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    check.mockResolvedValue({
+      body: "Adds a thing.",
+      download: (onEvent?: (e: unknown) => void) => {
+        download(onEvent);
+        onEvent?.({ data: { contentLength: 100 }, event: "Started" });
+        onEvent?.({ data: { chunkLength: 45 }, event: "Progress" });
+        return stalled.then(() => {
+          onEvent?.({ event: "Finished" });
+        });
+      },
+      install,
+      version: NEXT_VERSION,
+    });
 
-      // Well past the point a naive startup check would have grabbed it.
-      await act(async () => {
-        await vi.advanceTimersByTimeAsync(IDLE_THRESHOLD_MS - 1);
-      });
-      expect(download).not.toHaveBeenCalled();
+    const u = await mount();
+    await act(async () => {
+      await u.checkNow({ silent: true });
+    });
 
-      window.dispatchEvent(new KeyboardEvent("keydown", { key: "a" }));
-      await act(async () => {
-        await vi.advanceTimersByTimeAsync(1000);
-      });
-      expect(download).not.toHaveBeenCalled();
-    } finally {
-      vi.useRealTimers();
-    }
+    // The installer is fetched while the app is still settling, and its
+    // progress is on screen — nobody has to find Settings to get it.
+    expect(download).toHaveBeenCalledTimes(1);
+    expect(u.status()).toBe("downloading");
+    expect(await screen.findByText(/45% downloaded/i)).toBeInTheDocument();
+
+    await act(async () => {
+      finish();
+      await stalled;
+    });
+    // The Finished handler runs in a microtask after `stalled` settles; leaving
+    // it to land after unmount would push a stale toast into the next test.
+    await waitFor(() => expect(u.status()).toBe("ready"));
+    u.dismiss();
   });
 
-  it("downloads automatically once the app has been idle for five minutes", async () => {
+  it("holds a manual check's download until the app goes quiet", async () => {
     vi.useFakeTimers();
     try {
       const u = await mount();
       check.mockResolvedValue(downloadingUpdate());
       await act(async () => {
-        await u.checkNow({ silent: true });
+        await u.checkNow();
       });
       expect(download).not.toHaveBeenCalled();
 
@@ -305,6 +322,27 @@ describe("automatic updates and activity", () => {
         await vi.advanceTimersByTimeAsync(IDLE_THRESHOLD_MS);
       });
       expect(download).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not re-fetch an update it already has on disk", async () => {
+    vi.useFakeTimers();
+    try {
+      const u = await mount();
+      check.mockResolvedValue(downloadingUpdate());
+      await act(async () => {
+        await u.checkNow({ silent: true });
+      });
+      expect(download).toHaveBeenCalledTimes(1);
+
+      // Staged and waiting: further idle transitions must leave it alone.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(IDLE_THRESHOLD_MS * 4);
+      });
+      expect(download).toHaveBeenCalledTimes(1);
+      expect(u.status()).toBe("ready");
     } finally {
       vi.useRealTimers();
     }
