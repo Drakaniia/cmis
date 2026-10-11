@@ -55,6 +55,11 @@ export interface VocabularyPickerProps {
   /** Accessible name for the unlabelled `cell` variant. */
   "aria-label"?: string;
   className?: string;
+  /**
+   * Locks the field — used by the stock-in wizard when the chosen dose form
+   * makes a pack impossible (V4), so an invalid selection cannot be made.
+   */
+  disabled?: boolean;
   /** Field-level message rendered under the trigger. */
   error?: string | null;
   /** Rendered under the control when there is no error. */
@@ -84,6 +89,7 @@ export interface VocabularyPickerProps {
 export function VocabularyPicker({
   "aria-label": ariaLabel,
   className,
+  disabled,
   error,
   hint,
   invalid,
@@ -177,6 +183,7 @@ export function VocabularyPicker({
       className={className}
       clearLabel="— not recorded"
       copy={COPY_BY_KIND[kind]}
+      disabled={disabled}
       entries={entries}
       error={error}
       hasError={Boolean(loadError)}
