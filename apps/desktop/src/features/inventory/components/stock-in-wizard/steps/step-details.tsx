@@ -30,6 +30,7 @@ import { ValidationMessage } from "./validation-message";
  * plain (not events), so the step above stays a form and owns no handlers.
  */
 function PackPairFields({
+  disabled,
   error,
   unitError,
   onPackQtyChange,
@@ -37,6 +38,8 @@ function PackPairFields({
   packQty,
   packUnit,
 }: {
+  /** V4 — the dose form is "box", so no pack can be recorded at all. */
+  disabled?: boolean;
   /** V1–V6, from the shared `validatePackFields`, keyed by field. */
   error?: string;
   unitError?: string;
@@ -62,14 +65,21 @@ function PackPairFields({
 
   return (
     <>
-      <label className="block font-medium text-caption text-foreground">
+      <label
+        className={cn(
+          "block font-medium text-caption text-foreground",
+          disabled && "opacity-50"
+        )}
+      >
         Pack quantity
         <input
           aria-invalid={error !== undefined}
           className={cn(
             FIELD_CLASS,
-            error !== undefined && "border-destructive"
+            error !== undefined && "border-destructive",
+            disabled && "cursor-not-allowed bg-muted"
           )}
+          disabled={disabled}
           onChange={handleQtyChange}
           placeholder="10"
           type="number"
@@ -81,6 +91,7 @@ function PackPairFields({
           refuses a pack unit that is not in it — so a clinic whose container is
           missing needs somewhere to add it without abandoning the delivery. */}
       <VocabularyPicker
+        disabled={disabled}
         error={unitError}
         kind="pack_unit"
         name="stock-in-pack-unit"
@@ -102,7 +113,9 @@ export function StepDetails({
   strengthUnit,
   strengthValue,
   showErrors,
+  packDisabled,
   packErrors,
+  packWarnings,
   onNameChange,
   onCategoryChange,
   onFormChange,
@@ -122,8 +135,12 @@ export function StepDetails({
   strengthUnit: string;
   strengthValue: string;
   showErrors: boolean;
+  /** V4 — the chosen dose form is "box", so the pack pair cannot be recorded. */
+  packDisabled: boolean;
   /** The shared pack rules' errors, keyed by field (F7). */
   packErrors: ItemDraftErrors;
+  /** Soft pack notes (V3, V5) — shown, never blocking. */
+  packWarnings: readonly string[];
   onNameChange: (value: string) => void;
   onCategoryChange: (value: InventoryCategory) => void;
   onFormChange: (value: string) => void;
@@ -250,6 +267,7 @@ export function StepDetails({
               as soon as it is broken: Next is disabled by these, so a message
               held back until Next would leave the step looking stuck. */}
           <PackPairFields
+            disabled={packDisabled}
             error={packErrors.packQty}
             onPackQtyChange={onPackQtyChange}
             onPackUnitChange={onPackUnitChange}
@@ -258,6 +276,32 @@ export function StepDetails({
             unitError={packErrors.packUnit}
           />
         </div>
+
+        {/* V4 — the compatibility rule, stated where the operator met it. The
+            pair above is disabled rather than merely warned, so an invalid
+            selection cannot be made and there is nothing to submit. */}
+        {packDisabled ? (
+          <p
+            className="rounded-md border border-[var(--warning)]/40 bg-[var(--warning)]/10 px-2.5 py-1.5 text-[var(--warning)] text-caption"
+            role="status"
+          >
+            “{form.trim() || "Box"}” is its own base unit, so a pack quantity
+            and pack unit do not apply. The pack fields are disabled — choose a
+            different form to record a pack.
+          </p>
+        ) : null}
+
+        {/* V3/V5 — soft notes on a pair that is usable, so "a pack of 1" and
+            "a bulk form" read as guidance rather than as a hidden rule. */}
+        {packWarnings.map((warning) => (
+          <p
+            className="text-[var(--warning)] text-caption"
+            key={warning}
+            role="status"
+          >
+            {warning}
+          </p>
+        ))}
       </fieldset>
     </div>
   );
