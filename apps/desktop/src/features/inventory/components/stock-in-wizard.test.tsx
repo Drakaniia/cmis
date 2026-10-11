@@ -583,6 +583,42 @@ describe("StockInWizard — pack pair and pack-to-base conversion", () => {
 });
 
 /**
+ * V4 — the compatibility rule made visible: a form of "box" is its own base
+ * unit, so the pack quantity and pack unit below it are disabled and the
+ * reason is stated, instead of letting an invalid pair be submitted.
+ */
+describe("StockInWizard — unit compatibility (V4)", () => {
+  it("disables the pack fields and explains why when the form is box", async () => {
+    const user = userEvent.setup();
+    render(
+      <StockInWizard items={[]} onConfirm={vi.fn()} onOpenChange={noop} open />
+    );
+
+    await user.type(screen.getByPlaceholderText(/Scan barcode/i), "SKU-BOX");
+    await user.click(screen.getByRole("button", { name: /Next/i }));
+    await screen.findByText(/Step 2 — Item Details/i);
+    await user.type(
+      screen.getByPlaceholderText(/e\.g\., Paracetamol/i),
+      "Boxed"
+    );
+    await chooseCategory(user, "Analgesic");
+    await pickTerm(user, /^Form$/i, "box");
+
+    // The reason is shown, not just implied by a dead field.
+    expect(screen.getByText(/is its own base unit/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Pack quantity/i)).toBeDisabled();
+    expect(screen.getByRole("button", { name: /Pack unit/i })).toHaveAttribute(
+      "aria-disabled",
+      "true"
+    );
+
+    // The disabled pair does not block the step — there is nothing to fix.
+    await user.click(screen.getByRole("button", { name: /Next/i }));
+    await screen.findByText(/Step 3 — Batch Info/i);
+  });
+});
+
+/**
  * Stock-In Step 1 identity: barcode scan button, placeholder SKU,
  * non-blocking Next with fallback (stock-in-step-identity-barcode).
  * Seam: StockInWizard public interface (render + onConfirm).
@@ -825,6 +861,87 @@ describe("StockInWizard — stock in another item", () => {
     expect(onConfirm).toHaveBeenLastCalledWith(
       expect.objectContaining({ name: "Cefalexin", qty: 7 })
     );
+  });
+
+  it("keeps the just-stocked item selected for the next delivery", async () => {
+    const onConfirm = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <StockInWizard
+        initialItemId="item-1"
+        items={[item()]}
+        onConfirm={onConfirm}
+        onOpenChange={noop}
+        open
+      />
+    );
+
+    // First delivery: an existing item, answered from the fallback SKU.
+    await user.click(screen.getByRole("button", { name: /Next/i }));
+    await screen.findByText(/Step 2 — Item Details/i);
+    await user.click(screen.getByRole("button", { name: /Next/i }));
+    await screen.findByText(/Step 3 — Batch Info/i);
+    await user.type(screen.getByPlaceholderText("B-2026-04"), "LOT-2");
+    await user.type(screen.getByPlaceholderText("0"), "5");
+    await user.click(screen.getByRole("button", { name: /Next/i }));
+    await user.click(screen.getByRole("button", { name: /Confirm Stock In/i }));
+    await screen.findByText(/Step 5 — Done/i);
+
+    // Same product, next lot: the item stays selected and the wizard lands on
+    // the batch step, so only the lot and quantity have to be typed again.
+    await user.click(
+      screen.getByRole("button", { name: /Stock In Another Item/i })
+    );
+    await screen.findByText(/Step 3 — Batch Info/i);
+    expect(screen.queryByText(/Step 1 — Identify/i)).toBeNull();
+    await user.type(screen.getByPlaceholderText("B-2026-04"), "LOT-3");
+    await user.type(screen.getByPlaceholderText("0"), "2");
+    await user.click(screen.getByRole("button", { name: /Next/i }));
+    await user.click(screen.getByRole("button", { name: /Confirm Stock In/i }));
+
+    expect(onConfirm).toHaveBeenLastCalledWith(
+      expect.objectContaining({ batch: "LOT-3", itemId: "item-1", qty: 2 })
+    );
+  });
+
+  it("does not carry a stale selection when a brand-new item was stocked", async () => {
+    const user = userEvent.setup();
+    render(
+      <StockInWizard
+        initialItemId="item-1"
+        items={[item()]}
+        onConfirm={vi.fn()}
+        onOpenChange={noop}
+        open
+      />
+    );
+
+    // A genuinely different product was opened on the wizard's own item. The
+    // placeholder is that item's SKU, so the field is reached by its label.
+    await user.type(screen.getByLabelText(/Barcode \/ SKU/i), "SKU-BRAND");
+    await user.click(screen.getByRole("button", { name: /Lookup/i }));
+    await screen.findByText(/Item not found — Create new\?/i);
+    await user.click(screen.getByRole("button", { name: /Next/i }));
+    await screen.findByText(/Step 2 — Item Details/i);
+    await user.type(
+      screen.getByPlaceholderText(/e\.g\., Paracetamol/i),
+      "Brandnew"
+    );
+    await chooseCategory(user, "Analgesic");
+    await user.click(screen.getByRole("button", { name: /Next/i }));
+    await screen.findByText(/Step 3 — Batch Info/i);
+    await user.type(screen.getByPlaceholderText("0"), "3");
+    await user.click(screen.getByRole("button", { name: /Next/i }));
+    await user.click(screen.getByRole("button", { name: /Confirm Stock In/i }));
+    await screen.findByText(/Step 5 — Done/i);
+
+    // The parent never handed the created row back, so the previously selected
+    // item must not be reused as if the new delivery had been for it.
+    await user.click(
+      screen.getByRole("button", { name: /Stock In Another Item/i })
+    );
+    await screen.findByText(/Step 1 — Identify/i);
+    expect(screen.queryByText(/Step 3 — Batch Info/i)).toBeNull();
   });
 
   it("closes the wizard when Done is pressed", async () => {
