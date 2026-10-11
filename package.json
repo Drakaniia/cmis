@@ -38,11 +38,16 @@
     "hooks:setup": "vp config",
     "import:inventory": "pnpm --filter desktop exec vitest run --config ../../scripts/vitest.scripts.config.ts import-inventory",
     "lint": "vp lint",
+    "migrate-to-cloud": "pnpm --filter desktop exec vitest run --config ../../scripts/vitest.scripts.config.ts migrate-to-cloud",
     "seed:demo": "pnpm --filter desktop exec vitest run --config ../../scripts/vitest.scripts.config.ts seed-demo-data",
     "staged": "vp staged",
+    "sync:d1": "node scripts/d1-migrate.mjs",
+    "sync:deploy": "npx wrangler deploy --config workers/sync/wrangler.toml",
+    "sync:dev": "npx wrangler dev --config workers/sync/wrangler.toml",
     "tauri": "pnpm --filter desktop tauri",
     "test": "vp run -r test",
     "test:frontend": "pnpm --filter desktop test",
+    "test:worker": "pnpm --filter desktop exec vitest run --config ../../workers/sync/vitest.config.ts",
     "version:bump": "node scripts/bump-version.mjs"
   },
   "overrides": {
