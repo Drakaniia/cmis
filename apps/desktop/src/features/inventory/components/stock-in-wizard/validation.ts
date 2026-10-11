@@ -18,6 +18,20 @@ export function packErrors(draft: {
   return validatePackFields(draft).errors;
 }
 
+/**
+ * The soft pack warnings (V3, V5) — shown, never blocking. The two halves of
+ * `validatePackFields` are read on the same render, so a "pack of 1" note and
+ * a bulk-form note sit beside the pair they describe rather than only being
+ * discoverable from the review step.
+ */
+export function packWarnings(draft: {
+  form: string;
+  packQty: number | "";
+  packUnit: string;
+}): string[] {
+  return validatePackFields(draft).warnings;
+}
+
 export function validateStep(s: number, draft: StockInDraft): boolean {
   if (s === 1) {
     return draft.identifier.trim().length > 0;
