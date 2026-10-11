@@ -285,6 +285,10 @@ const PAGE_WIDTH_MM: f32 = 297.0;
 const PAGE_HEIGHT_MM: f32 = 210.0;
 const MARGIN_MM: f32 = 12.0;
 
+/// Space kept below the last drawn row on the single continuous page, clear of
+/// the footer (drawn at `margin - 4`) and the page edge.
+const SINGLE_PAGE_BOTTOM_MM: f32 = 16.0;
+
 /// Column widths (mm) for the 8-column stock table. They sum to the printable
 /// width of A4 landscape: 297 - 24 = 273. Shared with the frontend document's
 /// percentage widths so the preview and this file read the same.
@@ -349,19 +353,43 @@ fn fit_cell(text: &str, col_width: f32, size: f32, bold: bool) -> String {
 
 struct PdfCursor {
     doc: printpdf::PdfDocumentReference,
-    pages: Vec<(printpdf::PdfPageIndex, printpdf::PdfLayerIndex)>,
+    page: printpdf::PdfPageIndex,
+    layer: printpdf::PdfLayerIndex,
     page_width: f32,
-    page_height: f32,
     margin: f32,
     y: f32,
     font_regular: printpdf::IndirectFontRef,
     font_bold: printpdf::IndirectFontRef,
+    /// First pass: move `y` without drawing, so the one page the document will
+    /// use can be created at exactly the height its content needs.
+    measuring: bool,
 }
 
 impl PdfCursor {
-    fn new(title: &str) -> Self {
+    /// The real cursor. The report is **one continuous vertical page** — a long
+    /// receipt, not a paginated document — so its height is whatever the
+    /// measuring pass found.
+    fn new(title: &str, page_height: f32) -> Self {
+        let (doc, page, layer) =
+            PdfDocument::new(title, Mm(PAGE_WIDTH_MM), Mm(page_height), "Layer 1");
+        Self::with_page(doc, page, layer, page_height, false)
+    }
+
+    /// The throwaway first pass: same calls, no ink, only the `y` arithmetic,
+    /// which is what tells `generate_stock_report_pdf` how tall the sheet is.
+    fn new_measuring(title: &str) -> Self {
         let (doc, page, layer) =
             PdfDocument::new(title, Mm(PAGE_WIDTH_MM), Mm(PAGE_HEIGHT_MM), "Layer 1");
+        Self::with_page(doc, page, layer, PAGE_HEIGHT_MM, true)
+    }
+
+    fn with_page(
+        doc: printpdf::PdfDocumentReference,
+        page: printpdf::PdfPageIndex,
+        layer: printpdf::PdfLayerIndex,
+        page_height: f32,
+        measuring: bool,
+    ) -> Self {
         let font_regular = doc
             .add_builtin_font(BuiltinFont::Helvetica)
             .expect("builtin Helvetica");
@@ -370,35 +398,19 @@ impl PdfCursor {
             .expect("builtin Helvetica-Bold");
         Self {
             doc,
-            pages: vec![(page, layer)],
+            page,
+            layer,
             page_width: PAGE_WIDTH_MM,
-            page_height: PAGE_HEIGHT_MM,
             margin: MARGIN_MM,
-            y: PAGE_HEIGHT_MM - MARGIN_MM,
+            y: page_height - MARGIN_MM,
             font_regular,
             font_bold,
+            measuring,
         }
     }
 
     fn layer(&self) -> printpdf::PdfLayerReference {
-        let (page, layer) = self.pages.last().expect("at least one page");
-        self.doc.get_page(*page).get_layer(*layer)
-    }
-
-    /// Reserve vertical space, starting a fresh page when it does not fit.
-    /// Returns `true` when a new page was started, which is the signal a table
-    /// uses to repeat its column headers.
-    fn ensure_space(&mut self, needed: f32) -> bool {
-        if self.y - needed < self.margin + 8.0 {
-            let (page, layer) =
-                self.doc
-                    .add_page(Mm(self.page_width), Mm(self.page_height), "Layer 1");
-            self.pages.push((page, layer));
-            self.y = self.page_height - self.margin;
-            true
-        } else {
-            false
-        }
+        self.doc.get_page(self.page).get_layer(self.layer)
     }
 
     fn font(&self, bold: bool) -> printpdf::IndirectFontRef {
@@ -413,7 +425,10 @@ impl PdfCursor {
     /// can never run past the printable area.
     fn line(&mut self, text: &str, size: f32, bold: bool, indent: f32) {
         let line_h = size * PT_TO_MM * 1.6 + 1.0;
-        self.ensure_space(line_h);
+        if self.measuring {
+            self.y -= line_h;
+            return;
+        }
         let usable = self.page_width - self.margin * 2.0 - indent;
         let fitted = fit_cell(text, usable + CELL_PADDING * 2.0, size, bold);
         self.layer().use_text(
@@ -427,7 +442,10 @@ impl PdfCursor {
     }
 
     fn rule(&mut self) {
-        self.ensure_space(4.0);
+        if self.measuring {
+            self.y -= 3.0;
+            return;
+        }
         let layer = self.layer();
         layer.set_outline_thickness(0.4);
         let y = self.y + 1.0;
@@ -479,14 +497,12 @@ impl PdfCursor {
     }
 
     /// A real table row: each cell is measured, aligned to its column, and
-    /// vertically centred inside a closed grid band.
+    /// vertically centred inside a closed grid band. One continuous page means
+    /// there is never a mid-table break to repeat headers across.
     fn table_row(&mut self, cells: [&str; 8], size: f32, bold: bool, is_header: bool) {
-        let needed = row_height(size) + 1.0;
-        let broke = self.ensure_space(needed);
-        if broke && !is_header {
-            // New page mid-table: repeat the column headers so the continued
-            // rows are not a wall of unlabelled numbers.
-            self.draw_row(TABLE_HEADERS, HEADER_SIZE, true, true);
+        if self.measuring {
+            self.y -= row_height(size);
+            return;
         }
         self.draw_row(cells, size, bold, is_header);
     }
@@ -527,23 +543,15 @@ impl PdfCursor {
     }
 
     fn finish(self, footer_right: &str) -> Vec<u8> {
-        let total = self.pages.len();
-        for (index, (page, layer)) in self.pages.iter().enumerate() {
-            let layer = self.doc.get_page(*page).get_layer(*layer);
-            let footer = format!(
-                "Page {} of {}   {}",
-                index + 1,
-                total,
-                pdf_text(footer_right)
-            );
-            layer.use_text(
-                footer,
-                7.0,
-                Mm(self.margin),
-                Mm(self.margin - 4.0),
-                &self.font_regular,
-            );
-        }
+        let layer = self.doc.get_page(self.page).get_layer(self.layer);
+        // One continuous page, so there is no page count to print.
+        layer.use_text(
+            pdf_text(footer_right),
+            7.0,
+            Mm(self.margin),
+            Mm(self.margin - 4.0),
+            &self.font_regular,
+        );
         self.doc
             .save_to_bytes()
             .expect("printpdf save_to_bytes is infallible for builtin fonts")
@@ -554,20 +562,9 @@ const HEADER_SIZE: f32 = 7.0;
 const BODY_SIZE: f32 = 7.5;
 const TITLE_SIZE: f32 = 16.0;
 
-/// Draws the Stock Level Report (F8/F10) and writes it to the operator-chosen
-/// path, returning that path.
-///
-/// The destination arrives from the frontend because the preview step has
-/// already asked the operator where the file should go; the time-stamped default
-/// filename makes collisions impossible. Nothing is written to `audit_log` —
-/// reading is not an event.
-#[tauri::command]
-pub fn generate_stock_report_pdf(
-    payload: StockReportPdfPayload,
-    path: String,
-) -> Result<String, String> {
-    let mut pdf = PdfCursor::new("Stock Level Report");
-
+/// Draws the whole report onto `pdf`. Called twice — once by the measuring
+/// pass and once for real — so the drawing sequence is stated exactly once.
+fn draw_report(pdf: &mut PdfCursor, payload: &StockReportPdfPayload) {
     // Header block (F8).
     pdf.line("Stock Level Report", TITLE_SIZE, true, 0.0);
     pdf.line(
@@ -715,7 +712,31 @@ pub fn generate_stock_report_pdf(
         true,
         0.0,
     );
+}
 
+/// The height a single continuous page needs for `payload`, in millimetres.
+///
+/// The measuring cursor consumes the same vertical arithmetic the drawing
+/// cursor does, so the real page can be created at exactly this height rather
+/// than spilling onto A4-sized pages.
+fn single_page_height(payload: &StockReportPdfPayload) -> f32 {
+    let mut probe = PdfCursor::new_measuring("Stock Level Report");
+    let start = probe.y;
+    draw_report(&mut probe, payload);
+    let consumed = start - probe.y;
+    consumed + MARGIN_MM + SINGLE_PAGE_BOTTOM_MM
+}
+
+#[tauri::command]
+pub fn generate_stock_report_pdf(
+    payload: StockReportPdfPayload,
+    path: String,
+) -> Result<String, String> {
+    // One continuous vertical page: measured first, then drawn at that height,
+    // so the document is never split across pages (a long receipt, not a
+    // paginated table).
+    let mut pdf = PdfCursor::new("Stock Level Report", single_page_height(&payload));
+    draw_report(&mut pdf, &payload);
     let bytes = pdf.finish(&format!("Generated {}", payload.generated_at));
     std::fs::write(&path, &bytes).map_err(|error| format!("Could not write {path}: {error}"))?;
     Ok(path)
@@ -760,6 +781,24 @@ mod tests {
     #[test]
     fn fit_cell_keeps_text_that_already_fits() {
         assert_eq!(fit_cell("In stock", 28.0, BODY_SIZE, false), "In stock");
+    }
+
+    #[test]
+    fn single_page_height_grows_with_the_table() {
+        // The measuring pass is what lets the one page be sized to its content:
+        // a short report needs less than A4, a long one grows well past it — and
+        // neither ever needs a second page.
+        let mut payload = StockReportPdfPayload::default();
+        payload.groups = vec![PdfGroup {
+            category: "Analgesic".to_string(),
+            rows: Vec::new(),
+        }];
+        let short = single_page_height(&payload);
+        payload.groups[0].rows = (0..200).map(|_| PdfRow::default()).collect();
+        let tall = single_page_height(&payload);
+        assert!(short < PAGE_HEIGHT_MM);
+        assert!(tall > short);
+        assert!(tall > PAGE_HEIGHT_MM);
     }
 
     #[test]
