@@ -66,6 +66,13 @@ describe("the sync table registry", () => {
     }
   });
 
+  it("orders inventory_items before requests (requests.item_id FK)", () => {
+    const order = SYNC_TABLES.map((spec) => spec.name);
+    expect(order.indexOf("inventory_items")).toBeLessThan(
+      order.indexOf("requests")
+    );
+  });
+
   it("keys a parent by its primary key and a child by its content", () => {
     expect(syncTableSpec("requests")?.keyColumn).toBe("id");
     expect(syncTableSpec("request_notes")?.keyColumn).toBeNull();

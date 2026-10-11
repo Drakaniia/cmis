@@ -305,6 +305,24 @@ export async function countRows(
   return Number(rows[0]?.count ?? 0);
 }
 
+/** Summed `qty` for tables that carry one, else 0. Missing column → 0. */
+export async function sumQty(
+  db: SyncDatabase,
+  table: SyncTableName
+): Promise<number> {
+  if (!isSafeIdentifier(table)) {
+    throw new Error(`unknown sync table: ${table}`);
+  }
+  try {
+    const rows = await db.select<{ total: number | null }[]>(
+      `SELECT COALESCE(SUM(qty), 0) AS total FROM ${table}`
+    );
+    return Number(rows[0]?.total ?? 0);
+  } catch {
+    return 0;
+  }
+}
+
 /** The newest effective timestamp in a table, for `/sync/status`. */
 export async function newestTimestamp(
   db: SyncDatabase,

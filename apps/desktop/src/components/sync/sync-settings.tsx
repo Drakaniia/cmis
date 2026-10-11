@@ -126,6 +126,7 @@ export function SyncSettingsPanel({ className }: { className?: string }) {
         token: sync.token || undefined,
       });
       setMigratedAt(result.migratedAt);
+      sync.refreshServerStatus().catch(() => undefined);
       toast.success("Existing data uploaded", {
         description: `${result.total} rows (${sent} in this run), ${result.conflicts} conflicts resolved`,
         id: "sync-migration",
@@ -138,7 +139,7 @@ export function SyncSettingsPanel({ className }: { className?: string }) {
     } finally {
       setBusy(false);
     }
-  }, [sync.endpoint, sync.token]);
+  }, [sync.endpoint, sync.refreshServerStatus, sync.token]);
 
   const onSave = useCallback(() => {
     save().catch(() => undefined);
@@ -179,6 +180,7 @@ export function SyncSettingsPanel({ className }: { className?: string }) {
   }, [uploadExisting]);
 
   const serverCounts = sync.serverStatus?.counts ?? {};
+  const serverTotals = sync.serverStatus?.totals ?? {};
 
   return (
     <div className={cn("space-y-4", className)}>
@@ -285,7 +287,7 @@ export function SyncSettingsPanel({ className }: { className?: string }) {
             </Button>
           </div>
         }
-        description="Counts come from the Worker's own database, so a number here is what the cloud holds, not what this device thinks it sent."
+        description="Rows come from the Worker's own database, so a number here is what the cloud holds, not what this device thinks it sent. Units are summed qty for inventory tables."
         title="Status"
       >
         <dl className="grid gap-3 sm:grid-cols-2">
@@ -329,15 +331,21 @@ export function SyncSettingsPanel({ className }: { className?: string }) {
           <div className="mt-3 rounded-md border border-border/60 bg-muted/40 px-3 py-2">
             <p className="font-medium text-foreground text-xs">In the cloud</p>
             <ul className="mt-1 grid gap-1 sm:grid-cols-2">
-              {Object.entries(serverCounts).map(([table, count]) => (
-                <li
-                  className="flex items-center justify-between text-muted-foreground text-xs"
-                  key={table}
-                >
-                  <span className="font-mono">{table}</span>
-                  <span>{count}</span>
-                </li>
-              ))}
+              {Object.entries(serverCounts).map(([table, count]) => {
+                const total = serverTotals[table as keyof typeof serverTotals];
+                return (
+                  <li
+                    className="flex items-center justify-between text-muted-foreground text-xs"
+                    key={table}
+                  >
+                    <span className="font-mono">{table}</span>
+                    <span>
+                      {count} rows
+                      {typeof total === "number" ? ` · ${total} units` : ""}
+                    </span>
+                  </li>
+                );
+              })}
             </ul>
           </div>
         ) : null}

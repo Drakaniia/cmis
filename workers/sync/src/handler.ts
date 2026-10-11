@@ -28,6 +28,7 @@ import {
   readStateValue,
   scanRows,
   scanTombstones,
+  sumQty,
   writeStateValue,
 } from "../../../apps/desktop/src/lib/sync/scan";
 import {
@@ -221,10 +222,14 @@ async function handleStatus(
   db: ReturnType<typeof d1Database>
 ): Promise<Response> {
   const counts: Partial<Record<SyncTableName, number>> = {};
+  const totals: Partial<Record<SyncTableName, number>> = {};
   let lastWriteAt: string | null = null;
   for (const spec of SYNC_TABLES) {
     // biome-ignore lint/performance/noAwaitInLoops: one count and one aggregate per table, eight in total
     counts[spec.name] = await countRows(db, spec.name);
+    if (spec.name === "inventory_items" || spec.name === "inventory_batches") {
+      totals[spec.name] = await sumQty(db, spec.name);
+    }
     const latest = await newestTimestamp(db, spec.name);
     if (latest && (lastWriteAt === null || latest > lastWriteAt)) {
       lastWriteAt = latest;
@@ -237,6 +242,7 @@ async function handleStatus(
     ok: true,
     schemaVersion: SCHEMA_VERSION,
     serverTime: new Date().toISOString(),
+    totals,
   });
 }
 

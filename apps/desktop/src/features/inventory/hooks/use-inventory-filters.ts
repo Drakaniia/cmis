@@ -14,6 +14,28 @@ const DEFAULT_FILTERS: InventoryFilters = {
   status: "All",
 };
 
+function isExpiringSoon(expiry: string, withinDays = 30): boolean {
+  if (!expiry) {
+    return false;
+  }
+  const at = Date.parse(expiry);
+  if (Number.isNaN(at)) {
+    return false;
+  }
+  return at - Date.now() <= withinDays * 24 * 60 * 60 * 1000;
+}
+
+function matchesStatus(it: InventoryItem, status: string): boolean {
+  if (status === "All") {
+    return true;
+  }
+  // `expiring` is derived from nearest batch expiry, never a stored status.
+  if (status === "expiring") {
+    return isExpiringSoon(it.expiry);
+  }
+  return it.status === status;
+}
+
 function applyFilters(
   items: InventoryItem[],
   filters: InventoryFilters
@@ -23,7 +45,7 @@ function applyFilters(
     if (filters.category !== "All" && it.category !== filters.category) {
       return false;
     }
-    if (filters.status !== "All" && it.status !== filters.status) {
+    if (!matchesStatus(it, filters.status)) {
       return false;
     }
     if (q) {

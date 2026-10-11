@@ -65,7 +65,7 @@ function nowIso(): string {
  * Kept in one list so the SELECT and the row type cannot drift apart.
  */
 const EXISTING_COLUMNS =
-  "id, name, dosage, sku, category, display_name, strength_value, strength_unit, form, pack_size, threshold";
+  "id, name, dosage, sku, category, display_name, strength_value, strength_unit, form, pack_size, threshold, qty, status, stock_on_hand";
 
 interface ExistingItemRow {
   category: string | null;
@@ -76,7 +76,10 @@ interface ExistingItemRow {
   id: string;
   name: string;
   pack_size: string | null;
+  qty: number;
   sku: string;
+  status: string | null;
+  stock_on_hand: number | null;
   strength_unit: string | null;
   strength_value: string | null;
   /** Needed to tell an untouched default from a threshold the operator set. */
@@ -304,13 +307,22 @@ async function runInventoryImport(
   );
   const keyToRow = new Map<
     string,
-    { id: string; sku: string; category: string | null; threshold: number }
+    {
+      category: string | null;
+      id: string;
+      qty: number;
+      sku: string;
+      stockOnHand: number | null;
+      threshold: number;
+    }
   >();
   for (const r of existingRows) {
     const match = {
       category: r.category,
       id: r.id,
+      qty: r.qty,
       sku: r.sku,
+      stockOnHand: r.stock_on_hand,
       threshold: r.threshold,
     };
     const storedDosage = text(r.dosage);
@@ -379,7 +391,14 @@ interface ImportContext {
   existingSkus: Set<string>;
   keyToRow: Map<
     string,
-    { category: string | null; id: string; sku: string; threshold: number }
+    {
+      category: string | null;
+      id: string;
+      qty: number;
+      sku: string;
+      stockOnHand: number | null;
+      threshold: number;
+    }
   >;
   month: string;
   mutationLog: ImportMutationLog;
@@ -418,9 +437,7 @@ async function applyRow(
   const keys = allIdentityKeys(parts);
   const ck = identityKey(parts);
   const { displayName } = row;
-  const qty = row.stockOnHand ?? 0;
   const detailsIncomplete = isDetailsIncomplete(parts) ? 1 : 0;
-  const isNoStock = qty === 0 ? 1 : 0;
   const totalDispensed = row.totalDispensed ?? 0;
   const { dailySum, stockRemaining } = row;
   const totalMismatch = row.totalMismatch ? 1 : 0;
@@ -455,11 +472,16 @@ async function applyRow(
     existing && existing.threshold !== DEFAULT_THRESHOLD
       ? existing.threshold
       : derivedThreshold;
+  // Blank/unparseable stock_on_hand is null: keep the shelf count already on
+  // the row instead of zeroing it. New rows still start at 0.
+  const qty = row.stockOnHand ?? existing?.qty ?? 0;
   const status = deriveStatus(qty, threshold);
+  const isNoStock = qty === 0 ? 1 : 0;
 
   if (existing) {
     // Preserve existing category if effective is null, else use effective
     const categoryToSet = effectiveCategory ?? existing.category ?? null;
+    const stockOnHandValue = row.stockOnHand ?? existing.stockOnHand;
 
     await db.execute(
       `UPDATE inventory_items SET
@@ -471,7 +493,7 @@ async function applyRow(
            WHERE id = ?`,
       [
         detailsIncomplete,
-        row.stockOnHand,
+        stockOnHandValue,
         totalDispensed,
         stockRemaining,
         dailySum,
@@ -541,7 +563,14 @@ async function applyRow(
     ]
   );
   mutationLog.insertedIds.push(id);
-  const match = { category: effectiveCategory, id, sku, threshold };
+  const match = {
+    category: effectiveCategory,
+    id,
+    qty,
+    sku,
+    stockOnHand: row.stockOnHand,
+    threshold,
+  };
   for (const key of keys) {
     keyToRow.set(key, match);
   }

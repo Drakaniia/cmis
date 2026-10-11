@@ -163,6 +163,7 @@ function isOffline(): boolean {
 /** The state setters a finished run reports through. */
 interface SyncReportHandlers {
   refreshPending: () => Promise<void>;
+  refreshServerStatus: () => Promise<void>;
   setLastResult: (result: SyncRunResult) => void;
   setPhase: (phase: SyncPhase) => void;
   setSettingsBoth: (next: SyncSettings) => void;
@@ -191,6 +192,10 @@ async function reportSyncSuccess(
     })
   );
   await handlers.refreshPending();
+  // Keep "In the cloud" from going stale: a run that just pushed must re-read
+  // server counts, otherwise the panel says "in sync" while showing the old 0.
+  // ponytail: fire-and-forget refresh, sync already succeeded
+  await handlers.refreshServerStatus().catch(() => undefined);
 }
 
 async function reportSyncFailure(
@@ -259,6 +264,25 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
     }
   }, [openDb]);
 
+  const refreshServerStatus = useCallback(async () => {
+    const { current } = settingsRef;
+    if (!current?.endpoint) {
+      setServerStatus(null);
+      return;
+    }
+    try {
+      setServerStatus(
+        await fetchSyncStatus({
+          endpoint: current.endpoint,
+          fetchImpl: globalThis.fetch.bind(globalThis),
+          token: current.token || undefined,
+        })
+      );
+    } catch {
+      setServerStatus(null);
+    }
+  }, []);
+
   const syncNow = useCallback(
     async (opts?: { silent?: boolean }): Promise<SyncRunResult | null> => {
       const { current } = settingsRef;
@@ -280,6 +304,7 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
       const silent = opts?.silent ?? false;
       const handlers = {
         refreshPending,
+        refreshServerStatus,
         setLastResult,
         setPhase,
         setSettingsBoth,
@@ -301,27 +326,8 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
         runningRef.current.running = false;
       }
     },
-    [openDb, queryClient, refreshPending, setSettingsBoth]
+    [openDb, queryClient, refreshPending, refreshServerStatus, setSettingsBoth]
   );
-
-  const refreshServerStatus = useCallback(async () => {
-    const { current } = settingsRef;
-    if (!current?.endpoint) {
-      setServerStatus(null);
-      return;
-    }
-    try {
-      setServerStatus(
-        await fetchSyncStatus({
-          endpoint: current.endpoint,
-          fetchImpl: globalThis.fetch.bind(globalThis),
-          token: current.token || undefined,
-        })
-      );
-    } catch {
-      setServerStatus(null);
-    }
-  }, []);
 
   const update = useCallback(
     async (patch: Partial<SyncSettings>) => {

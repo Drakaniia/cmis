@@ -5,6 +5,7 @@ import {
   isDetailsIncomplete,
   type StrengthParts,
 } from "../domain/strength";
+import { deriveStatus } from "../import/inventory-status";
 
 /**
  * Creates a medication the inventory has never seen, plus its first batch.
@@ -106,7 +107,7 @@ export async function insertNewItemWithBatch(
       0,
       0,
       payload.qty,
-      payload.qty > 0 ? "in" : "out",
+      deriveStatus(payload.qty, NEW_ITEM_THRESHOLD),
       0,
       payload.category,
       supplier,

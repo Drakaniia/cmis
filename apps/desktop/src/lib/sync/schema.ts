@@ -89,25 +89,17 @@ function join(parts: (number | string | null)[]): string {
 }
 
 /**
- * Tables in dependency order: a parent before its children. Upserts apply in
- * this order (so a child's foreign key always resolves) and deletes apply in
- * reverse (so a child is gone before its parent is).
+ * Tables in foreign-key order: a referenced table before its referrers.
+ * Upserts apply in this order (so every foreign key resolves) and deletes
+ * apply in reverse (so a child is gone before its parent is).
+ *
+ * Note `requests` sits *after* `inventory_items`: `requests.item_id`
+ * references `inventory_items(id)`, so pushing requests onto an empty
+ * database first fails the FK check on D1. The `parent` field alone does
+ * not capture this — it only links content-keyed children — hence the
+ * explicit position.
  */
 export const SYNC_TABLES: SyncTableSpec[] = [
-  {
-    applyExcludeColumns: [],
-    effectiveUpdatedAt: (row) =>
-      firstStamp(row.updated_at, row.archived_at, row.submitted_at),
-    keyColumn: "id",
-    name: "requests",
-    parent: null,
-    rowKey: (row) => text(row.id),
-    rowKeySql: (prefix = "") => `${prefix}id`,
-    // A request is re-stamped by migration 0014's triggers on every save; the
-    // fallbacks only order the rows that predate the column.
-    updatedAtSql: (prefix = "") =>
-      `COALESCE(${prefix}updated_at, ${prefix}archived_at, ${prefix}submitted_at)`,
-  },
   {
     applyExcludeColumns: [],
     effectiveUpdatedAt: (row) => firstStamp(row.updated_at, row.created_at),
@@ -140,6 +132,20 @@ export const SYNC_TABLES: SyncTableSpec[] = [
     rowKeySql: (prefix = "") => `${prefix}id`,
     updatedAtSql: (prefix = "") =>
       `COALESCE(${prefix}updated_at, ${prefix}created_at)`,
+  },
+  {
+    applyExcludeColumns: [],
+    effectiveUpdatedAt: (row) =>
+      firstStamp(row.updated_at, row.archived_at, row.submitted_at),
+    keyColumn: "id",
+    name: "requests",
+    parent: null,
+    rowKey: (row) => text(row.id),
+    rowKeySql: (prefix = "") => `${prefix}id`,
+    // A request is re-stamped by migration 0014's triggers on every save; the
+    // fallbacks only order the rows that predate the column.
+    updatedAtSql: (prefix = "") =>
+      `COALESCE(${prefix}updated_at, ${prefix}archived_at, ${prefix}submitted_at)`,
   },
   {
     applyExcludeColumns: [],

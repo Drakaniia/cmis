@@ -99,6 +99,8 @@ export interface SyncStatusResponse {
   ok: true;
   schemaVersion: number;
   serverTime: string;
+  /** Summed `qty` where the table has one (inventory rows + batches). */
+  totals?: Partial<Record<SyncTableName, number>>;
 }
 
 export interface SyncErrorResponse {
