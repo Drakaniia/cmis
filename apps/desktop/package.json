@@ -1,6 +1,6 @@
 {
   "name": "desktop",
-  "version": "1.13.2",
+  "version": "1.13.3",
   "private": true,
   "description": "CMIS desktop frontend — TanStack Router + Tauri app for clinic inventory, requests, and dispensing",
   "keywords": [

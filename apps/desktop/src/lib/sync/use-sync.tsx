@@ -37,11 +37,13 @@ import {
   ensureDeviceId,
   pendingChangeCount,
   readCursors,
+  writePullCursors,
 } from "./offline-queue";
 import { registerSyncScheduler, scheduleSync } from "./schedule";
 import { SYNC_TABLE_NAMES } from "./schema";
 import {
   fetchSyncStatus,
+  pullRemoteChanges,
   runSync,
   SyncFailure,
   type SyncFailureKind,
@@ -150,6 +152,54 @@ async function runEnginePass(input: {
     await auditConflicts(db, result.conflicts);
   }
   return result;
+}
+
+/**
+ * First-connection pass: pull-only, no push.
+ *
+ * A new device holds zero rows. Pushing that blank state is a no-op today
+ * (empty payloads are skipped), but the intent on first save is "fetch what
+ * the cloud has", so no push request leaves this device at all. Pull cursors
+ * reset to empty first, so a repointed database fetches the new server in
+ * full instead of resuming the old server's position.
+ */
+async function runPullOnlyPass(input: {
+  current: SyncSettings;
+  db: SyncDatabase;
+  queryClient: QueryClient;
+}): Promise<SyncRunResult> {
+  const { current, db, queryClient } = input;
+  const deviceId = await ensureDeviceId(db);
+  await writePullCursors(db, { deleted: "", rows: {} });
+  const pull = await pullRemoteChanges({
+    db,
+    deviceId,
+    endpoint: current.endpoint,
+    fetchImpl: globalThis.fetch.bind(globalThis),
+    limit: current.queueMaxSize,
+    token: current.token || undefined,
+  });
+
+  if (pull.appliedRows + pull.appliedDeletes > 0) {
+    queryClient.invalidateQueries();
+    const { notifyRequestsChanged } = await import(
+      "@/features/requests/persistence"
+    );
+    notifyRequestsChanged();
+  }
+  if (pull.conflicts.length > 0) {
+    await auditConflicts(db, pull.conflicts);
+  }
+  return {
+    appliedDeletes: pull.appliedDeletes,
+    appliedRows: pull.appliedRows,
+    conflicts: pull.conflicts,
+    moreToPush: false,
+    pushedDeletes: 0,
+    pushedRows: 0,
+    serverTime: pull.serverTime,
+    skipped: 0,
+  };
 }
 
 /** The in-flight guard, as an object so one ref covers the whole run state. */
@@ -353,8 +403,55 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
     [openDb, queryClient, refreshPending, refreshServerStatus, setSettingsBoth]
   );
 
+  /**
+   * Pull-only twin of `syncNow`, for first connection only. Same guard-and-
+   * report shell, but `runPullOnlyPass` sends zero push requests.
+   */
+  const pullOnlyNow = useCallback(async (): Promise<SyncRunResult | null> => {
+    const { current } = settingsRef;
+    if (!(current?.enabled && current.endpoint)) {
+      return null;
+    }
+    if (runningRef.current.running) {
+      return null;
+    }
+    runningRef.current.running = true;
+    setPhase("syncing");
+    lastRunAtRef.current = Date.now();
+    const handlers = {
+      refreshPending,
+      refreshServerStatus,
+      setLastResult,
+      setPhase,
+      setSettingsBoth,
+    };
+
+    try {
+      const db = await openDb();
+      if (!db) {
+        setPhase("disabled");
+        return null;
+      }
+      const result = await runPullOnlyPass({ current, db, queryClient });
+      await reportSyncSuccess(result, false, handlers);
+      return result;
+    } catch (error) {
+      await reportSyncFailure(error, false, handlers);
+      return null;
+    } finally {
+      runningRef.current.running = false;
+    }
+  }, [
+    openDb,
+    queryClient,
+    refreshPending,
+    refreshServerStatus,
+    setSettingsBoth,
+  ]);
+
   const update = useCallback(
     async (patch: Partial<SyncSettings>) => {
+      const prevEndpoint = settingsRef.current?.endpoint ?? "";
       const next = await saveSyncSettings(patch);
       setSettingsBoth(next);
       if (!(patch.endpoint || patch.enabled)) {
@@ -366,11 +463,19 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
       }
       setPhase(next.enabled && next.endpoint ? "idle" : "disabled");
       if (next.enabled && next.endpoint) {
-        // Enabling is the operator asking for it now, not in 30 seconds.
-        await syncNow();
+        // A first connection (new or repointed endpoint) pulls the cloud down
+        // instead of pushing this device's blank state up. Steady-state syncs
+        // stay push-then-pull.
+        const firstConnection =
+          patch.endpoint !== undefined && prevEndpoint !== next.endpoint;
+        if (firstConnection) {
+          await pullOnlyNow();
+        } else {
+          await syncNow();
+        }
       }
     },
-    [refreshServerStatus, setSettingsBoth, syncNow]
+    [pullOnlyNow, refreshServerStatus, setSettingsBoth, syncNow]
   );
 
   // Settings load once. Until they do, `phase` stays `disabled`.

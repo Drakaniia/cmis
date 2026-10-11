@@ -119,7 +119,9 @@ describe("the client", () => {
     const hanging: typeof fetch = ((_url: string, init: RequestInit) =>
       new Promise((_resolve, reject) => {
         init.signal?.addEventListener("abort", () => {
-          reject(new DOMException("signal is aborted without reason", "AbortError"));
+          reject(
+            new DOMException("signal is aborted without reason", "AbortError")
+          );
         });
       })) as unknown as typeof fetch;
     const options = await baseOptions(harness, hanging);
@@ -399,6 +401,73 @@ describe("the client", () => {
     await expect(
       fetchSyncStatus({ endpoint: "https://cmis-sync.test", fetchImpl })
     ).rejects.toMatchObject({ kind: "protocol" });
+  });
+
+  it("fetches the cloud copy onto a fresh device without pushing its blank state", async () => {
+    // First-connection regression: an empty local database must never send its
+    // zero rows up. The push half is skipped (no request), the pull half lands.
+    const row = {
+      created_at: "2026-10-02T09:00:00.000Z",
+      id: "item-cloud",
+      name: "Amoxicillin",
+      qty: 7,
+      sku: "SKU-cloud",
+      stock_on_hand: 7,
+      updated_at: "2026-10-02T09:00:00.000Z",
+    };
+    const { calls, fetchImpl } = stubFetch((url) => {
+      if (url.endsWith("/sync/push")) {
+        return {
+          body: { applied: {}, conflicts: [], ok: true, serverTime: AT },
+        };
+      }
+      return {
+        body: {
+          deletedCursor: "",
+          hasMore: false,
+          ok: true,
+          serverTime: AT,
+          tables: [
+            {
+              cursor: "2026-10-02T09:00:00.000Z",
+              rows: [row],
+              table: "inventory_items",
+            },
+          ],
+        },
+      };
+    });
+    const options = await baseOptions(harness, fetchImpl);
+    const result = await runSync(options);
+
+    expect(result.pushedRows).toBe(0);
+    expect(result.appliedRows).toBe(1);
+    expect(calls.map((call) => call.url)).toEqual([
+      "https://cmis-sync.test/sync/pull",
+    ]);
+    expect(insertsFor(harness.db, "inventory_items")).toHaveLength(1);
+  });
+
+  it("asks from empty cursors after a reset, so a repointed device fetches everything", async () => {
+    // A database that synced elsewhere carries stale pull cursors. Resetting
+    // them (what the first-connection pass does) must make the next pull ask
+    // from "" rather than resuming the old server's position.
+    await writePullCursors(harness.sync, {
+      deleted: "2026-10-05T00:00:00.000Z",
+      rows: { inventory_items: "2026-10-05T00:00:00.000Z" },
+    });
+    await writePullCursors(harness.sync, { deleted: "", rows: {} });
+    const { calls, fetchImpl } = stubFetch(() => ({
+      body: { deletedCursor: "", hasMore: false, ok: true, tables: [] },
+    }));
+    const options = await baseOptions(harness, fetchImpl);
+    await pullRemoteChanges(options);
+
+    expect(calls).toHaveLength(1);
+    const sent = calls[0].body as {
+      cursors: { rows: Partial<Record<string, string>> };
+    };
+    expect(sent.cursors.rows.inventory_items ?? "").toBe("");
   });
 
   it("exposes the database shape the engine needs, nothing more", () => {
