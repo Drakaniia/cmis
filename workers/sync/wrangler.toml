@@ -1,0 +1,30 @@
+# CMIS Cloud Sync Worker — Cloudflare Wrangler configuration.
+#
+# Deploy with:
+#   npx wrangler d1 create cmis-prod          # once; paste the id below
+#   node scripts/d1-migrate.mjs --remote      # applies every local migration
+#   npx wrangler deploy --config workers/sync/wrangler.toml
+#
+# The spec's §2 asks for exactly this: one D1 database, one Worker, free tier.
+
+name = "cmis-sync"
+main = "src/index.ts"
+# Pinned, so a deploy months from now runs against the same runtime semantics the
+# release was tested on rather than whatever `latest` has become.
+compatibility_date = "2026-10-01"
+workers_dev = true
+
+# The desktop app is the only client, and it sends no credentials by default, so
+# no cookies and no CORS origin allowlist are needed (the handler sets `*`).
+[[d1_databases]]
+binding = "DB"
+database_name = "cmis-prod"
+# Replaced with the real id by `scripts/d1-migrate.mjs --remote --setup`, or by
+# hand from `wrangler d1 create cmis-prod`'s output.
+database_id = "ef662fb1-04f4-49d2-8108-ce05643de0b7"
+
+[vars]
+# Optional. Unset means "trusted network, no authentication" — the spec's
+# default. Set it instead of putting it here:
+#   npx wrangler secret put SYNC_TOKEN --config workers/sync/wrangler.toml
+# so the value is never committed.
