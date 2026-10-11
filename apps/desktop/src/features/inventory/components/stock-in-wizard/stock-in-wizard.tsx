@@ -1,12 +1,13 @@
 import { Button } from "@cmis/ui/components/button";
 import { useReducedMotion } from "motion/react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import {
   baseUnitFor,
   describeQuantity,
   hasPack,
+  normalizeUnit,
   toBaseUnits,
 } from "../../domain/pack-size";
 import type { InventoryItem } from "../../types";
@@ -28,6 +29,7 @@ import {
   allStepsValid,
   detailsFromItem,
   packErrors,
+  packWarnings,
   validateStep,
 } from "./validation";
 
@@ -93,6 +95,11 @@ export function StockInWizard({
   // reselects the just-saved item, and re-prefilling here would clobber both the
   // success screen and the blank Step 1 of a "Stock In Another Item" run.
   const [submitted, setSubmitted] = useState(false);
+  // The item the wizard was opened on. "Stock In Another Item" trusts a later
+  // `initialItemId` only when it has changed from this, so a newly created
+  // item is carried forward while the previously selected item — which a new
+  // delivery never touched — is not mistaken for it.
+  const openedItemIdRef = useRef<string | null>(null);
   const reduceMotion = useReducedMotion();
 
   useEffect(() => {
@@ -114,6 +121,7 @@ export function StockInWizard({
     const found = initialItemId
       ? (items.find((i) => i.id === initialItemId) ?? null)
       : null;
+    openedItemIdRef.current = found?.id ?? null;
     setFoundItem(found);
     setIsNew(false);
     // Identity text is never prefilled: the SKU/barcode shows as a greyed
@@ -134,6 +142,24 @@ export function StockInWizard({
     setQtyUnit("base");
     setNotes("");
   }, [open, initialItemId, items, submitted]);
+
+  /**
+   * V4 — an item whose form is "box" is its own base unit: a pack on top would
+   * double-count (D15). The pack fields are disabled in that case, so any pair
+   * a prefilled item arrived with has to be cleared as well — otherwise the
+   * disabled inputs would hold a value the operator cannot see, fix or submit.
+   * The same clear runs from `handleFormChange` the moment "box" is picked.
+   */
+  useEffect(() => {
+    if (
+      normalizeUnit(form) === "box" &&
+      (packQty !== "" || packUnit !== "" || packSize !== "")
+    ) {
+      setPackQty("");
+      setPackUnit("");
+      setPackSize("");
+    }
+  }, [form, packQty, packUnit, packSize]);
 
   const packItem = useMemo(
     () => ({ form: form.trim(), packQty, packUnit: packUnit.trim() }),
@@ -270,18 +296,64 @@ export function StockInWizard({
   );
 
   /**
-   * "Stock In Another Item" — blank Step 1 in place, with no prefill from the
-   * item just saved, so the next delivery can be anything (a scan re-resolves an
-   * existing item on its own). The `submitted` flag stays set so a background
-   * refetch of the inventory cannot re-prefill this fresh run.
+   * "Stock In Another Item" — repeat the delivery for the item just saved.
+   *
+   * A delivery run is almost always the same product in different lots, so the
+   * item stays selected: the operator lands on Step 3 with the identity and
+   * details already filled and only has to type the new batch and quantity —
+   * no second scan, no reopening the wizard. Back still walks to Step 1 for a
+   * genuinely different item.
+   *
+   * The item comes from `foundItem` for an existing row. A brand-new item has
+   * no `foundItem`, but the parent hands its id back through `initialItemId`
+   * (and refetches `items`) after the insert. That id is trusted only when it
+   * differs from the one the wizard opened on, so a previously selected item is
+   * never carried as if the new delivery had touched it. When nothing resolves
+   * — the parent has not handed the row back yet — the wizard falls back to a
+   * blank Step 1 rather than guessing.
+   *
+   * The `submitted` flag stays set so a background refetch cannot re-prefill
+   * the fresh batch this run deliberately cleared.
    */
   const startAnother = useCallback(() => {
+    const createdId =
+      initialItemId && initialItemId !== openedItemIdRef.current
+        ? initialItemId
+        : null;
+    const carried =
+      foundItem ??
+      (createdId
+        ? (items.find((item) => item.id === createdId) ?? null)
+        : null);
     setConfirmed(null);
-    setStep(1);
     setDirection(1);
-    setIdentifier("");
+    setAttemptedNext(false);
+    // Step 3 is re-entered fresh: the identity and details carry over, but the
+    // lot being recorded now is a different one.
+    setBatch("");
+    setExpiry("");
+    setQty("");
+    setQtyUnit("base");
+    setNotes("");
+    if (carried) {
+      setFoundItem(carried);
+      setIsNew(false);
+      setIdentifier("");
+      const details = detailsFromItem(carried);
+      setCategory(details.category);
+      setForm(details.form);
+      setName(details.name);
+      setPackQty(details.packQty);
+      setPackSize(details.packSize);
+      setPackUnit(details.packUnit);
+      setStrengthUnit(details.strengthUnit);
+      setStrengthValue(details.strengthValue);
+      setStep(3);
+      return;
+    }
     setFoundItem(null);
     setIsNew(false);
+    setIdentifier("");
     setCategory(EMPTY_DETAILS.category);
     setForm(EMPTY_DETAILS.form);
     setName(EMPTY_DETAILS.name);
@@ -290,13 +362,8 @@ export function StockInWizard({
     setPackUnit(EMPTY_DETAILS.packUnit);
     setStrengthUnit(EMPTY_DETAILS.strengthUnit);
     setStrengthValue(EMPTY_DETAILS.strengthValue);
-    setBatch("");
-    setExpiry("");
-    setQty("");
-    setQtyUnit("base");
-    setNotes("");
-    setAttemptedNext(false);
-  }, []);
+    setStep(1);
+  }, [foundItem, initialItemId, items]);
 
   const lookup = useCallback(() => {
     const typed = identifier.trim();
@@ -364,6 +431,20 @@ export function StockInWizard({
   const handleCreateNew = useCallback(() => {
     setDirection(1);
     setStep(2);
+  }, []);
+
+  /**
+   * Choosing the dose form is the moment V4 becomes knowable, so a switch to
+   * "box" clears the pack pair at once rather than leaving two disabled fields
+   * holding numbers the operator can no longer edit.
+   */
+  const handleFormChange = useCallback((value: string) => {
+    setForm(value);
+    if (normalizeUnit(value) === "box") {
+      setPackQty("");
+      setPackUnit("");
+      setPackSize("");
+    }
   }, []);
 
   const handleCancel = useCallback(() => onOpenChange(false), [onOpenChange]);
@@ -441,17 +522,19 @@ export function StockInWizard({
           form={form}
           itemName={name}
           onCategoryChange={setCategory}
-          onFormChange={setForm}
+          onFormChange={handleFormChange}
           onNameChange={setName}
           onPackQtyChange={setPackQty}
           onPackSizeChange={setPackSize}
           onPackUnitChange={setPackUnit}
           onStrengthUnitChange={setStrengthUnit}
           onStrengthValueChange={setStrengthValue}
+          packDisabled={normalizeUnit(form) === "box"}
           packErrors={packErrors({ form, packQty, packUnit })}
           packQty={packQty}
           packSize={packSize}
           packUnit={packUnit}
+          packWarnings={packWarnings({ form, packQty, packUnit })}
           preFilled={foundItem !== null}
           showErrors={attemptedNext}
           strengthUnit={strengthUnit}
