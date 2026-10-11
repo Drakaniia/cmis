@@ -1,0 +1,370 @@
+/**
+ * CMIS Cloud Sync — the configuration surface.
+ *
+ * Rendered in two places on purpose: as the Settings → Sync tab, and inside the
+ * dialog the title-bar indicator opens. One component, so the chrome shortcut
+ * cannot drift from the settings page.
+ *
+ * The endpoint is edited locally and saved on submit: a half-typed URL is not a
+ * configuration, and saving every keystroke would fire a request per character.
+ */
+
+import { Button } from "@cmis/ui/components/button";
+import { Input } from "@cmis/ui/components/input";
+import { cn } from "@cmis/ui/lib/utils";
+import { RefreshCw, Save, Upload } from "lucide-react";
+import { type ChangeEvent, useCallback, useEffect, useState } from "react";
+import { toast } from "sonner";
+
+import { SettingsCard } from "@/features/admin/settings/components/settings-card";
+import { getDb } from "@/lib/db";
+import { migrateToCloud, readMigrationMarker } from "@/lib/sync/migration";
+import { ensureDeviceId } from "@/lib/sync/offline-queue";
+import { DEFAULT_SYNC_INTERVAL_MS } from "@/lib/sync/sync-settings";
+import type { SyncDatabase } from "@/lib/sync/types";
+import { useSync } from "@/lib/sync/use-sync";
+import { SyncButton } from "./sync-button";
+
+const INTERVAL_CHOICES = [
+  { label: "Every 15 seconds", value: 15_000 },
+  { label: "Every 30 seconds", value: DEFAULT_SYNC_INTERVAL_MS },
+  { label: "Every minute", value: 60_000 },
+  { label: "Every 5 minutes", value: 300_000 },
+] as const;
+
+function formatWhen(iso: string | null): string {
+  if (!iso) {
+    return "Never";
+  }
+  try {
+    return new Intl.DateTimeFormat(undefined, {
+      dateStyle: "medium",
+      timeStyle: "short",
+    }).format(new Date(iso));
+  } catch {
+    return iso;
+  }
+}
+
+export function SyncSettingsPanel({ className }: { className?: string }) {
+  const sync = useSync();
+  const [endpoint, setEndpoint] = useState(sync.endpoint);
+  const [token, setToken] = useState(sync.token);
+  const [busy, setBusy] = useState(false);
+  const [migratedAt, setMigratedAt] = useState<string | null>(null);
+  const [adopted, setAdopted] = useState({
+    endpoint: sync.endpoint,
+    token: sync.token,
+  });
+
+  // Adopt the stored values in the same render they arrive, not in an effect
+  // after it: until they do, the field is disabled, and an effect would leave a
+  // commit where it is already enabled but still shows the previous (empty)
+  // value — a window a fast save could capture. Typing changes the local state
+  // without changing `sync`, so an in-progress edit is never overwritten.
+  if (adopted.endpoint !== sync.endpoint || adopted.token !== sync.token) {
+    setAdopted({ endpoint: sync.endpoint, token: sync.token });
+    setEndpoint(sync.endpoint);
+    setToken(sync.token);
+  }
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const db = (await getDb()) as unknown as SyncDatabase;
+        const marker = await readMigrationMarker(db);
+        if (!cancelled) {
+          setMigratedAt(marker);
+        }
+      } catch {
+        // No database in this window (preview) — the row stays "Not yet".
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const dirty = endpoint !== sync.endpoint || token !== sync.token;
+
+  const save = useCallback(async () => {
+    setBusy(true);
+    try {
+      await sync.update({
+        enabled: endpoint.trim() !== "",
+        endpoint,
+        token,
+      });
+      toast.success(
+        endpoint.trim() === "" ? "Cloud sync disabled" : "Sync settings saved",
+        { id: "sync-settings" }
+      );
+    } finally {
+      setBusy(false);
+    }
+  }, [endpoint, sync, token]);
+
+  const uploadExisting = useCallback(async () => {
+    if (sync.endpoint === "") {
+      toast.error("Set an endpoint first");
+      return;
+    }
+    setBusy(true);
+    try {
+      const db = (await getDb()) as unknown as SyncDatabase;
+      const deviceId = await ensureDeviceId(db);
+      let sent = 0;
+      const result = await migrateToCloud({
+        batchSize: 500,
+        db,
+        deviceId,
+        endpoint: sync.endpoint,
+        onProgress: (progress) => {
+          sent += progress.rows;
+        },
+        token: sync.token || undefined,
+      });
+      setMigratedAt(result.migratedAt);
+      toast.success("Existing data uploaded", {
+        description: `${result.total} rows (${sent} in this run), ${result.conflicts} conflicts resolved`,
+        id: "sync-migration",
+      });
+    } catch (error) {
+      toast.error("Upload failed", {
+        description: error instanceof Error ? error.message : String(error),
+        id: "sync-migration",
+      });
+    } finally {
+      setBusy(false);
+    }
+  }, [sync.endpoint, sync.token]);
+
+  const onSave = useCallback(() => {
+    save().catch(() => undefined);
+  }, [save]);
+
+  const onEndpointChange = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => setEndpoint(event.target.value),
+    []
+  );
+
+  const onTokenChange = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => setToken(event.target.value),
+    []
+  );
+
+  const onEnabledChange = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => {
+      sync.update({ enabled: event.target.checked }).catch(() => undefined);
+    },
+    [sync]
+  );
+
+  const onIntervalChange = useCallback(
+    (event: ChangeEvent<HTMLSelectElement>) => {
+      sync
+        .update({ intervalMs: Number(event.target.value) })
+        .catch(() => undefined);
+    },
+    [sync]
+  );
+
+  const onCheckServer = useCallback(() => {
+    sync.refreshServerStatus().catch(() => undefined);
+  }, [sync]);
+
+  const onUploadExisting = useCallback(() => {
+    uploadExisting().catch(() => undefined);
+  }, [uploadExisting]);
+
+  const serverCounts = sync.serverStatus?.counts ?? {};
+
+  return (
+    <div className={cn("space-y-4", className)}>
+      <SettingsCard
+        actions={
+          <div className="flex items-center gap-2">
+            <Button
+              className="press-feedback"
+              disabled={busy || !dirty}
+              onClick={onSave}
+              size="sm"
+              variant="confirm"
+            >
+              <Save aria-hidden className="size-3.5" />
+              Save
+            </Button>
+          </div>
+        }
+        description="Point this device at the Cloudflare Worker that serves the sync API. Sync is off until an endpoint is set, so a clinic that has not deployed one is never asked to authenticate against a server that does not exist."
+        title="Connection"
+      >
+        <div className="space-y-3">
+          <label className="block space-y-1" htmlFor="sync-endpoint">
+            <span className="font-medium text-foreground text-sm">
+              Worker endpoint
+            </span>
+            <Input
+              autoComplete="off"
+              disabled={!sync.resolved}
+              id="sync-endpoint"
+              onChange={onEndpointChange}
+              placeholder="https://cmis-sync.<account>.workers.dev"
+              spellCheck={false}
+              value={endpoint}
+            />
+          </label>
+          {sync.resolved ? null : (
+            <p className="text-muted-foreground text-xs">
+              Reading the saved sync settings…
+            </p>
+          )}
+          <label className="block space-y-1" htmlFor="sync-token">
+            <span className="font-medium text-foreground text-sm">
+              Shared token{" "}
+              <span className="text-muted-foreground">(optional)</span>
+            </span>
+            <Input
+              autoComplete="off"
+              id="sync-token"
+              onChange={onTokenChange}
+              placeholder="Must match the Worker's SYNC_TOKEN secret"
+              spellCheck={false}
+              type="password"
+              value={token}
+            />
+          </label>
+          <label className="flex items-center gap-3 text-foreground text-sm">
+            <input
+              checked={sync.enabled}
+              className="accent-primary"
+              disabled={sync.endpoint === ""}
+              onChange={onEnabledChange}
+              type="checkbox"
+            />
+            Sync automatically
+          </label>
+          <label className="block space-y-1" htmlFor="sync-interval">
+            <span className="font-medium text-foreground text-sm">
+              Automatic interval
+            </span>
+            <select
+              className="h-8 w-full border border-input bg-transparent px-2 text-xs dark:bg-input/30"
+              id="sync-interval"
+              onChange={onIntervalChange}
+              value={sync.intervalMs}
+            >
+              {INTERVAL_CHOICES.map((choice) => (
+                <option key={choice.value} value={choice.value}>
+                  {choice.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <p className="text-muted-foreground text-xs">
+            Sync also runs when the app regains focus, shortly after a change,
+            and whenever you press Sync now. Offline changes are queued locally
+            and sent on the next successful run.
+          </p>
+        </div>
+      </SettingsCard>
+
+      <SettingsCard
+        actions={
+          <div className="flex items-center gap-2">
+            <SyncButton />
+            <Button
+              className="press-feedback"
+              onClick={onCheckServer}
+              size="sm"
+              variant="outline"
+            >
+              <RefreshCw aria-hidden className="size-3.5" />
+              Check server
+            </Button>
+          </div>
+        }
+        description="Counts come from the Worker's own database, so a number here is what the cloud holds, not what this device thinks it sent."
+        title="Status"
+      >
+        <dl className="grid gap-3 sm:grid-cols-2">
+          <div>
+            <dt className="text-caption text-muted-foreground">State</dt>
+            <dd className="font-medium text-foreground text-sm capitalize">
+              {sync.phase}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-caption text-muted-foreground">Last synced</dt>
+            <dd className="font-medium text-foreground text-sm">
+              {formatWhen(sync.lastSyncedAt)}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-caption text-muted-foreground">
+              Waiting to be sent
+            </dt>
+            <dd className="font-medium text-foreground text-sm">
+              {sync.pending} change{sync.pending === 1 ? "" : "s"}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-caption text-muted-foreground">
+              Existing data uploaded
+            </dt>
+            <dd className="font-medium text-foreground text-sm">
+              {formatWhen(migratedAt)}
+            </dd>
+          </div>
+          {sync.lastError ? (
+            <div className="sm:col-span-2">
+              <dt className="text-caption text-destructive">Last error</dt>
+              <dd className="text-destructive text-sm">{sync.lastError}</dd>
+            </div>
+          ) : null}
+        </dl>
+
+        {Object.keys(serverCounts).length > 0 ? (
+          <div className="mt-3 rounded-md border border-border/60 bg-muted/40 px-3 py-2">
+            <p className="font-medium text-foreground text-xs">In the cloud</p>
+            <ul className="mt-1 grid gap-1 sm:grid-cols-2">
+              {Object.entries(serverCounts).map(([table, count]) => (
+                <li
+                  className="flex items-center justify-between text-muted-foreground text-xs"
+                  key={table}
+                >
+                  <span className="font-mono">{table}</span>
+                  <span>{count}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+      </SettingsCard>
+
+      <SettingsCard
+        actions={
+          <Button
+            className="press-feedback"
+            disabled={busy || sync.endpoint === ""}
+            onClick={onUploadExisting}
+            size="sm"
+            variant="outline"
+          >
+            <Upload aria-hidden className="size-3.5" />
+            Send existing data
+          </Button>
+        }
+        description="The one-time migration: uploads everything this device already has, in batches, and then marks the cursors so the next automatic sync does not send it again. Safe to run more than once — the server applies it with the same last-write-wins rules as any other push."
+        title="Existing data"
+      >
+        <p className="text-muted-foreground text-xs">
+          Run this once per device after pointing it at a new Worker. Data
+          created by other devices is pulled in by the next sync, not by this
+          button.
+        </p>
+      </SettingsCard>
+    </div>
+  );
+}
