@@ -1,6 +1,6 @@
 import { Button } from "@cmis/ui/components/button";
 import { cn } from "@cmis/ui/lib/utils";
-import { ArrowLeft, Clock, Package, Trash2, X } from "lucide-react";
+import { ArrowLeft, Clock, Package, Pencil, Trash2, X } from "lucide-react";
 import { motion, useReducedMotion } from "motion/react";
 import {
   type RefObject,
@@ -10,7 +10,8 @@ import {
   useState,
 } from "react";
 import { daysUntilExpiry, expiryLabel } from "../domain/expiry";
-import type { InventoryItem } from "../types";
+import type { InventoryBatch, InventoryItem } from "../types";
+import { BatchEditModal } from "./batch-edit-modal";
 import { ItemEditPanel } from "./item-edit-panel";
 import { ItemHistoryPanel } from "./item-history-panel";
 
@@ -96,6 +97,69 @@ function BatchDeleteAction({
     >
       <Trash2 aria-hidden className="size-3" />
     </Button>
+  );
+}
+
+/**
+ * One batch's edit affordance, beside its delete. Module-level so its handler
+ * is stable and the batch list stays a layout rather than a handler list.
+ */
+function BatchEditAction({
+  batch,
+  onEdit,
+}: {
+  batch: InventoryBatch;
+  onEdit: (batch: InventoryBatch) => void;
+}) {
+  const handleClick = useCallback(() => onEdit(batch), [batch, onEdit]);
+  return (
+    <Button
+      aria-label={`Edit batch ${batch.batch}`}
+      className="press-feedback shrink-0"
+      onClick={handleClick}
+      size="icon-xs"
+      variant="ghost"
+    >
+      <Pencil aria-hidden className="size-3" />
+    </Button>
+  );
+}
+
+/**
+ * Hosts the edit modal for whichever row is being corrected. Module-level so
+ * the detail panel does not grow a branch (and an inline handler) just to keep
+ * a modal mounted.
+ */
+function BatchEditHost({
+  batch,
+  item,
+  onClose,
+  onSaved,
+}: {
+  batch: InventoryBatch | null;
+  item: InventoryItem;
+  onClose: () => void;
+  onSaved?: () => void;
+}) {
+  const handleOpenChange = useCallback(
+    (next: boolean) => {
+      if (!next) {
+        onClose();
+      }
+    },
+    [onClose]
+  );
+  if (!batch) {
+    return null;
+  }
+  return (
+    <BatchEditModal
+      batch={batch}
+      item={item}
+      onOpenChange={handleOpenChange}
+      onSaved={onSaved}
+      open
+    />
   );
 }
 
@@ -198,6 +262,12 @@ export function InventoryDetailContent({
   const stockInRef = useRef<HTMLButtonElement>(null);
   const reduceMotion = useReducedMotion();
   const [view, setView] = useState<InPlaceView>("detail");
+  // Which batch the edit modal is correcting; `null` keeps it closed. Owned
+  // here so every surface that lists batches gets the affordance without each
+  // page having to wire a modal of its own.
+  const [editingBatch, setEditingBatch] = useState<InventoryBatch | null>(null);
+
+  const closeBatchEdit = useCallback(() => setEditingBatch(null), []);
 
   useEffect(() => {
     if (autoFocus && item && stockInRef.current) {
@@ -479,18 +549,33 @@ export function InventoryDetailContent({
                       Qty {b.qty}
                     </span>
                     <span className="text-muted-foreground">{b.supplier}</span>
-                    {onDeleteBatch ? (
-                      <BatchDeleteAction
-                        batch={b.batch}
-                        onDelete={onDeleteBatch}
-                      />
-                    ) : null}
+                    {/* The row's actions travel together — the large gap is
+                     * between them and the data, never between the two buttons. */}
+                    <span className="flex shrink-0 items-center gap-0.5">
+                      <BatchEditAction batch={b} onEdit={setEditingBatch} />
+                      {onDeleteBatch ? (
+                        <BatchDeleteAction
+                          batch={b.batch}
+                          onDelete={onDeleteBatch}
+                        />
+                      ) : null}
+                    </span>
                   </li>
                 ))}
             </ul>
           )}
         </div>
       </div>
+
+      {/* One modal for whichever batch row asked to be corrected. Its write
+       * hook is created only while a row is open, so a surface that never edits
+       * a batch pays nothing for it. */}
+      <BatchEditHost
+        batch={editingBatch}
+        item={item}
+        onClose={closeBatchEdit}
+        onSaved={onItemUpdated}
+      />
     </div>
   );
 }
