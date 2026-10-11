@@ -35,6 +35,44 @@ const KEY_STEP = 40;
 const OPT_OUT = "[data-no-scrollbar], [data-scrollbar-ui]";
 const SCROLLABLE_OVERFLOW = new Set(["auto", "overlay", "scroll"]);
 
+/**
+ * A modal surface. Every app modal marks itself with `aria-modal`; the shared
+ * `DialogContent` marks itself with a `data-slot`. Both are detected because
+ * either alone would miss a whole family of dialogs.
+ */
+const MODAL_SELECTOR =
+  '[aria-modal="true"], [data-slot="dialog-content"], [data-slot="dialog-overlay"]';
+
+/**
+ * A portalled popup that sits above a modal: a term/category picker, a menu.
+ * Its own scrollers must keep an indicator even though it is rendered beside
+ * the dialog rather than inside it.
+ */
+const POPUP_SELECTOR =
+  '[data-slot="popover-popup"], [data-slot="dropdown-menu-content"]';
+
+/**
+ * The scrollers that may keep an indicator while an overlay is open.
+ *
+ * Native scrollbars are painted inside their own scroller and therefore sit
+ * behind whatever overlay is above them, so opening a modal hides the page's
+ * bars. Our indicator layer is one global fixed layer drawn above the modal
+ * (it has to be, or an in-modal scroller could not show its bar), so without
+ * this filter every background bar would float on top of the dialog. Returning
+ * an empty list means "no overlay is open — describe everything", which keeps
+ * the ordinary page behavior untouched.
+ */
+function foregroundRoots(): HTMLElement[] {
+  const modals = Array.from(
+    document.querySelectorAll<HTMLElement>(MODAL_SELECTOR)
+  );
+  if (modals.length === 0) {
+    return [];
+  }
+  const popups = document.querySelectorAll<HTMLElement>(POPUP_SELECTOR);
+  return [...modals, ...popups];
+}
+
 const assignedIds = new WeakMap<Element, string>();
 let idSequence = 0;
 
@@ -74,9 +112,16 @@ function targetId(element: HTMLElement): string {
 
 /** The layout reads are cheap and run only after mutations settle. */
 function findScrollTargets(): ScrollTarget[] {
+  const roots = foregroundRoots();
   const found: ScrollTarget[] = [];
   for (const element of document.querySelectorAll<HTMLElement>("*")) {
     if (element.closest(OPT_OUT) !== null) {
+      continue;
+    }
+    // While an overlay is open, only scrollers inside it (or inside one of its
+    // portalled popups) keep a bar — the background's native-equivalent bars
+    // are behind the overlay and must not paint over it.
+    if (roots.length > 0 && !roots.some((root) => root.contains(element))) {
       continue;
     }
     const axes = scrollAxes(element);
