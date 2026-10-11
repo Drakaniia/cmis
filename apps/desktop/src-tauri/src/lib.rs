@@ -110,6 +110,12 @@ fn db_migrations() -> Vec<Migration> {
             sql: include_str!("../migrations/0013_vocabulary_terms.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 14,
+            description: "sync_metadata",
+            sql: include_str!("../migrations/0014_sync_metadata.sql"),
+            kind: MigrationKind::Up,
+        },
     ]
 }
 
