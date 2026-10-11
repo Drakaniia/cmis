@@ -66,3 +66,6 @@ temp
 # Python bytecode (scripts/inventory_vocabulary.py)
 __pycache__/
 *.pyc
+
+# Wrangler
+.wrangler
