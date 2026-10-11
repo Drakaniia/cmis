@@ -12,6 +12,10 @@ vi.mock("../hooks/use-item-update", () => ({
   useItemUpdateMutation: () => ({ isPending: false, mutate: vi.fn() }),
 }));
 vi.mock("../hooks/use-categories", () => import("@/test/categories-mock"));
+// The batch edit modal owns a write hook; the panel's job is only to open it.
+vi.mock("../hooks/use-update-batch", () => ({
+  useUpdateBatchMutation: () => ({ isPending: false, mutate: vi.fn() }),
+}));
 vi.mock("@cmis/ui/components/popover", () => import("@/test/popover-shim"));
 vi.mock("sonner", () => ({
   toast: { error: vi.fn(), info: vi.fn(), success: vi.fn() },
@@ -153,5 +157,25 @@ describe("InventoryDetailContent", () => {
     );
 
     expect(screen.getByText("Batches (FEFO)")).toBeInTheDocument();
+  });
+
+  it("opens the batch edit modal from a batch row's edit affordance", async () => {
+    const user = userEvent.setup();
+    render(
+      <InventoryDetailContent
+        item={item()}
+        onStockIn={vi.fn()}
+        onStockOut={vi.fn()}
+      />
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: "Edit batch LOT-8842" })
+    );
+
+    const dialog = await screen.findByRole("dialog", { name: /Edit batch/i });
+    expect(dialog).toBeInTheDocument();
+    // The stored lot is prefilled, ready to correct.
+    expect(screen.getByDisplayValue("LOT-8842")).toBeInTheDocument();
   });
 });
