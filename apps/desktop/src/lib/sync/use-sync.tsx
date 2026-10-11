@@ -39,11 +39,13 @@ import {
   readCursors,
   writePullCursors,
 } from "./offline-queue";
+import { countRows } from "./scan";
 import { registerSyncScheduler, scheduleSync } from "./schedule";
 import { SYNC_TABLE_NAMES } from "./schema";
 import {
   fetchSyncStatus,
   pullRemoteChanges,
+  pushLocalChanges,
   runSync,
   SyncFailure,
   type SyncFailureKind,
@@ -71,6 +73,10 @@ export interface SyncContextValue extends SyncSettings {
   /** Rows plus deletes waiting to be sent. */
   pending: number;
   phase: SyncPhase;
+  /** Pull-only: fetch cloud rows, never push. Pending local changes are kept. */
+  pullNow: () => Promise<SyncRunResult | null>;
+  /** Push-only: send local queue, never pull. */
+  pushNow: () => Promise<SyncRunResult | null>;
   /** Re-reads `/sync/status`. `null` when there is no endpoint yet. */
   refreshServerStatus: () => Promise<void>;
   /**
@@ -200,6 +206,112 @@ async function runPullOnlyPass(input: {
     serverTime: pull.serverTime,
     skipped: 0,
   };
+}
+
+/**
+ * Manual pull: same as the first-connection pass but without resetting cursors,
+ * so it resumes instead of re-fetching everything. Pending local changes are
+ * left queued — apply is last-write-wins.
+ */
+async function runPullPass(input: {
+  current: SyncSettings;
+  db: SyncDatabase;
+  queryClient: QueryClient;
+}): Promise<SyncRunResult> {
+  const { current, db, queryClient } = input;
+  const deviceId = await ensureDeviceId(db);
+  const pull = await pullRemoteChanges({
+    db,
+    deviceId,
+    endpoint: current.endpoint,
+    fetchImpl: globalThis.fetch.bind(globalThis),
+    limit: current.queueMaxSize,
+    token: current.token || undefined,
+  });
+
+  if (pull.appliedRows + pull.appliedDeletes > 0) {
+    queryClient.invalidateQueries();
+    const { notifyRequestsChanged } = await import(
+      "@/features/requests/persistence"
+    );
+    notifyRequestsChanged();
+  }
+  if (pull.conflicts.length > 0) {
+    await auditConflicts(db, pull.conflicts);
+  }
+  return {
+    appliedDeletes: pull.appliedDeletes,
+    appliedRows: pull.appliedRows,
+    conflicts: pull.conflicts,
+    moreToPush: false,
+    pushedDeletes: 0,
+    pushedRows: 0,
+    serverTime: pull.serverTime,
+    skipped: 0,
+  };
+}
+
+/** Manual push: send the local queue, never pull. */
+async function runPushPass(input: {
+  current: SyncSettings;
+  db: SyncDatabase;
+}): Promise<SyncRunResult> {
+  const { current, db } = input;
+  const deviceId = await ensureDeviceId(db);
+  const push = await pushLocalChanges({
+    db,
+    deviceId,
+    endpoint: current.endpoint,
+    fetchImpl: globalThis.fetch.bind(globalThis),
+    limit: current.queueMaxSize,
+    token: current.token || undefined,
+  });
+  if (push.response.conflicts.length > 0) {
+    await auditConflicts(db, push.response.conflicts);
+  }
+  return {
+    appliedDeletes: 0,
+    appliedRows: 0,
+    conflicts: push.response.conflicts,
+    moreToPush: push.moreToPush,
+    pushedDeletes: push.pushedDeletes,
+    pushedRows: push.pushedRows,
+    serverTime: push.response.serverTime,
+    // biome-ignore lint/suspicious/noUnnecessaryConditions: older Workers may omit the field
+    skipped: Object.values(push.response.skipped ?? {}).reduce(
+      (total, value) => total + (value ?? 0),
+      0
+    ),
+  };
+}
+
+/** True when every synced table is empty. Missing tables → not empty. */
+async function isLocalEmpty(db: SyncDatabase): Promise<boolean> {
+  try {
+    for (const table of SYNC_TABLE_NAMES) {
+      // biome-ignore lint/performance/noAwaitInLoops: eight fixed tables, sequential counts
+      if ((await countRows(db, table)) > 0) {
+        return false;
+      }
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** True when the cloud holds any rows. Unreachable server → false. */
+async function serverHasData(current: SyncSettings): Promise<boolean> {
+  try {
+    const status = await fetchSyncStatus({
+      endpoint: current.endpoint,
+      fetchImpl: globalThis.fetch.bind(globalThis),
+      token: current.token || undefined,
+    });
+    return Object.values(status.counts).some((count) => count > 0);
+  } catch {
+    return false;
+  }
 }
 
 /** The in-flight guard, as an object so one ref covers the whole run state. */
@@ -390,6 +502,14 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
           setPhase("disabled");
           return null;
         }
+        // Empty-device guard: a fresh device pushing blank state is what
+        // produced the phantom "N changes waiting / conflicts" on first sync.
+        // If local is empty but the cloud has rows, pull instead of pushing.
+        if ((await isLocalEmpty(db)) && (await serverHasData(current))) {
+          const result = await runPullPass({ current, db, queryClient });
+          await reportSyncSuccess(result, silent, handlers);
+          return result;
+        }
         const result = await runEnginePass({ current, db, queryClient });
         await reportSyncSuccess(result, silent, handlers);
         return result;
@@ -401,6 +521,65 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
       }
     },
     [openDb, queryClient, refreshPending, refreshServerStatus, setSettingsBoth]
+  );
+
+  /**
+   * Builds a manual one-direction run (pull or push) on the shared
+   * guard-and-report shell. One run at a time via `runningRef`.
+   */
+  const runManual = useCallback(
+    async (
+      run: (input: {
+        current: SyncSettings;
+        db: SyncDatabase;
+        queryClient: QueryClient;
+      }) => Promise<SyncRunResult>
+    ): Promise<SyncRunResult | null> => {
+      const { current } = settingsRef;
+      if (!(current?.enabled && current.endpoint)) {
+        return null;
+      }
+      if (runningRef.current.running) {
+        return null;
+      }
+      if (isOffline()) {
+        setPhase("offline");
+        return null;
+      }
+      runningRef.current.running = true;
+      setPhase("syncing");
+      lastRunAtRef.current = Date.now();
+      const handlers = {
+        refreshPending,
+        refreshServerStatus,
+        setLastResult,
+        setPhase,
+        setSettingsBoth,
+      };
+      try {
+        const db = await openDb();
+        if (!db) {
+          setPhase("disabled");
+          return null;
+        }
+        const result = await run({ current, db, queryClient });
+        await reportSyncSuccess(result, false, handlers);
+        return result;
+      } catch (error) {
+        await reportSyncFailure(error, false, handlers);
+        return null;
+      } finally {
+        runningRef.current.running = false;
+      }
+    },
+    [openDb, queryClient, refreshPending, refreshServerStatus, setSettingsBoth]
+  );
+
+  const pullNow = useCallback(() => runManual(runPullPass), [runManual]);
+
+  const pushNow = useCallback(
+    () => runManual(({ current, db }) => runPushPass({ current, db })),
+    [runManual]
   );
 
   /**
@@ -575,6 +754,55 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
     };
   }, [syncNow]);
 
+  // Sync on app close: push pending changes when window close is requested.
+  // This uses Tauri's window close event which allows async operations to complete.
+  useEffect(() => {
+    if (!(settings?.enabled && settings.endpoint)) {
+      return;
+    }
+    let cancelled = false;
+    let unlisten: (() => void) | undefined;
+
+    (async () => {
+      try {
+        const { listen } = await import("@tauri-apps/api/event");
+        const off = await listen("tauri://close-requested", async () => {
+          if (cancelled) {
+            return;
+          }
+          // Check pending count at close time, not from stale closure
+          const db = await openDb();
+          if (!db) {
+            return;
+          }
+          try {
+            const cursors = await readCursors(db);
+            const counts = await pendingChangeCount(db, cursors.push);
+            if (counts.rows + counts.deletes === 0) {
+              return;
+            }
+            // Push pending changes before allowing close
+            await pushNow().catch(() => undefined);
+          } catch {
+            // If checking fails, just allow close
+          }
+        });
+        if (cancelled) {
+          off();
+        } else {
+          unlisten = off;
+        }
+      } catch {
+        // browser preview — no Tauri events
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      unlisten?.();
+    };
+  }, [openDb, pushNow, settings?.enabled, settings?.endpoint]);
+
   // Queue depth, so the indicator can say "3 waiting" without a database poll on
   // every render.
   useEffect(() => {
@@ -599,6 +827,8 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
       lastResult,
       pending,
       phase,
+      pullNow,
+      pushNow,
       refreshServerStatus,
       resolved,
       serverStatus,
@@ -611,6 +841,8 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
       lastResult,
       pending,
       phase,
+      pullNow,
+      pushNow,
       refreshServerStatus,
       resolved,
       serverStatus,

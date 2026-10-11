@@ -23,7 +23,7 @@ import { ensureDeviceId } from "@/lib/sync/offline-queue";
 import { DEFAULT_SYNC_INTERVAL_MS } from "@/lib/sync/sync-settings";
 import type { SyncDatabase } from "@/lib/sync/types";
 import { useSync } from "@/lib/sync/use-sync";
-import { SyncButton } from "./sync-button";
+import { SyncButtons } from "./sync-button";
 
 const INTERVAL_CHOICES = [
   { label: "Every 15 seconds", value: 15_000 },
@@ -274,7 +274,8 @@ export function SyncSettingsPanel({ className }: { className?: string }) {
           </label>
           <p className="text-muted-foreground text-xs">
             Sync also runs when the app regains focus, shortly after a change,
-            and whenever you press Sync now. Offline changes are queued locally
+            and whenever you press Sync now. Push sends only, Pull downloads
+            only (local edits stay queued). Offline changes are queued locally
             and sent on the next successful run.
           </p>
         </div>
@@ -283,7 +284,7 @@ export function SyncSettingsPanel({ className }: { className?: string }) {
       <SettingsCard
         actions={
           <div className="flex items-center gap-2">
-            <SyncButton />
+            <SyncButtons />
             <Button
               className="press-feedback"
               onClick={onCheckServer}
