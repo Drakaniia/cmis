@@ -1,7 +1,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-
+import { useExpiryThresholds } from "@/features/admin/settings/expiry-thresholds";
 import { useDensity } from "@/hooks/use-density";
 import { insertNewItemWithBatch } from "../data/create-item-with-batch";
 import { buildMinimapBuckets } from "../domain/expiry";
@@ -101,6 +101,7 @@ export function ExpiryPage({
   onOpenItemInStockManagement?: (itemId: string) => void;
 } = {}) {
   const { density } = useDensity();
+  const thresholds = useExpiryThresholds();
   const isWideEnough = useMediaQuery900();
   const { data: itemsData, isSuccess } = useInventoryItems();
   const items = itemsData ?? [];
@@ -124,7 +125,7 @@ export function ExpiryPage({
     setSearch,
     setSort,
     setStatus,
-  } = useExpiryFilters(items, activeMonth, handleClearMonth);
+  } = useExpiryFilters(items, activeMonth, handleClearMonth, thresholds);
 
   // Wrap clearFilters to also clear minimap month
   const clearFilters = useCallback(() => {
