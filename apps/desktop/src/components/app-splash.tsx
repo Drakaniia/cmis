@@ -1,5 +1,6 @@
 import { motion, useReducedMotion } from "motion/react";
 import { Loader } from "@/components/motion/loader";
+import { useAppName } from "@/lib/app-name";
 
 interface AppSplashProps {
   visible: boolean;
@@ -25,6 +26,7 @@ function stage<T>(
 
 export function AppSplash({ visible }: AppSplashProps) {
   const reduceMotion = useReducedMotion() ?? false;
+  const appName = useAppName();
 
   return (
     <motion.div
@@ -34,7 +36,7 @@ export function AppSplash({ visible }: AppSplashProps) {
           : { opacity: 0, pointerEvents: "none" as const }
       }
       aria-hidden={!visible}
-      aria-label="Loading CMIS"
+      aria-label={`Loading ${appName}`}
       className="fixed inset-0 z-[9999] flex select-none flex-col items-center justify-center overflow-hidden bg-background"
       data-testid="app-splash"
       initial={false}
@@ -122,7 +124,7 @@ export function AppSplash({ visible }: AppSplashProps) {
           }
         >
           <img
-            alt="CMIS logo"
+            alt={`${appName} logo`}
             className="h-full w-full object-contain dark:hidden"
             draggable={false}
             height={72}
@@ -130,7 +132,7 @@ export function AppSplash({ visible }: AppSplashProps) {
             width={72}
           />
           <img
-            alt="CMIS logo"
+            alt={`${appName} logo`}
             className="hidden h-full w-full object-contain dark:block"
             draggable={false}
             height={72}
@@ -150,7 +152,7 @@ export function AppSplash({ visible }: AppSplashProps) {
               lineHeight: 1.05,
             }}
           >
-            CMIS
+            {appName}
           </h1>
           <p
             className="max-w-[28ch] text-balance text-muted-foreground"

@@ -30,6 +30,7 @@ import { useHelpDialogs } from "@/features/help/help-dialogs-context";
 import { useQuickDeductDialog } from "@/features/inventory/quick-deduct-dialog-context";
 import { useNewRequestDialog } from "@/features/requests/new-request-dialog-context";
 import { useUpdaterOptional } from "@/features/updater/use-updater";
+import { useAppName } from "@/lib/app-name";
 import { isTauriRuntime, openExternal } from "@/lib/open-external";
 import { acceptsTypedText } from "@/lib/typed-text";
 
@@ -774,6 +775,10 @@ function MenuItemRow({
   dispatchById: (id: string) => Promise<void>;
   item: MenuItemDef;
 }) {
+  const appName = useAppName();
+  // The menu tree is a static const; the one brand label resolves at render
+  // so a rename applies live with no reload.
+  const label = item.id === "help.about" ? `About ${appName}` : item.label;
   const handleSelect = useCallback(() => {
     dispatchById(item.id).catch(() => undefined);
   }, [dispatchById, item.id]);
@@ -800,7 +805,7 @@ function MenuItemRow({
       onClick={handleSelect}
       variant={item.variant}
     >
-      <span className="flex-1">{item.label}</span>
+      <span className="flex-1">{label}</span>
       {item.accelerator ? (
         <MenubarShortcut>{item.accelerator}</MenubarShortcut>
       ) : null}

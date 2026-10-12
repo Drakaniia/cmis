@@ -24,6 +24,7 @@ import type * as React from "react";
 import { useCallback, useState } from "react";
 
 import { useUpdaterOptional } from "@/features/updater/use-updater";
+import { useAppName } from "@/lib/app-name";
 import { chromeSpring } from "@/lib/motion";
 
 interface NavItem {
@@ -285,6 +286,7 @@ export function AppSidebar({
   const [brandHovered, setBrandHovered] = useState(false);
   const reduceMotion = useReducedMotion();
   const updater = useUpdaterOptional();
+  const appName = useAppName();
   const hasUpdate =
     updater?.status === "available" ||
     updater?.status === "ready" ||
@@ -359,14 +361,14 @@ export function AppSidebar({
             {/* Apple card style — same as splash (dark-theme apple style) — bg-card + transparent logo */}
             <span className="flex size-7 shrink-0 items-center justify-center overflow-hidden rounded-[0.5rem] border bg-card p-[3px] shadow-sm">
               <img
-                alt="CMIS logo"
+                alt={`${appName} logo`}
                 className="size-[22px] object-contain dark:hidden"
                 height={22}
                 src="/cmis-dark-transparent.png"
                 width={22}
               />
               <img
-                alt="CMIS logo"
+                alt={`${appName} logo`}
                 className="hidden size-[22px] object-contain dark:block"
                 height={22}
                 src="/cmis-white-transparent.png"
@@ -404,7 +406,7 @@ export function AppSidebar({
           style={{ paddingLeft: BRAND_LABEL_LEFT, width: BRAND_LABEL_WIDTH }}
         >
           <span className="truncate font-semibold text-foreground text-xs leading-tight">
-            CMIS
+            {appName}
           </span>
           <span className="truncate text-[10.5px] text-muted-foreground leading-tight">
             BukSU Clinic
