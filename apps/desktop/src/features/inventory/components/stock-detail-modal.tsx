@@ -3,6 +3,7 @@ import { cn } from "@cmis/ui/lib/utils";
 import { X } from "lucide-react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useNewRequestDialog } from "@/features/requests/new-request-dialog-context";
 import {
   materializeEnter,
   materializeEnterReduced,
@@ -129,6 +130,19 @@ export function StockDetailModal({
   const handleClose = useCallback(() => {
     onOpenChange(false);
   }, [onOpenChange]);
+
+  // Ctrl+K lands here with no page behind it, so the request entry point lives
+  // on the modal itself: close this, then open New Request pre-filled with the
+  // shown item for instant feedback (§1 — no waiting on the exit animation).
+  const { openNewRequest } = useNewRequestDialog();
+  const handleNewRequest = useCallback(() => {
+    if (!item) {
+      return;
+    }
+    const medicine = item.displayName;
+    onOpenChange(false);
+    requestAnimationFrame(() => openNewRequest(medicine));
+  }, [item, onOpenChange, openNewRequest]);
 
   /** Edit's Cancel/Save both land back on the detail view (§8.3). */
   const handleBackToDetail = useCallback(() => setView("detail"), []);
@@ -257,6 +271,14 @@ export function StockDetailModal({
                 </h2>
                 <div className="flex items-center gap-1.5">
                   <ContextualBar actions={actions} />
+                  <Button
+                    className="press-feedback"
+                    onClick={handleNewRequest}
+                    size="sm"
+                    variant="secondary"
+                  >
+                    New request for this item
+                  </Button>
                   <Button
                     aria-label="Close"
                     className="press-feedback shrink-0"
