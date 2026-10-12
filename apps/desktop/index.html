@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta content="width=device-width, initial-scale=1.0" name="viewport">
     <meta content="dark light" name="color-scheme">
-    <title>cmis</title>
+    <title>CMIS</title>
     <!-- Theme sync — must run before first paint so #splash doesn't blink light→dark.
          Mirrors next-themes (storageKey vite-ui-theme, default dark). -->
     <script>
@@ -360,6 +360,26 @@
       <div id="splash-foot">Preparing database &amp; inventory</div>
     </div>
     <div id="app"></div>
+    <!-- First-paint branding: a rename applies on next launch before React
+         mounts (runtime renames need no reload — see lib/app-name.ts). -->
+    <script>
+    "use strict";
+    (() => {
+      try {
+        const name = (localStorage.getItem("cmis:app-name") || "").trim();
+        if (!name) {
+          return;
+        }
+        document.title = name;
+        const heading = document.querySelector("#splash h1");
+        if (heading) {
+          heading.textContent = name;
+        }
+      } catch {
+        // storage unavailable — static CMIS fallback stands
+      }
+    })();
+    </script>
     <script src="/src/main.tsx" type="module"></script>
   </body>
 </html>
