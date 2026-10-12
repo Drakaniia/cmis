@@ -1,10 +1,16 @@
 import { act, renderHook } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
-
+import { beforeEach, describe, expect, it } from "vitest";
+import {
+  __resetExpiryThresholdsForTests,
+  getExpiryThresholds,
+} from "../expiry-thresholds";
 import type { SettingsState } from "../types";
 import { DEFAULT_SETTINGS, useSettings } from "./use-settings";
 
 describe("useSettings", () => {
+  beforeEach(() => {
+    __resetExpiryThresholdsForTests();
+  });
   it("starts with a fully populated default state (no undefined sections)", () => {
     const { result } = renderHook(() => useSettings());
 
@@ -54,5 +60,17 @@ describe("useSettings", () => {
       (row) => row.id === "inv-001"
     );
     expect(updated?.override).toBe(99);
+  });
+
+  it("setAlerts persists orange/red thresholds to the shared store", () => {
+    const { result } = renderHook(() => useSettings());
+
+    act(() => {
+      result.current.setAlerts({ orangeDays: 45, redDays: 10 });
+    });
+
+    expect(result.current.state.alerts.orangeDays).toBe(45);
+    expect(result.current.state.alerts.redDays).toBe(10);
+    expect(getExpiryThresholds()).toEqual({ orangeDays: 45, redDays: 10 });
   });
 });
