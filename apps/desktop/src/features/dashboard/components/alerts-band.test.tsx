@@ -98,3 +98,42 @@ it("holds the height with skeletons instead of claiming All clear while loading"
     expect(area.className).toMatch(RESERVED_HEIGHT);
   }
 });
+
+function expiryDot(container: HTMLElement): string {
+  const dot = container.querySelector(
+    '[data-slot="alerts-list"] li span[aria-hidden]'
+  );
+  if (!dot) {
+    throw new Error("expiry dot not found");
+  }
+  return dot.className;
+}
+
+it("colours the expiry dot by the red/orange thresholds", () => {
+  const { container } = render(
+    <AlertsBand expiry={[EXPIRY_ALERT]} links={LINKS} lowStock={[]} />
+  );
+  // 3 days <= default red 7 → critical red.
+  expect(expiryDot(container)).toMatch(/bg-destructive/);
+
+  const { container: warned } = render(
+    <AlertsBand
+      expiry={[EXPIRY_ALERT]}
+      links={LINKS}
+      lowStock={[]}
+      orangeDays={30}
+      redDays={2}
+    />
+  );
+  // 3 days > red 2 but <= orange 30 → warning orange, and the header
+  // urgent count (red only) drops to zero.
+  expect(expiryDot(warned)).toMatch(/bg-\[var\(--warning\)\]/);
+  const warnedHeader = warned
+    .querySelector('[data-icon="expiring"]')
+    ?.parentElement?.querySelector(":scope > span.rounded-full");
+  expect(warnedHeader).toBeNull();
+  const defaultHeader = container
+    .querySelector('[data-icon="expiring"]')
+    ?.parentElement?.querySelector(":scope > span.rounded-full");
+  expect(defaultHeader?.textContent).toBe("1");
+});
