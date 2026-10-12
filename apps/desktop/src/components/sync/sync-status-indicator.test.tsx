@@ -158,6 +158,34 @@ describe("the manual sync button", () => {
     const button = await screen.findByRole("button", { name: /Sync now/ });
     expect(button).toBeEnabled();
   });
+
+  it("recounts what is waiting after a failed run, so the number is not stale", async () => {
+    const user = userEvent.setup();
+    render(
+      <Wrapper>
+        <SyncStatusIndicator />
+        <SyncButton />
+      </Wrapper>
+    );
+    // The mount counts an empty database, so the pill starts at "Ready".
+    expect(await screen.findByText("Ready")).toBeInTheDocument();
+
+    // A change made after that count. A run that failed before reaching the pull
+    // used to leave "waiting" frozen at the last successful count, so the panel
+    // kept reporting a backlog that had already been sent.
+    harness.current.db
+      .prepare(
+        `INSERT INTO inventory_items (id, sku, name, stock_on_hand, qty, created_at, updated_at)
+         VALUES ('item-1', 'SKU-1', 'Paracetamol', 10, 10, ?, ?)`
+      )
+      .run(AFTER_SEEDS, AFTER_SEEDS);
+
+    await user.click(screen.getByRole("button", { name: /Sync now/ }));
+
+    // The stubbed fetch rejects, so the run fails offline — and the count is
+    // re-read on the way out instead of being left as it was.
+    expect(await screen.findByText("Offline · 1 waiting")).toBeInTheDocument();
+  });
 });
 
 describe("the settings panel", () => {

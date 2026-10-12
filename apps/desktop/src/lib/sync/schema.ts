@@ -60,8 +60,20 @@ export interface SyncTableSpec {
    * A pulled child whose parent is not here yet is skipped rather than inserted
    * into a constraint violation — the next pass brings it once the parent has
    * landed.
+   *
+   * `optional` marks a *nullable* link: a column the schema declares with
+   * `ON DELETE SET NULL` rather than a child's `NOT NULL` parent. That is
+   * deliberately a different case, because the row is the record and the link is
+   * only a convenience, so a missing parent drops the link instead of
+   * withholding the row. It is also what the database itself does when the
+   * parent is deleted, so both ends agree on what a link with no target means.
    */
-  parent: { column: string; table: SyncTableName } | null;
+  parent: {
+    column: string;
+    /** `true` when a missing parent drops the link instead of the row. */
+    optional?: boolean;
+    table: SyncTableName;
+  } | null;
   /** JS mirror of `rowKeySql`, for tests and conflict reporting. */
   rowKey: (row: SyncRow) => string;
   /** Key expression for a SQL statement, over `prefix + column`. */
@@ -97,7 +109,10 @@ function join(parts: (number | string | null)[]): string {
  * references `inventory_items(id)`, so pushing requests onto an empty
  * database first fails the FK check on D1. The `parent` field alone does
  * not capture this — it only links content-keyed children — hence the
- * explicit position.
+ * explicit position. `parent` is declared as well, as an *optional* link, so
+ * that a pull whose item has not arrived (a page boundary, or an item this
+ * device deleted) lands the request with a NULL link instead of aborting the
+ * whole run on a foreign-key violation.
  */
 export const SYNC_TABLES: SyncTableSpec[] = [
   {
@@ -139,7 +154,9 @@ export const SYNC_TABLES: SyncTableSpec[] = [
       firstStamp(row.updated_at, row.archived_at, row.submitted_at),
     keyColumn: "id",
     name: "requests",
-    parent: null,
+    // A nullable link, not a child's parent: `0009_request_item_id.sql` declares
+    // it `ON DELETE SET NULL`. A request must land even when its item cannot.
+    parent: { column: "item_id", optional: true, table: "inventory_items" },
     rowKey: (row) => text(row.id),
     rowKeySql: (prefix = "") => `${prefix}id`,
     // A request is re-stamped by migration 0014's triggers on every save; the

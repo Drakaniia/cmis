@@ -233,6 +233,90 @@ describe("the client", () => {
     expect(insertsFor(harness.db, "request_notes")).toHaveLength(0);
   });
 
+  it("lands a request whose linked item is not on this device", async () => {
+    // The regression this pins: `requests.item_id` is a *nullable* foreign key,
+    // and applying a request whose item was deleted here (or has not arrived
+    // yet) threw `787 FOREIGN KEY constraint failed` — one row aborting the
+    // whole run, leaving the operator with a permanent error and a queue that
+    // never drained. The link is what gets dropped, because the row is the
+    // record; this is exactly what the schema's own `ON DELETE SET NULL` does.
+    const response: SyncPullResponse = {
+      deletedCursor: "",
+      hasMore: false,
+      ok: true,
+      serverTime: AT,
+      tables: [
+        {
+          cursor: AT,
+          rows: [
+            {
+              category: "Analgesic",
+              id: "req-1",
+              item_id: "item-absent",
+              medicine: "Paracetamol",
+              qty: 2,
+              reason: "headache",
+              requestor_email: "nurse@clinic.test",
+              requestor_id: "n-1",
+              requestor_name: "Nurse",
+              status: "pending",
+              submitted_at: AT,
+              unit: "tablet",
+              updated_at: AT,
+            },
+          ],
+          table: "requests",
+        },
+      ],
+    };
+
+    const outcome = await applyPullResponse(harness.sync, response);
+
+    expect(outcome.appliedRows).toBe(1);
+    expect(outcome.skipped).toBe(0);
+    const [request] = insertsFor(harness.db, "requests");
+    expect(request.id).toBe("req-1");
+    expect(request.item_id).toBeNull();
+  });
+
+  it("keeps the item link when the item is on this device", async () => {
+    insertItem(harness.db, "item-1");
+    const response: SyncPullResponse = {
+      deletedCursor: "",
+      hasMore: false,
+      ok: true,
+      serverTime: AT,
+      tables: [
+        {
+          cursor: AT,
+          rows: [
+            {
+              category: "Analgesic",
+              id: "req-1",
+              item_id: "item-1",
+              medicine: "Paracetamol",
+              qty: 2,
+              reason: "headache",
+              requestor_email: "nurse@clinic.test",
+              requestor_id: "n-1",
+              requestor_name: "Nurse",
+              status: "pending",
+              submitted_at: AT,
+              unit: "tablet",
+              updated_at: AT,
+            },
+          ],
+          table: "requests",
+        },
+      ],
+    };
+
+    await applyPullResponse(harness.sync, response);
+
+    const [request] = insertsFor(harness.db, "requests");
+    expect(request.item_id).toBe("item-1");
+  });
+
   it("runs push before pull, so its own edit is decided once against the newest state", async () => {
     insertItem(harness.db);
     const order: string[] = [];

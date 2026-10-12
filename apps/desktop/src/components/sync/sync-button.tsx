@@ -58,6 +58,25 @@ function useBusy(): [boolean, (busy: boolean) => void] {
   return [busy, setBusy];
 }
 
+/**
+ * Why a trigger cannot run, for its tooltip.
+ *
+ * Two different states grey all three buttons out — no saved endpoint, and a run
+ * already in flight — and a title that only describes the action leaves the
+ * operator guessing which one they are looking at. A greyed-out Pull is the one
+ * that reads as broken, because it is the button you reach for when a sync is
+ * already going badly.
+ */
+function disabledReason(configured: boolean, spinning: boolean): string | null {
+  if (!configured) {
+    return "Set a sync endpoint in Settings → Sync to enable this";
+  }
+  if (spinning) {
+    return "A sync is already running — this unlocks when it finishes";
+  }
+  return null;
+}
+
 export function SyncButton({
   className,
   size = "sm",
@@ -101,9 +120,8 @@ export function SyncButton({
       onClick={onClick}
       size={size}
       title={
-        configured
-          ? "Push local changes, then pull cloud changes"
-          : "Set a sync endpoint in Settings → Sync to enable this"
+        disabledReason(configured, spinning) ??
+        "Push local changes, then pull cloud changes"
       }
       variant={variant}
     >
@@ -157,9 +175,8 @@ export function PushButton({
       onClick={onClick}
       size={size}
       title={
-        configured
-          ? "Send local changes to the cloud (no download)"
-          : "Set a sync endpoint in Settings → Sync to enable this"
+        disabledReason(configured, spinning) ??
+        "Send local changes to the cloud (no download)"
       }
       variant={variant}
     >
@@ -210,9 +227,8 @@ export function PullButton({
       onClick={onClick}
       size={size}
       title={
-        configured
-          ? "Download cloud changes (local edits stay queued)"
-          : "Set a sync endpoint in Settings → Sync to enable this"
+        disabledReason(configured, spinning) ??
+        "Download cloud changes (local edits stay queued)"
       }
       variant={variant}
     >

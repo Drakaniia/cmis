@@ -394,6 +394,12 @@ async function reportSyncFailure(
   handlers.setSettingsBoth(
     await saveSyncSettings({ lastError: failure.message })
   );
+  // A failed run still moved something: the push half may have advanced its
+  // cursors before the pull half threw, and the pull may have adopted rows
+  // before the row that failed. Without this the queue depth stays frozen at
+  // whatever the last successful run counted, so "46 waiting" outlives the
+  // backlog it described and sends the operator after changes that are gone.
+  await handlers.refreshPending();
   if (silent) {
     return;
   }

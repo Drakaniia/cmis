@@ -15,7 +15,7 @@
  */
 
 import { decideIncomingDelete, decideIncomingRow } from "./conflict-resolver";
-import { isSafeIdentifier, syncTableSpec } from "./schema";
+import { isSafeIdentifier, type SyncTableSpec, syncTableSpec } from "./schema";
 import type {
   SyncApplyOutcome,
   SyncDatabase,
@@ -167,6 +167,56 @@ async function writeRow(
   );
 }
 
+/** A copy of `row` without `column`, so a write can leave a column unset. */
+function withoutColumn(row: SyncRow, column: string): SyncRow {
+  const { [column]: _dropped, ...rest } = row;
+  return rest;
+}
+
+/**
+ * What to do with a row, given the foreign key it names.
+ *
+ * A row whose link is not here could not be written as-is — SQLite answers
+ * `787 FOREIGN KEY constraint failed`, and that one row would abort the whole
+ * run. Parents are applied first within one pull, so this is only reached when
+ * the link is genuinely absent: a delete this device made, or a page boundary.
+ *
+ * What happens then depends on what the column is. A `NOT NULL` child parent is
+ * skipped, and the overlap window in `scan.ts` brings the row back once its
+ * parent has landed. A nullable link (`optional`) is dropped instead, because
+ * the row is the record and withholding it would lose a request the clinic
+ * needs — and dropping it is what the schema's own `ON DELETE SET NULL` does.
+ */
+async function resolveParentLink(
+  db: SyncDatabase,
+  spec: SyncTableSpec,
+  row: SyncRow
+): Promise<{ kind: "skip" } | { kind: "write"; row: SyncRow }> {
+  const { parent } = spec;
+  if (!parent) {
+    return { kind: "write", row };
+  }
+  const parentKey = row[parent.column];
+  const linked =
+    parentKey !== null && parentKey !== undefined && parentKey !== "";
+  if (!linked) {
+    return parent.optional ? { kind: "write", row } : { kind: "skip" };
+  }
+  const found = await db.select<{ present: number }[]>(
+    `SELECT 1 AS present FROM ${parent.table} WHERE id = ? LIMIT 1`,
+    [parentKey]
+  );
+  if (found.length > 0) {
+    return { kind: "write", row };
+  }
+  // Leaving the column out of the write resolves it to NULL locally, and the
+  // upsert only touches named columns — so an existing, valid local link is
+  // kept rather than being blanked by an incoming row that cannot resolve.
+  return parent.optional
+    ? { kind: "write", row: withoutColumn(row, parent.column) }
+    : { kind: "skip" };
+}
+
 /**
  * Applies incoming rows, one guarded write each.
  *
@@ -191,26 +241,11 @@ export async function applyRows(
       outcome.skipped += 1;
       continue;
     }
-    // A child row whose parent is not here yet cannot be inserted (its foreign
-    // key would fail). Parents are applied first within one pull, so this is only
-    // reached when the parent is genuinely absent — a delete this device made,
-    // or a page boundary. Skipping keeps the pull going; the overlap window in
-    // `scan.ts` brings the row back once its parent has landed.
-    if (spec.parent) {
-      const parentKey = row[spec.parent.column];
-      if (parentKey === null || parentKey === undefined || parentKey === "") {
-        outcome.skipped += 1;
-        continue;
-      }
-      // biome-ignore lint/performance/noAwaitInLoops: rows are applied one at a time on purpose — each write's conflict guard reads what the previous row left behind, and a child can only be checked once its parent is in place
-      const parent = await db.select<{ present: number }[]>(
-        `SELECT 1 AS present FROM ${spec.parent.table} WHERE id = ? LIMIT 1`,
-        [parentKey]
-      );
-      if (parent.length === 0) {
-        outcome.skipped += 1;
-        continue;
-      }
+    // biome-ignore lint/performance/noAwaitInLoops: rows are applied one at a time on purpose — each write's conflict guard reads what the previous row left behind, and a child can only be checked once its parent is in place
+    const resolved = await resolveParentLink(db, spec, row);
+    if (resolved.kind === "skip") {
+      outcome.skipped += 1;
+      continue;
     }
     const local = await readLocalTimestamp(db, table, rowKey);
     const tombstoneDeletedAt = await readTombstone(db, table, rowKey);
@@ -229,7 +264,7 @@ export async function applyRows(
       }
       continue;
     }
-    await writeRow(db, table, row, rowKey, incoming);
+    await writeRow(db, table, resolved.row, rowKey, incoming);
     // A live row and a tombstone for the same key cannot coexist: this is what
     // stops an adopted row from being deleted again by the tombstone that
     // raced it.
