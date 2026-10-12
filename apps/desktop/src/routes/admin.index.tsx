@@ -1,6 +1,11 @@
+import { Button } from "@cmis/ui/components/button";
 import { createFileRoute } from "@tanstack/react-router";
+import { Plus } from "lucide-react";
 import { useCallback } from "react";
-
+import {
+  type ExpiryThresholds,
+  useExpiryThresholds,
+} from "@/features/admin/settings/expiry-thresholds";
 import { AdminHealthRow } from "@/features/dashboard/components/admin-health-row";
 import { AlertsBand } from "@/features/dashboard/components/alerts-band";
 import { DashboardMonthFilter } from "@/features/dashboard/components/dashboard-month-filter";
@@ -18,6 +23,7 @@ import { buildExpiryRows } from "@/features/inventory/domain/expiry";
 import { buildLowStockRows } from "@/features/inventory/domain/low-stock";
 import { useInventoryItems } from "@/features/inventory/hooks/use-inventory-items";
 import type { InventoryItem } from "@/features/inventory/types";
+import { useNewRequestDialog } from "@/features/requests/new-request-dialog-context";
 import { isMonthKey, monthKey } from "@/lib/month";
 
 export interface AdminSearch {
@@ -41,7 +47,7 @@ const links = dashboardLinks();
 
 const EMPTY_SPARKLINE = [0, 0, 0, 0, 0, 0, 0];
 
-function buildHomeStats(stats: DashboardStats | undefined) {
+function buildHomeStats(stats: DashboardStats | undefined, orangeDays: number) {
   return [
     {
       context: `${stats?.sparkline[stats.sparkline.length - 1] ?? 0} this week`,
@@ -71,7 +77,7 @@ function buildHomeStats(stats: DashboardStats | undefined) {
       context: stats?.needsBatch
         ? `${stats.needsBatch} need batch`
         : "all have batches",
-      label: "EXPIRING IN 30D",
+      label: `EXPIRING IN ${orangeDays}D`,
       link: "expiry" as const,
       sparkline: [0, 0, 0, 0, 0, 0, stats?.expiring30d ?? 0],
       tone: "danger" as const,
@@ -80,11 +86,14 @@ function buildHomeStats(stats: DashboardStats | undefined) {
   ];
 }
 
-function buildExpiryAlerts(inventory: InventoryItem[] | undefined) {
+function buildExpiryAlerts(
+  inventory: InventoryItem[] | undefined,
+  thresholds: ExpiryThresholds
+) {
   if (!inventory) {
     return [];
   }
-  return buildExpiryRows(inventory)
+  return buildExpiryRows(inventory, thresholds.redDays, thresholds.orangeDays)
     .slice(0, 5)
     .map((r) => ({
       batch: r.batch.batch,
@@ -131,11 +140,20 @@ function AdminIndex() {
     [navigate]
   );
 
-  const { data: stats } = useDashboardStats();
+  const thresholds = useExpiryThresholds();
+  const { data: stats } = useDashboardStats(thresholds.orangeDays);
   const { data: inventory, isLoading: inventoryLoading } = useInventoryItems();
   const { data: velocity } = useDispensingVelocity(activeMonth);
   const { data: hourly } = useHourlyActivity();
-  const { data: adjustments } = useStockAdjustments();
+  const { data: adjustments } = useStockAdjustments(thresholds.orangeDays);
+
+  // The same dialog Ctrl+N opens — one clear CTA so creating a request does
+  // not require knowing the shortcut.
+  const { openNewRequest } = useNewRequestDialog();
+  const handleNewRequest = useCallback(
+    () => openNewRequest(),
+    [openNewRequest]
+  );
 
   const totalItems = stats?.totalItems ?? 0;
   const isEmpty = totalItems === 0 && inventory?.length === 0;
@@ -146,9 +164,9 @@ function AdminIndex() {
     );
   }
 
-  const expiryAlerts = buildExpiryAlerts(inventory);
+  const expiryAlerts = buildExpiryAlerts(inventory, thresholds);
   const lowStockAlerts = buildLowStockAlerts(inventory);
-  const homeStats = buildHomeStats(stats);
+  const homeStats = buildHomeStats(stats, thresholds.orangeDays);
 
   const dispensingVelocity = velocity ?? {
     categoryBreakdown: [{ color: "bg-muted", count: 0, label: "No data" }],
@@ -171,6 +189,20 @@ function AdminIndex() {
 
   return (
     <div className="mx-auto w-full max-w-6xl px-4 pt-6 pb-10 sm:px-6 sm:pt-8">
+      {/* One clear CTA into the request flow, with its shortcut discoverable. */}
+      <div className="flex items-center justify-end gap-2">
+        <kbd className="pointer-events-none hidden select-none items-center gap-1 rounded border border-border bg-muted px-1.5 font-medium font-mono text-[10px] text-muted-foreground sm:inline-flex">
+          Ctrl+N
+        </kbd>
+        <Button
+          className="press-feedback rounded-full shadow-[0_1px_3px_oklch(0_0_0/0.08)] hover:shadow-[0_2px_8px_oklch(0_0_0/0.12)]"
+          onClick={handleNewRequest}
+          size="sm"
+        >
+          <Plus className="size-3.5" />
+          New request
+        </Button>
+      </div>
       <div className="mt-6 space-y-4 sm:mt-8 sm:space-y-5">
         <section aria-label="Alerts">
           <AlertsBand
@@ -178,6 +210,8 @@ function AdminIndex() {
             links={links}
             loading={inventoryLoading}
             lowStock={lowStockAlerts}
+            orangeDays={thresholds.orangeDays}
+            redDays={thresholds.redDays}
           />
         </section>
         <section aria-label="Key numbers">
