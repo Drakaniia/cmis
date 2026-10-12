@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import type { ExpiryThresholds } from "@/features/admin/settings/expiry-thresholds";
 import { buildExpiryRows } from "../domain/expiry";
 import type {
   ExpiryDatePreset,
@@ -127,9 +128,13 @@ function applyExpiryFilters(
 export function useExpiryFilters(
   items: InventoryItem[],
   activeMonth: string | null,
-  onMonthClear?: () => void
+  onMonthClear?: () => void,
+  thresholds?: ExpiryThresholds
 ) {
-  const allRows = useMemo(() => buildExpiryRows(items), [items]);
+  const allRows = useMemo(
+    () => buildExpiryRows(items, thresholds?.redDays, thresholds?.orangeDays),
+    [items, thresholds?.redDays, thresholds?.orangeDays]
+  );
 
   const [filters, setFilters] = useState<ExpiryFilters>(DEFAULT_EXPIRY_FILTERS);
   const [debouncedSearch, setDebouncedSearch] = useState(filters.search);
