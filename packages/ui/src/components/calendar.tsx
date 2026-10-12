@@ -200,6 +200,8 @@ export interface CalendarProps {
   max?: string;
   /** Inclusive `YYYY-MM-DD` lower bound; earlier days/months/years are disabled. */
   min?: string;
+  /** Month/year only: month tiles commit immediately, the day view never shows. */
+  monthOnly?: boolean;
   /** Fires with the chosen day as `YYYY-MM-DD`. */
   onSelect: (iso: string) => void;
   /** `YYYY-MM-DD`, or `null` when nothing is selected. */
@@ -216,10 +218,11 @@ export function Calendar({
   onSelect,
   min,
   max,
+  monthOnly = false,
   className,
 }: CalendarProps) {
   const today = todayIso();
-  const [view, setView] = useState<CalendarView>("day");
+  const [view, setView] = useState<CalendarView>(monthOnly ? "month" : "day");
   const [cursor, setCursor] = useState<Date>(
     () => fromIsoDate(value ?? "") ?? new Date()
   );
@@ -288,10 +291,17 @@ export function Calendar({
     setView((current) => (current === "day" ? "month" : "year"));
   }, []);
 
-  const handleSelectMonth = useCallback((index: number) => {
-    setCursor((current) => new Date(current.getFullYear(), index, 1));
-    setView("day");
-  }, []);
+  const handleSelectMonth = useCallback(
+    (index: number) => {
+      if (monthOnly) {
+        onSelect(monthFirstDayIso(year, index));
+        return;
+      }
+      setCursor((current) => new Date(current.getFullYear(), index, 1));
+      setView("day");
+    },
+    [monthOnly, onSelect, year]
+  );
 
   const handleSelectYear = useCallback((next: number) => {
     setCursor((current) => new Date(next, current.getMonth(), 1));
@@ -345,7 +355,7 @@ export function Calendar({
         </button>
       </div>
 
-      {view === "day" ? (
+      {view === "day" && !monthOnly ? (
         <div className="grid grid-cols-7 gap-0.5">
           {WEEKDAY_LABELS.map((label) => (
             <span
