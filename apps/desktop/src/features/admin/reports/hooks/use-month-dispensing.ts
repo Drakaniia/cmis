@@ -24,6 +24,33 @@ interface DispensingRow {
   qty: number;
 }
 
+interface BatchDispensingRow {
+  batch: string;
+  total: number;
+}
+
+/**
+ * Monthly dispensing grouped by batch — answers "what left per batch this
+ * month". `dispensing_events` is item-level daily totals; the batch survives
+ * only in `dispensing_records.at` (ISO), so month is `substr(at, 1, 7)`.
+ */
+export function useMonthBatchDispensing(month: string) {
+  return useQuery({
+    queryFn: async (): Promise<BatchDispensingRow[]> => {
+      try {
+        const db = await getDb();
+        return await db.select<BatchDispensingRow[]>(
+          "SELECT batch, SUM(qty) AS total FROM dispensing_records WHERE substr(at, 1, 7) = ? GROUP BY batch ORDER BY total DESC",
+          [month]
+        );
+      } catch {
+        return [];
+      }
+    },
+    queryKey: ["reports-month-batch-dispensing", month],
+  });
+}
+
 export function useMonthDispensing(month: string) {
   return useQuery({
     queryFn: async (): Promise<Map<string, number[]>> => {
