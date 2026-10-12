@@ -140,6 +140,12 @@ interface StockGate {
   attention: number;
   blocked: boolean;
   cannotSubmit: boolean;
+  /** True when any row fails validation (unknown medicine or bad quantity) —
+   *  the submit button stays clickable for these so the first click can reveal
+   *  the messages (§6 validation timing: errors show only after submit is
+   *  attempted). Stock blocks still disable the button; their messages are
+   *  live availability, not validation. */
+  structuralBlocked: boolean;
   warnEntries: WarnEntry[];
   /** §5.4 — ordered `key:state:shortBy`; any change re-opens the gate. */
   warnSignature: string;
@@ -194,6 +200,7 @@ function deriveStockGate(input: {
       driftCount > 0 ||
       submitting ||
       dbReady !== true,
+    structuralBlocked: problems.length > 0,
     warnEntries,
     warnSignature,
     warnSummaries: warnEntries.map(({ check, row }) =>
@@ -423,6 +430,7 @@ function RequestRow({
   onRemove,
   row,
   startReady,
+  showProblem,
 }: {
   canRemove: boolean;
   /** The §4.3 stock check for this row — null while `rowProblem` owns it. */
@@ -438,11 +446,14 @@ function RequestRow({
   onRemove: (key: string) => void;
   row: RequestDraftRow;
   startReady: boolean;
+  /** §6 validation timing — the row's validation message (and invalid styling)
+   *  render only after submit is attempted, never on select/change. */
+  showProblem: boolean;
 }) {
   // Hooks must run unconditionally, so generate the ids at the top of the row.
   const id = useId();
   const matched = matchInventoryItem(items, row.medicine);
-  const problem = rowProblem(row, items);
+  const problem = showProblem ? rowProblem(row, items) : null;
 
   // The item's own units lead; the fixed list is only for a row with no item
   // picked yet (F5/D8). The current value is always kept selectable so editing
@@ -616,9 +627,13 @@ function RequestRow({
 export function NewRequestModal({
   onOpenChange,
   open,
+  initialMedicine = null,
 }: {
   onOpenChange: (open: boolean) => void;
   open: boolean;
+  /** Seeds the first row — the stock detail modal passes the shown item so
+   *  "New request for this item" lands pre-filled. */
+  initialMedicine?: string | null;
 }) {
   const reduceMotion = useReducedMotion();
   const navigate = useNavigate();
@@ -628,6 +643,11 @@ export function NewRequestModal({
   const { deduct } = useQuickDeduct();
 
   const [rows, setRows] = useState<RequestDraftRow[]>(() => [newRow()]);
+  const [submitted, setSubmitted] = useState(false);
+  // Latest seed without re-keying the open-effect: the reset runs on `open`,
+  // and reads whatever the opener passed last.
+  const seedRef = useRef(initialMedicine);
+  seedRef.current = initialMedicine;
   const [name, setName] = useState("");
   const [requestorId, setRequestorId] = useState("");
   const [email, setEmail] = useState("");
@@ -661,7 +681,13 @@ export function NewRequestModal({
       document.activeElement instanceof HTMLElement
         ? document.activeElement
         : null;
-    setRows([newRow()]);
+    const seed = newRow();
+    const seedMedicine = seedRef.current;
+    if (seedMedicine) {
+      seed.medicine = seedMedicine;
+    }
+    setRows([seed]);
+    setSubmitted(false);
     setName("");
     setRequestorId("");
     setEmail("");
@@ -788,6 +814,9 @@ export function NewRequestModal({
   const cannotSave = dbReady === false;
 
   const handleSubmit = useCallback(async () => {
+    // §6 validation timing — the attempt itself reveals the row messages; the
+    // gate below still decides whether anything is written.
+    setSubmitted(true);
     // `dbReady` is null until the probe finishes — submitting then could write
     // nothing and still report success.
     if (gate.cannotSubmit) {
@@ -994,6 +1023,7 @@ export function NewRequestModal({
                           onDispense={handleDispenseRow}
                           onRemove={removeRow}
                           row={row}
+                          showProblem={submitted}
                           startReady={startReady}
                         />
                       ))}
@@ -1112,7 +1142,7 @@ export function NewRequestModal({
                     </Button>
                     <Button
                       className="press-feedback"
-                      disabled={gate.cannotSubmit}
+                      disabled={gate.cannotSubmit && !gate.structuralBlocked}
                       onClick={handleSubmit}
                       size="sm"
                     >
