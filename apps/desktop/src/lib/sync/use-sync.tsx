@@ -30,8 +30,17 @@ import {
   useState,
 } from "react";
 import { toast } from "sonner";
+import { SyncStrategyDialog } from "@/components/sync/sync-strategy-dialog";
 import { recordAudit } from "@/features/admin/audit/write-audit";
 import { getDb } from "@/lib/db";
+import {
+  backupSyncedTables,
+  clearSyncedTables,
+  readLatestBackup,
+  reconcilePushCursors,
+  restoreSyncedTables,
+  type SyncBackupInfo,
+} from "./cloud-takeover";
 import { describeConflict } from "./conflict-resolver";
 import {
   ensureDeviceId,
@@ -39,9 +48,15 @@ import {
   readCursors,
   writePullCursors,
 } from "./offline-queue";
-import { countRows } from "./scan";
+import { countAllRows, countRows } from "./scan";
 import { registerSyncScheduler, scheduleSync } from "./schedule";
 import { SYNC_TABLE_NAMES } from "./schema";
+import {
+  classifySyncSituation,
+  rememberStrategy,
+  type SyncStrategy,
+  strategyForEndpoint,
+} from "./strategy";
 import {
   fetchSyncStatus,
   pullRemoteChanges,
@@ -57,7 +72,7 @@ import {
   type SyncSettings,
   saveSyncSettings,
 } from "./sync-settings";
-import type { SyncDatabase, SyncStatusResponse } from "./types";
+import type { SyncDatabase, SyncStatusResponse, SyncTableName } from "./types";
 
 export type SyncPhase =
   | "disabled"
@@ -67,7 +82,26 @@ export type SyncPhase =
   | "syncing"
   | "timeout";
 
+/** The both-sides-populated decision the operator has not yet answered (§6.4). */
+export interface SyncDecisionState {
+  cloudCounts: Partial<Record<SyncTableName, number>>;
+  cloudTotals: Partial<Record<SyncTableName, number>>;
+  endpoint: string;
+  localCounts: Partial<Record<SyncTableName, number>>;
+}
+
 export interface SyncContextValue extends SyncSettings {
+  /** The most recent automatic sync backup, restorable from the Status tab. */
+  backup: SyncBackupInfo | null;
+  /** Resolves the pending decision, remembers it, and runs the chosen pass. */
+  chooseStrategy: (strategy: SyncStrategy) => Promise<SyncRunResult | null>;
+  /**
+   * The pending both-sides choice, or `null`. When this is set no data has
+   * moved; the UI renders the chooser and calls `chooseStrategy`.
+   */
+  decision: SyncDecisionState | null;
+  /** Closes the chooser without choosing; the next run asks again. */
+  dismissDecision: () => void;
   /** `null` until a sync has run in this session. */
   lastResult: SyncRunResult | null;
   /** Rows plus deletes waiting to be sent. */
@@ -85,6 +119,8 @@ export interface SyncContextValue extends SyncSettings {
    * endpoint must not let someone save a value it has not loaded yet.
    */
   resolved: boolean;
+  /** Replaces the synced tables with the latest automatic backup. */
+  restoreBackup: () => Promise<void>;
   serverStatus: SyncStatusResponse | null;
   syncNow: (opts?: { silent?: boolean }) => Promise<SyncRunResult | null>;
   /** Every table this build syncs, for the settings panel. */
@@ -132,9 +168,10 @@ function asSyncFailure(error: unknown): SyncFailure {
 async function runEnginePass(input: {
   current: SyncSettings;
   db: SyncDatabase;
+  preferLocal?: boolean;
   queryClient: QueryClient;
 }): Promise<SyncRunResult> {
-  const { current, db, queryClient } = input;
+  const { current, db, queryClient, preferLocal } = input;
   const deviceId = await ensureDeviceId(db);
   const result = await runSync({
     db,
@@ -142,6 +179,7 @@ async function runEnginePass(input: {
     endpoint: current.endpoint,
     fetchImpl: globalThis.fetch.bind(globalThis),
     limit: current.queueMaxSize,
+    preferLocal,
     token: current.token || undefined,
   });
 
@@ -204,7 +242,7 @@ async function runPullOnlyPass(input: {
     pushedDeletes: 0,
     pushedRows: 0,
     serverTime: pull.serverTime,
-    skipped: 0,
+    skipped: pull.skipped,
   };
 }
 
@@ -247,7 +285,7 @@ async function runPullPass(input: {
     pushedDeletes: 0,
     pushedRows: 0,
     serverTime: pull.serverTime,
-    skipped: 0,
+    skipped: pull.skipped,
   };
 }
 
@@ -285,33 +323,152 @@ async function runPushPass(input: {
   };
 }
 
-/** True when every synced table is empty. Missing tables → not empty. */
+/**
+ * Adopts the cloud copy (§6.4 option 2). Backs up first, then clears and
+ * refills from the cloud, then reconciles the push cursors so the mirror is not
+ * uploaded back. A failed backup throws before anything is cleared.
+ */
+async function runCloudStrategyPass(input: {
+  current: SyncSettings;
+  db: SyncDatabase;
+  onBackup?: (info: SyncBackupInfo) => void;
+  queryClient: QueryClient;
+}): Promise<SyncRunResult> {
+  const { current, db, queryClient, onBackup } = input;
+  const deviceId = await ensureDeviceId(db);
+  // Refuse before anything is cleared if the cloud cannot be reached (§7.6):
+  // emptying the local tables and then failing to refill them would be the one
+  // data-loss path this whole flow exists to prevent.
+  if ((await cloudStatusOrNull(current)) === null) {
+    throw new SyncFailure(
+      "The cloud is unreachable, so this device's copy cannot be replaced",
+      "offline"
+    );
+  }
+  onBackup?.(await backupSyncedTables(db));
+  await clearSyncedTables(db);
+  await writePullCursors(db, { deleted: "", rows: {} });
+  const pull = await pullRemoteChanges({
+    db,
+    deviceId,
+    endpoint: current.endpoint,
+    fetchImpl: globalThis.fetch.bind(globalThis),
+    limit: current.queueMaxSize,
+    token: current.token || undefined,
+  });
+  await reconcilePushCursors(db);
+
+  if (pull.appliedRows + pull.appliedDeletes > 0) {
+    queryClient.invalidateQueries();
+    const { notifyRequestsChanged } = await import(
+      "@/features/requests/persistence"
+    );
+    notifyRequestsChanged();
+  }
+  if (pull.conflicts.length > 0) {
+    await auditConflicts(db, pull.conflicts);
+  }
+  return {
+    appliedDeletes: pull.appliedDeletes,
+    appliedRows: pull.appliedRows,
+    conflicts: pull.conflicts,
+    moreToPush: false,
+    pushedDeletes: 0,
+    pushedRows: 0,
+    serverTime: pull.serverTime,
+    skipped: pull.skipped,
+  };
+}
+
+/**
+ * True when every synced table is empty.
+ *
+ * A table this build does not have locally (a pre-migration database) counts as
+ * empty rather than as an error, which is the tolerance §7.10 asks for: the
+ * decision must not crash on a database older than the sync metadata.
+ */
 async function isLocalEmpty(db: SyncDatabase): Promise<boolean> {
-  try {
-    for (const table of SYNC_TABLE_NAMES) {
+  for (const table of SYNC_TABLE_NAMES) {
+    try {
       // biome-ignore lint/performance/noAwaitInLoops: eight fixed tables, sequential counts
       if ((await countRows(db, table)) > 0) {
         return false;
       }
+    } catch {
+      // Missing table → treated as empty.
     }
-    return true;
-  } catch {
-    return false;
   }
+  return true;
 }
 
-/** True when the cloud holds any rows. Unreachable server → false. */
-async function serverHasData(current: SyncSettings): Promise<boolean> {
+/** The cloud's status, or `null` when the server cannot be reached. */
+async function cloudStatusOrNull(
+  current: SyncSettings
+): Promise<SyncStatusResponse | null> {
   try {
-    const status = await fetchSyncStatus({
+    return await fetchSyncStatus({
       endpoint: current.endpoint,
       fetchImpl: globalThis.fetch.bind(globalThis),
       token: current.token || undefined,
     });
-    return Object.values(status.counts).some((count) => count > 0);
   } catch {
-    return false;
+    return null;
   }
+}
+
+/** True only when the cloud answered and holds at least one row. */
+function cloudHasData(status: SyncStatusResponse | null): boolean {
+  return (
+    status !== null &&
+    Object.values(status.counts).some((count) => (count ?? 0) > 0)
+  );
+}
+
+/** What a first run against an endpoint (no remembered strategy) should do. */
+type FirstRunPlan =
+  | { kind: "ask"; decision: SyncDecisionState }
+  | { kind: "idle" }
+  | { kind: "merge" }
+  | { kind: "pull-only" }
+  | { kind: "push-only" };
+
+/**
+ * Classifies one first run against §6.1, kept out of `syncNow` so that callback
+ * stays a readable guard-and-report shell (the provider's busiest callback).
+ */
+async function planFirstRun(input: {
+  current: SyncSettings;
+  db: SyncDatabase;
+}): Promise<FirstRunPlan> {
+  const localHasData = !(await isLocalEmpty(input.db));
+  const status = await cloudStatusOrNull(input.current);
+  // The cloud's state is unknown (status failed). Run the ordinary merge
+  // rather than infer an authority from an absent answer.
+  if (status === null && localHasData) {
+    return { kind: "merge" };
+  }
+  const situation = classifySyncSituation({
+    cloudHasData: cloudHasData(status),
+    localHasData,
+  });
+  if (situation === "idle") {
+    return { kind: "idle" };
+  }
+  if (situation === "pull-only") {
+    return { kind: "pull-only" };
+  }
+  if (situation === "push-only") {
+    return { kind: "push-only" };
+  }
+  return {
+    decision: {
+      cloudCounts: status?.counts ?? {},
+      cloudTotals: status?.totals ?? {},
+      endpoint: input.current.endpoint,
+      localCounts: await countAllRows(input.db),
+    },
+    kind: "ask",
+  };
 }
 
 /** The in-flight guard, as an object so one ref covers the whole run state. */
@@ -419,6 +576,8 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
   const [serverStatus, setServerStatus] = useState<SyncStatusResponse | null>(
     null
   );
+  const [decision, setDecision] = useState<SyncDecisionState | null>(null);
+  const [backup, setBackup] = useState<SyncBackupInfo | null>(null);
 
   const runningRef = useRef<RunLock>(createRunLock());
   const settingsRef = useRef<SyncSettings | null>(null);
@@ -428,6 +587,40 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
     settingsRef.current = next;
     setSettings(next);
   }, []);
+
+  /** Runs the pass a remembered or newly chosen strategy calls for. */
+  const runStrategyPass = useCallback(
+    (
+      strategy: SyncStrategy,
+      input: {
+        current: SyncSettings;
+        db: SyncDatabase;
+        queryClient: QueryClient;
+      }
+    ): Promise<SyncRunResult> =>
+      strategy === "cloud"
+        ? runCloudStrategyPass({ ...input, onBackup: setBackup })
+        : runEnginePass({
+            ...input,
+            preferLocal: strategy === "local",
+          }),
+    []
+  );
+
+  /** Records the implicit `merge` once a non-overlap first run has succeeded. */
+  const rememberEndpointStrategy = useCallback(
+    async (current: SyncSettings, strategy: SyncStrategy) => {
+      const next = await saveSyncSettings({
+        endpointStrategies: rememberStrategy(
+          current.endpointStrategies,
+          current.endpoint,
+          strategy
+        ),
+      });
+      setSettingsBoth(next);
+    },
+    [setSettingsBoth]
+  );
 
   /**
    * The database, or `null` when this window has none (browser preview without
@@ -456,6 +649,19 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
     }
   }, [openDb]);
 
+  /** Re-reads the latest automatic backup, for the Status tab. */
+  const refreshBackup = useCallback(async () => {
+    const db = await openDb();
+    if (!db) {
+      return;
+    }
+    try {
+      setBackup(await readLatestBackup(db));
+    } catch {
+      // A database from before migration 0014 has no sync_state to read.
+    }
+  }, [openDb]);
+
   const refreshServerStatus = useCallback(async () => {
     const { current } = settingsRef;
     if (!current?.endpoint) {
@@ -474,6 +680,79 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
       setServerStatus(null);
     }
   }, []);
+
+  /**
+   * One run's decision: a remembered strategy, else the §6.1 first-run plan.
+   * Extracted so `syncNow` stays a readable guard-and-report shell.
+   */
+  const runOnce = useCallback(
+    async (input: {
+      current: SyncSettings;
+      db: SyncDatabase;
+      handlers: SyncReportHandlers;
+      queryClient: QueryClient;
+      silent: boolean;
+    }): Promise<SyncRunResult | null> => {
+      const { current, db, handlers, silent } = input;
+      // A remembered decision runs silently (D7) — the operator already
+      // answered this endpoint's overlap question.
+      const remembered = strategyForEndpoint(
+        current.endpointStrategies,
+        current.endpoint
+      );
+      if (remembered) {
+        const result = await runStrategyPass(remembered, {
+          current,
+          db,
+          queryClient: input.queryClient,
+        });
+        await reportSyncSuccess(result, silent, handlers);
+        return result;
+      }
+
+      const plan = await planFirstRun({ current, db });
+      if (plan.kind === "idle") {
+        setPhase("idle");
+        return null;
+      }
+      if (plan.kind === "ask") {
+        // Both sides hold records and nothing is remembered: ask before any
+        // data moves (D1, D4). No push, no pull happens until the operator
+        // answers.
+        setDecision(plan.decision);
+        setPhase("idle");
+        return null;
+      }
+
+      // §6.2: a first run against an endpoint must not resume from a stale
+      // pull cursor, whatever the strategy turns out to be. `runPullOnlyPass`
+      // resets it anyway; the engine pass needs the reset done here.
+      await writePullCursors(db, { deleted: "", rows: {} });
+      // `pull-only` is the guaranteed full pull (D13); `push-only` and the
+      // unknown-cloud `merge` fall through to the ordinary engine pass.
+      const result =
+        plan.kind === "pull-only"
+          ? await runPullOnlyPass({
+              current,
+              db,
+              queryClient: input.queryClient,
+            })
+          : await runEnginePass({
+              current,
+              db,
+              queryClient: input.queryClient,
+            });
+      await reportSyncSuccess(result, silent, handlers);
+      // A non-overlap first run is remembered as `merge` so the next run — now
+      // that both sides hold records — does not surprise the operator with the
+      // chooser.
+      if (plan.kind === "pull-only" || plan.kind === "push-only") {
+        await rememberEndpointStrategy(current, "merge");
+      }
+      return result;
+    },
+    [rememberEndpointStrategy, runStrategyPass]
+  );
 
   const syncNow = useCallback(
     async (opts?: { silent?: boolean }): Promise<SyncRunResult | null> => {
@@ -501,24 +780,13 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
         setPhase,
         setSettingsBoth,
       };
-
       try {
         const db = await openDb();
         if (!db) {
           setPhase("disabled");
           return null;
         }
-        // Empty-device guard: a fresh device pushing blank state is what
-        // produced the phantom "N changes waiting / conflicts" on first sync.
-        // If local is empty but the cloud has rows, pull instead of pushing.
-        if ((await isLocalEmpty(db)) && (await serverHasData(current))) {
-          const result = await runPullPass({ current, db, queryClient });
-          await reportSyncSuccess(result, silent, handlers);
-          return result;
-        }
-        const result = await runEnginePass({ current, db, queryClient });
-        await reportSyncSuccess(result, silent, handlers);
-        return result;
+        return await runOnce({ current, db, handlers, queryClient, silent });
       } catch (error) {
         await reportSyncFailure(error, silent, handlers);
         return null;
@@ -526,7 +794,14 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
         runningRef.current.running = false;
       }
     },
-    [openDb, queryClient, refreshPending, refreshServerStatus, setSettingsBoth]
+    [
+      openDb,
+      queryClient,
+      refreshPending,
+      refreshServerStatus,
+      runOnce,
+      setSettingsBoth,
+    ]
   );
 
   /**
@@ -589,78 +864,72 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
   );
 
   /**
-   * Pull-only twin of `syncNow`, for first connection only. Same guard-and-
-   * report shell, but `runPullOnlyPass` sends zero push requests.
+   * Resolves the chooser: remembers the choice for this endpoint, then runs it.
+   * Persisting first means the run sees a remembered strategy, and a failed run
+   * does not ask again for a decision the operator already made.
    */
-  const pullOnlyNow = useCallback(async (): Promise<SyncRunResult | null> => {
-    const { current } = settingsRef;
-    if (!(current?.enabled && current.endpoint)) {
-      return null;
-    }
-    if (runningRef.current.running) {
-      return null;
-    }
-    runningRef.current.running = true;
-    setPhase("syncing");
-    lastRunAtRef.current = Date.now();
-    const handlers = {
-      refreshPending,
-      refreshServerStatus,
-      setLastResult,
-      setPhase,
-      setSettingsBoth,
-    };
-
-    try {
-      const db = await openDb();
-      if (!db) {
-        setPhase("disabled");
+  const chooseStrategy = useCallback(
+    async (strategy: SyncStrategy): Promise<SyncRunResult | null> => {
+      const { current } = settingsRef;
+      if (!(current?.enabled && current.endpoint)) {
         return null;
       }
-      const result = await runPullOnlyPass({ current, db, queryClient });
-      await reportSyncSuccess(result, false, handlers);
-      return result;
-    } catch (error) {
-      await reportSyncFailure(error, false, handlers);
-      return null;
-    } finally {
-      runningRef.current.running = false;
+      await rememberEndpointStrategy(current, strategy);
+      setDecision(null);
+      return runManual(async (input) => {
+        // The first run under a freshly chosen strategy is a first connection:
+        // reset the pull cursors so it cannot skip cloud data below a stale
+        // cursor (§6.2). A later remembered run resumes normally.
+        await writePullCursors(input.db, { deleted: "", rows: {} });
+        return runStrategyPass(strategy, input);
+      });
+    },
+    [rememberEndpointStrategy, runManual, runStrategyPass]
+  );
+
+  const dismissDecision = useCallback(() => setDecision(null), []);
+
+  const restoreBackup = useCallback(async () => {
+    const db = await openDb();
+    if (!db) {
+      return;
     }
-  }, [
-    openDb,
-    queryClient,
-    refreshPending,
-    refreshServerStatus,
-    setSettingsBoth,
-  ]);
+    try {
+      const restored = await restoreSyncedTables(db);
+      if (!restored) {
+        toast.error("No sync backup to restore");
+        return;
+      }
+      await queryClient.invalidateQueries();
+      const { notifyRequestsChanged } = await import(
+        "@/features/requests/persistence"
+      );
+      notifyRequestsChanged();
+      await refreshPending();
+      toast.success("Sync backup restored");
+    } catch (error) {
+      toast.error("Restore failed", {
+        description: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }, [openDb, queryClient, refreshPending]);
 
   const update = useCallback(
     async (patch: Partial<SyncSettings>) => {
-      const prevEndpoint = settingsRef.current?.endpoint ?? "";
       const next = await saveSyncSettings(patch);
       setSettingsBoth(next);
-      if (!(patch.endpoint || patch.enabled)) {
-        return;
-      }
       if (patch.endpoint !== undefined) {
         setServerStatus(null);
         await refreshServerStatus();
       }
       setPhase(next.enabled && next.endpoint ? "idle" : "disabled");
       if (next.enabled && next.endpoint) {
-        // A first connection (new or repointed endpoint) pulls the cloud down
-        // instead of pushing this device's blank state up. Steady-state syncs
-        // stay push-then-pull.
-        const firstConnection =
-          patch.endpoint !== undefined && prevEndpoint !== next.endpoint;
-        if (firstConnection) {
-          await pullOnlyNow();
-        } else {
-          await syncNow();
-        }
+        // Every run — first connection included — now classifies the state and
+        // decides (§6.1) instead of blindly pulling or pushing.
+        await syncNow();
       }
     },
-    [pullOnlyNow, refreshServerStatus, setSettingsBoth, syncNow]
+    [refreshServerStatus, setSettingsBoth, syncNow]
   );
 
   // Settings load once. Until they do, `phase` stays `disabled`.
@@ -675,11 +944,12 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
       setResolved(true);
       setPhase(loaded.enabled && loaded.endpoint ? "idle" : "disabled");
       await refreshPending();
+      await refreshBackup();
     })();
     return () => {
       cancelled = true;
     };
-  }, [refreshPending, setSettingsBoth]);
+  }, [refreshBackup, refreshPending, setSettingsBoth]);
 
   // The write-path trigger: `persistence.ts` and the mutation cache below both
   // funnel into this, and only while a sync is actually configured.
@@ -830,6 +1100,10 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
   const value = useMemo<SyncContextValue>(
     () => ({
       ...active,
+      backup,
+      chooseStrategy,
+      decision,
+      dismissDecision,
       lastResult,
       pending,
       phase,
@@ -837,6 +1111,7 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
       pushNow,
       refreshServerStatus,
       resolved,
+      restoreBackup,
       serverStatus,
       syncNow,
       tables: SYNC_TABLE_NAMES,
@@ -844,6 +1119,10 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
     }),
     [
       active,
+      backup,
+      chooseStrategy,
+      decision,
+      dismissDecision,
       lastResult,
       pending,
       phase,
@@ -851,13 +1130,23 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
       pushNow,
       refreshServerStatus,
       resolved,
+      restoreBackup,
       serverStatus,
       syncNow,
       update,
     ]
   );
 
-  return <SyncContext.Provider value={value}>{children}</SyncContext.Provider>;
+  return (
+    <SyncContext.Provider value={value}>
+      {children}
+      <SyncStrategyDialog
+        decision={decision}
+        onChoose={chooseStrategy}
+        onDismiss={dismissDecision}
+      />
+    </SyncContext.Provider>
+  );
 }
 
 /**

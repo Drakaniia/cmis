@@ -554,6 +554,127 @@ describe("the client", () => {
     expect(sent.cursors.rows.inventory_items ?? "").toBe("");
   });
 
+  it("never overwrites an existing local row under the local strategy", async () => {
+    insertItem(harness.db, "item-local");
+    const incoming = {
+      created_at: "2031-01-01T00:00:00.000Z",
+      id: "item-local",
+      name: "Cloud name",
+      qty: 999,
+      sku: "SKU-cloud",
+      stock_on_hand: 999,
+      updated_at: "2031-01-01T00:00:00.000Z",
+    };
+    const outcome = await applyPullResponse(
+      harness.sync,
+      {
+        deletedCursor: "",
+        hasMore: false,
+        ok: true,
+        serverTime: AT,
+        tables: [{ rows: [incoming], table: "inventory_items" }],
+      },
+      { preferLocal: true }
+    );
+
+    expect(outcome.appliedRows).toBe(0);
+    expect(outcome.skipped).toBe(1);
+    const [local] = insertsFor(harness.db, "inventory_items");
+    expect(local.name).toBe("Paracetamol");
+    expect(local.qty).toBe(10);
+  });
+
+  it("adds a cloud row this device does not have under the local strategy", async () => {
+    const outcome = await applyPullResponse(
+      harness.sync,
+      {
+        deletedCursor: "",
+        hasMore: false,
+        ok: true,
+        serverTime: AT,
+        tables: [
+          {
+            rows: [
+              {
+                created_at: AFTER_SEEDS,
+                id: "item-cloud",
+                name: "Ibuprofen",
+                qty: 4,
+                sku: "SKU-cloud",
+                stock_on_hand: 4,
+                updated_at: AFTER_SEEDS,
+              },
+            ],
+            table: "inventory_items",
+          },
+        ],
+      },
+      { preferLocal: true }
+    );
+    expect(outcome.appliedRows).toBe(1);
+    expect(insertsFor(harness.db, "inventory_items")).toHaveLength(1);
+  });
+
+  it("keeps a local row against a cloud delete under the local strategy", async () => {
+    insertItem(harness.db, "item-local");
+    const outcome = await applyPullResponse(
+      harness.sync,
+      {
+        deletedCursor: "",
+        hasMore: false,
+        ok: true,
+        serverTime: AT,
+        tables: [
+          {
+            deletes: [
+              { deletedAt: "2031-01-01T00:00:00.000Z", rowKey: "item-local" },
+            ],
+            table: "inventory_items",
+          },
+        ],
+      },
+      { preferLocal: true }
+    );
+    expect(outcome.appliedDeletes).toBe(0);
+    expect(outcome.skipped).toBe(1);
+    expect(insertsFor(harness.db, "inventory_items")).toHaveLength(1);
+  });
+
+  it("reports pull skips in the run result, so a silent zero cannot recur", async () => {
+    const { fetchImpl } = stubFetch((url) => {
+      if (url.endsWith("/sync/push")) {
+        return {
+          body: { applied: {}, conflicts: [], ok: true, serverTime: AT },
+        };
+      }
+      return {
+        body: {
+          deletedCursor: "",
+          hasMore: false,
+          ok: true,
+          serverTime: AT,
+          tables: [
+            {
+              rows: [
+                {
+                  at: AT,
+                  author: "Nurse",
+                  request_id: "req-absent",
+                  text: "orphan",
+                },
+              ],
+              table: "request_notes",
+            },
+          ],
+        },
+      };
+    });
+    const options = await baseOptions(harness, fetchImpl);
+    const result = await runSync(options);
+    expect(result.appliedRows).toBe(0);
+    expect(result.skipped).toBe(1);
+  });
+
   it("exposes the database shape the engine needs, nothing more", () => {
     // A compile-time contract rather than a runtime one: the engine runs against
     // the desktop's SQLite handle, D1 and `node:sqlite` because it asks for two

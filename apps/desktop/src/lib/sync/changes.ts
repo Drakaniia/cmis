@@ -218,6 +218,17 @@ async function resolveParentLink(
 }
 
 /**
+ * How an incoming row is judged. `preferLocal` is the "This device's data"
+ * strategy (§6.4): an existing local row always wins, whatever its timestamp,
+ * because the operator has declared this device authoritative. A tie/older
+ * guard is not enough — a stale-but-present local row must still not be
+ * overwritten.
+ */
+export interface ApplyOptions {
+  preferLocal?: boolean;
+}
+
+/**
  * Applies incoming rows, one guarded write each.
  *
  * Returns what happened rather than throwing on a conflict: a rejected row is a
@@ -227,7 +238,8 @@ async function resolveParentLink(
 export async function applyRows(
   db: SyncDatabase,
   table: SyncTableName,
-  rows: SyncRow[]
+  rows: SyncRow[],
+  opts: ApplyOptions = {}
 ): Promise<SyncApplyOutcome> {
   const spec = syncTableSpec(table);
   if (!spec) {
@@ -248,6 +260,12 @@ export async function applyRows(
       continue;
     }
     const local = await readLocalTimestamp(db, table, rowKey);
+    // Local-preferred: an existing row is never overwritten. Missing rows are
+    // still added, which is the whole point of pulling under this strategy.
+    if (opts.preferLocal && local.exists) {
+      outcome.skipped += 1;
+      continue;
+    }
     const tombstoneDeletedAt = await readTombstone(db, table, rowKey);
     const decision = decideIncomingRow({
       incomingUpdatedAt: incoming,
@@ -286,7 +304,8 @@ export async function applyRows(
 export async function applyDeletes(
   db: SyncDatabase,
   table: SyncTableName,
-  deletes: SyncDelete[]
+  deletes: SyncDelete[],
+  opts: ApplyOptions = {}
 ): Promise<SyncApplyOutcome> {
   const spec = syncTableSpec(table);
   if (!spec) {
@@ -296,6 +315,12 @@ export async function applyDeletes(
   for (const entry of deletes) {
     // biome-ignore lint/performance/noAwaitInLoops: deleting a parent removes its children through the foreign key, so the deletes must be applied in the order given
     const local = await readLocalTimestamp(db, table, entry.rowKey);
+    // Local-preferred: this device's record wins over a cloud tombstone too,
+    // otherwise "keep the local copy" would still be deleted from under it.
+    if (opts.preferLocal && local.exists) {
+      outcome.skipped += 1;
+      continue;
+    }
     const decision = decideIncomingDelete({
       deletedAt: entry.deletedAt,
       localExists: local.exists,

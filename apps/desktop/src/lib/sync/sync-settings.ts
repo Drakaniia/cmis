@@ -13,6 +13,8 @@
  * not belong in `cmis.db` (which is backed up, restored and wiped as a unit).
  */
 
+import { isSyncStrategy, type SyncStrategy } from "./strategy";
+
 export const SYNC_STORE_FILE = "sync.json";
 
 /** Spec default: `SYNC_INTERVAL_MS`. */
@@ -25,6 +27,14 @@ export interface SyncSettings {
   /** Off until an endpoint exists and the operator has not switched it off. */
   enabled: boolean;
   endpoint: string;
+  /**
+   * The remembered authority for one endpoint, keyed by the normalized URL
+   * (`docs/cloud-sync-data-guard-spec.md` §6.4, D7/D14). This is per-device
+   * configuration, which is why it lives in the store rather than in
+   * `cmis.db` — see the file note above. A repointed endpoint has no entry, so
+   * the chooser asks again instead of inheriting the old Worker's decision.
+   */
+  endpointStrategies: Record<string, SyncStrategy>;
   intervalMs: number;
   lastError: string | null;
   lastSyncedAt: string | null;
@@ -64,6 +74,7 @@ export function normalizeEndpoint(value: string): string {
 export const DEFAULT_SYNC_SETTINGS: SyncSettings = {
   enabled: Boolean(env("SYNC_API_ENDPOINT")),
   endpoint: normalizeEndpoint(env("SYNC_API_ENDPOINT") ?? ""),
+  endpointStrategies: {},
   intervalMs: envNumber("SYNC_INTERVAL_MS", DEFAULT_SYNC_INTERVAL_MS),
   lastError: null,
   lastSyncedAt: null,
@@ -88,6 +99,24 @@ async function getStore(): Promise<{
   const store = new LazyStore(SYNC_STORE_FILE);
   cachedStore = store;
   return store as never;
+}
+
+/**
+ * Reads the per-endpoint strategy map, tolerating an older store file that has
+ * no such field (it reads as `{}`) and dropping anything that is not one of the
+ * three known strategies rather than trusting a value from disk.
+ */
+function coerceStrategies(raw: unknown): Record<string, SyncStrategy> {
+  if (!raw || typeof raw !== "object") {
+    return {};
+  }
+  const out: Record<string, SyncStrategy> = {};
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    if (key !== "" && isSyncStrategy(value)) {
+      out[key] = value;
+    }
+  }
+  return out;
 }
 
 function coerce(raw: unknown): SyncSettings {
@@ -116,6 +145,7 @@ function coerce(raw: unknown): SyncSettings {
         ? r.enabled
         : DEFAULT_SYNC_SETTINGS.enabled && endpoint !== "",
     endpoint,
+    endpointStrategies: coerceStrategies(r.endpointStrategies),
     intervalMs,
     lastError: typeof r.lastError === "string" ? r.lastError : null,
     lastSyncedAt: typeof r.lastSyncedAt === "string" ? r.lastSyncedAt : null,
@@ -166,4 +196,9 @@ export async function saveSyncSettings(
 
 export function __resetSyncStoreCacheForTests(): void {
   cachedStore = null;
+}
+
+/** The raw store value → settings coercion, exposed for the tolerance tests. */
+export function __coerceSyncSettingsForTests(raw: unknown): SyncSettings {
+  return coerce(raw);
 }

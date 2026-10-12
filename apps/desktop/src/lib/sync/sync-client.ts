@@ -18,7 +18,7 @@
  * cursors untouched, so nothing is skipped by a failed attempt.
  */
 
-import { applyDeletes, applyRows } from "./changes";
+import { type ApplyOptions, applyDeletes, applyRows } from "./changes";
 import { isNewer } from "./conflict-resolver";
 import {
   collectLocalChanges,
@@ -77,6 +77,11 @@ export interface SyncClientOptions extends SyncEndpointOptions {
   limit: number;
   /** Pages of pull per run, so one pass cannot loop forever on a big backlog. */
   maxPages?: number;
+  /**
+   * The "This device's data" strategy (`docs/cloud-sync-data-guard-spec.md`
+   * §6.4): an incoming row or delete never overwrites an existing local row.
+   */
+  preferLocal?: boolean;
 }
 
 export interface SyncRunResult {
@@ -296,7 +301,8 @@ function mergeCursors(
 /** Applies one pull response: parents then children, deletes in reverse. */
 export async function applyPullResponse(
   db: SyncDatabase,
-  response: SyncPullResponse
+  response: SyncPullResponse,
+  opts: ApplyOptions = {}
 ): Promise<PullApplyOutcome> {
   const byTable = new Map<SyncTableName, SyncTableChange>();
   for (const change of response.tables) {
@@ -317,7 +323,7 @@ export async function applyPullResponse(
       continue;
     }
     // biome-ignore lint/performance/noAwaitInLoops: a child row can only be written once its parent exists, so these tables are applied one after another in dependency order
-    const result = await applyRows(db, spec.name, rows);
+    const result = await applyRows(db, spec.name, rows, opts);
     outcome.appliedRows += result.applied;
     outcome.skipped += result.skipped;
     outcome.conflicts.push(...result.conflicts);
@@ -331,7 +337,7 @@ export async function applyPullResponse(
       continue;
     }
     // biome-ignore lint/performance/noAwaitInLoops: the reverse-dependency order is the point — a parent's cascade must not run first
-    const result = await applyDeletes(db, spec.name, deletes);
+    const result = await applyDeletes(db, spec.name, deletes, opts);
     outcome.appliedDeletes += result.applied;
     outcome.skipped += result.skipped;
     outcome.conflicts.push(...result.conflicts);
@@ -351,11 +357,13 @@ export async function pullRemoteChanges(options: SyncClientOptions): Promise<{
   appliedRows: number;
   conflicts: SyncConflict[];
   serverTime: string | null;
+  skipped: number;
   truncated: boolean;
 }> {
   let cursors = (await readCursors(options.db)).pull;
   let appliedRows = 0;
   let appliedDeletes = 0;
+  let skipped = 0;
   const conflicts: SyncConflict[] = [];
   let serverTime: string | null = null;
   let truncated = false;
@@ -380,9 +388,14 @@ export async function pullRemoteChanges(options: SyncClientOptions): Promise<{
     });
     ({ serverTime } = response);
 
-    const result = await applyPullResponse(options.db, response);
+    const result = await applyPullResponse(
+      options.db,
+      response,
+      options.preferLocal ? { preferLocal: true } : undefined
+    );
     appliedRows += result.appliedRows;
     appliedDeletes += result.appliedDeletes;
+    skipped += result.skipped;
     conflicts.push(...result.conflicts);
 
     const advanced: SyncCursors = {
@@ -403,13 +416,21 @@ export async function pullRemoteChanges(options: SyncClientOptions): Promise<{
         appliedRows,
         conflicts,
         serverTime,
+        skipped,
         truncated: false,
       };
     }
     truncated = page === pages - 1;
   }
 
-  return { appliedDeletes, appliedRows, conflicts, serverTime, truncated };
+  return {
+    appliedDeletes,
+    appliedRows,
+    conflicts,
+    serverTime,
+    skipped,
+    truncated,
+  };
 }
 
 /** Push then pull. Throws `SyncFailure`; the caller decides what to show. */
@@ -418,6 +439,11 @@ export async function runSync(
 ): Promise<SyncRunResult> {
   const push = await pushLocalChanges(options);
   const pull = await pullRemoteChanges(options);
+  // biome-ignore lint/suspicious/noUnnecessaryConditions: a Worker older than this client may answer without the field, and a missing count is not a reason to lose the whole result
+  const pushSkipped = Object.values(push.response.skipped ?? {}).reduce(
+    (total, value) => total + (value ?? 0),
+    0
+  );
   return {
     appliedDeletes: pull.appliedDeletes,
     appliedRows: pull.appliedRows,
@@ -426,10 +452,8 @@ export async function runSync(
     pushedDeletes: push.pushedDeletes,
     pushedRows: push.pushedRows,
     serverTime: pull.serverTime,
-    // biome-ignore lint/suspicious/noUnnecessaryConditions: a Worker older than this client may answer without the field, and a missing count is not a reason to lose the whole result
-    skipped: Object.values(push.response.skipped ?? {}).reduce(
-      (total, value) => total + (value ?? 0),
-      0
-    ),
+    // Both halves are reported: a push the server skipped and a pull this
+    // device skipped are the same silent loss from the operator's seat (§6.7).
+    skipped: pull.skipped + pushSkipped,
   };
 }

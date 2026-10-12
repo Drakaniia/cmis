@@ -15,7 +15,12 @@
  * change.
  */
 
-import { isSafeIdentifier, isSyncTableName, syncTableSpec } from "./schema";
+import {
+  isSafeIdentifier,
+  isSyncTableName,
+  SYNC_TABLES,
+  syncTableSpec,
+} from "./schema";
 import type { SyncDatabase, SyncDelete, SyncRow, SyncTableName } from "./types";
 
 /** How far back of the cursor the client re-reads, in milliseconds. */
@@ -303,6 +308,57 @@ export async function countRows(
     `SELECT COUNT(*) AS count FROM ${table}`
   );
   return Number(rows[0]?.count ?? 0);
+}
+
+/**
+ * The push cursor at the newest row of a table.
+ *
+ * Used when adopting the cloud copy: after the local tables are emptied and
+ * refilled from the cloud, every row is "already sent", so the push cursor is
+ * moved to each table's newest row and the next run does not re-upload the
+ * mirror it just downloaded.
+ */
+export async function newestPushCursor(
+  db: SyncDatabase,
+  table: SyncTableName
+): Promise<PushCursor> {
+  const spec = syncTableSpec(table);
+  if (!(spec && isSafeIdentifier(table))) {
+    throw new Error(`unknown sync table: ${table}`);
+  }
+  const rows = await db.select<(SyncRow & { rowid: number })[]>(
+    `SELECT rowid AS rowid, * FROM ${table}
+      ORDER BY ${spec.updatedAtSql()} DESC, rowid DESC
+      LIMIT 1`
+  );
+  const last = rows.at(-1);
+  return last
+    ? { rowId: Number(last.rowid), stamp: spec.effectiveUpdatedAt(last) ?? "" }
+    : { rowId: 0, stamp: "" };
+}
+
+/** Row count per synced table, for the side-by-side status view. */
+export async function countAllRows(
+  db: SyncDatabase
+): Promise<Partial<Record<SyncTableName, number>>> {
+  const counts: Partial<Record<SyncTableName, number>> = {};
+  for (const spec of SYNC_TABLES) {
+    // biome-ignore lint/performance/noAwaitInLoops: one count per table; this backs two status reads, not a hot path
+    counts[spec.name] = await countRows(db, spec.name);
+  }
+  return counts;
+}
+
+/** Summed `qty` per synced table, for the side-by-side status view. */
+export async function sumAllQty(
+  db: SyncDatabase
+): Promise<Partial<Record<SyncTableName, number>>> {
+  const totals: Partial<Record<SyncTableName, number>> = {};
+  for (const spec of SYNC_TABLES) {
+    // biome-ignore lint/performance/noAwaitInLoops: one sum per table, matching the cloud's `totals`
+    totals[spec.name] = await sumQty(db, spec.name);
+  }
+  return totals;
 }
 
 /** Summed `qty` for tables that carry one, else 0. Missing column → 0. */
