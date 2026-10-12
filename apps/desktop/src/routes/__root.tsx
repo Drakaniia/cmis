@@ -38,6 +38,7 @@ import { QuickDeductDialogProvider } from "@/features/inventory/quick-deduct-dia
 import { StockItemDetailDialogProvider } from "@/features/inventory/stock-item-detail-dialog-context";
 import { NewRequestDialogProvider } from "@/features/requests/new-request-dialog-context";
 import { UpdaterProvider } from "@/features/updater/use-updater";
+import { useAppName } from "@/lib/app-name";
 import { SyncProvider } from "@/lib/sync/use-sync";
 
 import "../index.css";
@@ -89,7 +90,7 @@ export const Route = createRootRouteWithContext<RouterAppContext>()({
   head: () => ({
     meta: [
       {
-        title: "cmis",
+        title: "CMIS",
       },
       {
         name: "description",
@@ -249,6 +250,14 @@ function RootComponent() {
   const pathname = useRouterState({
     select: (state) => state.location.pathname,
   });
+  const appName = useAppName();
+  // Single owner of document.title: router head only sets the first paint,
+  // so a rename applies live with no reload (docs keeps its prefix).
+  useEffect(() => {
+    document.title = pathname.startsWith("/docs")
+      ? `Documentation · ${appName}`
+      : appName;
+  }, [appName, pathname]);
   // Documentation is a standalone reading surface: keep the title bar (window
   // drag + controls) but drop the admin sidebar and header.
   const isDocsRoute = pathname.startsWith("/docs");
@@ -282,9 +291,11 @@ function RootComponent() {
                 owned by a route. */}
               <QuickDeductDialogProvider>
                 {/* The palette's stock detail is app-wide too (D22), so its host
-                  sits beside Quick Deduct rather than inside the palette. */}
-                <StockItemDetailDialogProvider>
-                  <NewRequestDialogProvider>
+                  sits beside Quick Deduct rather than inside the palette. It
+                  nests inside New Request so "New request for this item" can
+                  open the pre-filled form from the detail modal. */}
+                <NewRequestDialogProvider>
+                  <StockItemDetailDialogProvider>
                     {isDocsRoute ? (
                       <div className="flex h-svh flex-col overflow-hidden overflow-x-hidden">
                         <TitleBar onToggleSidebar={handleToggle} />
@@ -315,8 +326,8 @@ function RootComponent() {
                         </div>
                       </div>
                     )}
-                  </NewRequestDialogProvider>
-                </StockItemDetailDialogProvider>
+                  </StockItemDetailDialogProvider>
+                </NewRequestDialogProvider>
               </QuickDeductDialogProvider>
               <StrengthBackfillNotice />
               <PackBackfillNotice />

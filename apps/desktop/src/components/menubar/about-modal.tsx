@@ -8,6 +8,7 @@ import {
   DialogTitle,
 } from "@cmis/ui/components/dialog";
 import { useUpdaterOptional } from "@/features/updater/use-updater";
+import { useAppName } from "@/lib/app-name";
 
 export function AboutModal({
   open,
@@ -17,13 +18,14 @@ export function AboutModal({
   open: boolean;
 }) {
   const updater = useUpdaterOptional();
+  const appName = useAppName();
   const version = updater?.currentVersion ?? "0.1.0";
 
   return (
     <Dialog onOpenChange={onOpenChange} open={open}>
       <DialogContent className="max-w-sm">
         <DialogHeader>
-          <DialogTitle>About CMIS</DialogTitle>
+          <DialogTitle>About {appName}</DialogTitle>
           <DialogDescription>
             Clinic Medicine Inventory System — BukSU Clinic
           </DialogDescription>
@@ -31,21 +33,23 @@ export function AboutModal({
         <div className="space-y-3 py-1">
           <div className="flex items-center gap-3">
             <img
-              alt="CMIS"
+              alt={appName}
               className="size-9 rounded-xl dark:hidden"
               height={36}
               src="/cmis-dark-rounded.png"
               width={36}
             />
             <img
-              alt="CMIS"
+              alt={appName}
               className="hidden size-9 rounded-xl dark:block"
               height={36}
               src="/cmis-white-rounded.png"
               width={36}
             />
             <div>
-              <p className="font-semibold text-[13px] leading-tight">CMIS</p>
+              <p className="font-semibold text-[13px] leading-tight">
+                {appName}
+              </p>
               <p className="text-[11.5px] text-muted-foreground">
                 Clinic Medicine Inventory System
               </p>
