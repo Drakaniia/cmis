@@ -17,9 +17,12 @@ import { NewRequestModal } from "./components/new-request-modal";
  * The board, the menubar and (on macOS) the native menu all go through the one
  * `openNewRequest`, which keeps the accelerator, the menu item and any future
  * entry point from drifting apart.
+ *
+ * The optional `medicine` seeds the first row — the stock detail modal uses it
+ * so "New request for this item" lands pre-filled instead of blank.
  */
 interface NewRequestDialogValue {
-  openNewRequest: () => void;
+  openNewRequest: (medicine?: string) => void;
 }
 
 const NOOP: NewRequestDialogValue = { openNewRequest: () => undefined };
@@ -38,7 +41,11 @@ export function NewRequestDialogProvider({
 }) {
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
-  const openNewRequest = useCallback(() => setOpen(true), []);
+  const [pendingMedicine, setPendingMedicine] = useState<string | null>(null);
+  const openNewRequest = useCallback((medicine?: string) => {
+    setPendingMedicine(medicine ?? null);
+    setOpen(true);
+  }, []);
   const value = useMemo<NewRequestDialogValue>(
     () => ({ openNewRequest }),
     [openNewRequest]
@@ -60,7 +67,13 @@ export function NewRequestDialogProvider({
   return (
     <NewRequestDialogContext.Provider value={value}>
       {children}
-      {mounted ? <NewRequestModal onOpenChange={setOpen} open={open} /> : null}
+      {mounted ? (
+        <NewRequestModal
+          initialMedicine={pendingMedicine}
+          onOpenChange={setOpen}
+          open={open}
+        />
+      ) : null}
     </NewRequestDialogContext.Provider>
   );
 }

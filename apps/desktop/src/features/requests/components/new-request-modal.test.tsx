@@ -326,4 +326,38 @@ describe("NewRequestModal stock validation (spec §4–§6)", () => {
       })
     );
   });
+
+  it("hides the quantity error until Create request is clicked", async () => {
+    const user = userEvent.setup();
+    renderModal();
+    await user.type(
+      screen.getByPlaceholderText("Start typing a medicine…"),
+      "Paracetamol 500 mg tablet"
+    );
+
+    expect(
+      screen.queryByText("Quantity must be a whole number greater than zero.")
+    ).toBeNull();
+
+    await user.click(submitButton());
+
+    expect(
+      screen.getByText("Quantity must be a whole number greater than zero.")
+    ).toBeInTheDocument();
+    expect(h.create).not.toHaveBeenCalled();
+  });
+
+  it("seeds the first row from initialMedicine", () => {
+    const onOpenChange = vi.fn();
+    render(
+      <NewRequestModal
+        initialMedicine="Paracetamol 500 mg tablet"
+        onOpenChange={onOpenChange}
+        open
+      />
+    );
+    expect(
+      screen.getByDisplayValue("Paracetamol 500 mg tablet")
+    ).toBeInTheDocument();
+  });
 });
