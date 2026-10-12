@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { DEFAULT_ORANGE_DAYS } from "@/features/inventory/domain/expiry";
 import { getDb } from "@/lib/db";
 import { monthKey } from "@/lib/month";
 import type { HourlyCount, StockAdjustmentsData } from "../types";
@@ -12,7 +13,7 @@ export interface DashboardStats {
   totalItems: number;
 }
 
-export function useDashboardStats() {
+export function useDashboardStats(orangeDays: number = DEFAULT_ORANGE_DAYS) {
   return useQuery({
     placeholderData: (previousData) => previousData,
     queryFn: async (): Promise<DashboardStats> => {
@@ -32,7 +33,8 @@ export function useDashboardStats() {
             .catch(() => [{ c: 0 }]),
           db
             .select<{ c: number }[]>(
-              "SELECT COUNT(*) as c FROM inventory_batches WHERE julianday(expiry) - julianday('now') <= 30"
+              "SELECT COUNT(*) as c FROM inventory_batches WHERE julianday(expiry) - julianday('now') <= ?",
+              [orangeDays]
             )
             .catch(() => [{ c: 0 }]),
           db.select<{ c: number }[]>(
@@ -63,7 +65,7 @@ export function useDashboardStats() {
         totalItems: totalRows[0]?.c ?? 0,
       };
     },
-    queryKey: ["dashboard-stats"],
+    queryKey: ["dashboard-stats", orangeDays],
   });
 }
 
@@ -245,7 +247,7 @@ const EMPTY_ADJUSTMENTS: StockAdjustmentsData = {
  * logged as a transfer (`audit_log.detail`), and a batch at or past its expiry
  * window.
  */
-export function useStockAdjustments() {
+export function useStockAdjustments(orangeDays: number = DEFAULT_ORANGE_DAYS) {
   return useQuery({
     placeholderData: (previousData) => previousData,
     queryFn: async (): Promise<StockAdjustmentsData> => {
@@ -268,8 +270,9 @@ export function useStockAdjustments() {
                     CAST(julianday(b.expiry) - julianday('now') AS INTEGER) AS days_until
                FROM inventory_batches b JOIN inventory_items i ON i.id = b.item_id
               WHERE b.expiry IS NOT NULL AND b.expiry != ''
-                AND julianday(b.expiry) - julianday('now') <= 30
-              ORDER BY b.expiry LIMIT 3`
+                AND julianday(b.expiry) - julianday('now') <= ?
+              ORDER BY b.expiry LIMIT 3`,
+            [orangeDays]
           ),
         ]);
         const [mismatchCount, transferCount, flaggedCount] = await Promise.all([
@@ -282,7 +285,8 @@ export function useStockAdjustments() {
           db.select<{ c: number }[]>(
             `SELECT COUNT(*) AS c FROM inventory_batches
               WHERE expiry IS NOT NULL AND expiry != ''
-                AND julianday(expiry) - julianday('now') <= 30`
+                AND julianday(expiry) - julianday('now') <= ?`,
+            [orangeDays]
           ),
         ]);
         return {
@@ -315,6 +319,6 @@ export function useStockAdjustments() {
         return EMPTY_ADJUSTMENTS;
       }
     },
-    queryKey: ["stock-adjustments"],
+    queryKey: ["stock-adjustments", orangeDays],
   });
 }

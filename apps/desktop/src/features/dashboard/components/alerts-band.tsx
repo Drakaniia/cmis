@@ -18,7 +18,10 @@ import { Link } from "@tanstack/react-router";
 import type { LucideIcon } from "lucide-react";
 import { AlertTriangle, CheckCircle2, Clock } from "lucide-react";
 import { motion } from "motion/react";
-
+import {
+  DEFAULT_ORANGE_DAYS,
+  DEFAULT_RED_DAYS,
+} from "@/features/inventory/domain/expiry";
 import { densitySpring } from "@/lib/motion";
 import type { DashboardLinkKey, ExpiryAlert, LowStockAlert } from "../types";
 
@@ -157,12 +160,27 @@ function ExpiryCard({
   alerts,
   links,
   loading,
+  orangeDays = DEFAULT_ORANGE_DAYS,
+  redDays = DEFAULT_RED_DAYS,
 }: {
   alerts: ExpiryAlert[];
   links: Record<DashboardLinkKey, string>;
   loading: boolean;
+  orangeDays?: number;
+  redDays?: number;
 }) {
-  const urgentCount = alerts.filter((a) => a.daysUntilExpiry <= 7).length;
+  const urgentCount = alerts.filter((a) => a.daysUntilExpiry <= redDays).length;
+
+  /** Red = critical, orange = warning, muted = outside both windows. */
+  function dotClass(daysUntilExpiry: number): string {
+    if (daysUntilExpiry <= redDays) {
+      return "size-2 shrink-0 rounded-full bg-destructive";
+    }
+    if (daysUntilExpiry <= orangeDays) {
+      return "size-2 shrink-0 rounded-full bg-[var(--warning)]";
+    }
+    return "size-2 shrink-0 rounded-full bg-muted-foreground/30";
+  }
 
   return (
     <motion.div
@@ -188,10 +206,7 @@ function ExpiryCard({
           {alerts.slice(0, 5).map((alert) => (
             <li className={ROW} key={alert.id}>
               {/* Status dot */}
-              <span
-                aria-hidden
-                className="size-2 shrink-0 rounded-full bg-destructive"
-              />
+              <span aria-hidden className={dotClass(alert.daysUntilExpiry)} />
 
               {/* Item info */}
               <div className="min-w-0 flex-1">
@@ -282,6 +297,8 @@ export function AlertsBand({
   links,
   loading = false,
   lowStock,
+  orangeDays = DEFAULT_ORANGE_DAYS,
+  redDays = DEFAULT_RED_DAYS,
 }: {
   expiry: ExpiryAlert[];
   links: Record<DashboardLinkKey, string>;
@@ -289,6 +306,8 @@ export function AlertsBand({
    *  lists are clear. */
   loading?: boolean;
   lowStock: LowStockAlert[];
+  orangeDays?: number;
+  redDays?: number;
 }) {
   return (
     <motion.div
@@ -296,7 +315,13 @@ export function AlertsBand({
       {...SECTION}
       transition={{ ...densitySpring, staggerChildren: 0.06 }}
     >
-      <ExpiryCard alerts={expiry} links={links} loading={loading} />
+      <ExpiryCard
+        alerts={expiry}
+        links={links}
+        loading={loading}
+        orangeDays={orangeDays}
+        redDays={redDays}
+      />
       <LowStockCard alerts={lowStock} links={links} loading={loading} />
     </motion.div>
   );
