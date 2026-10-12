@@ -4,7 +4,6 @@ import type {
   InventoryItem,
   MinimapBucket,
 } from "../types";
-import { EXPIRY_THRESHOLDS } from "../types";
 
 export function daysUntilExpiry(iso: string): number {
   const now = new Date();
@@ -22,14 +21,23 @@ export function expiryLabel(iso: string): string {
   });
 }
 
-export function classifyExpiry(daysUntil: number): ExpiryStatus {
+/** Orange warning band — batch expires within this many days (warning). */
+export const DEFAULT_ORANGE_DAYS = 30;
+/** Red alert band — batch expires within this many days (critical). */
+export const DEFAULT_RED_DAYS = 7;
+
+export function classifyExpiry(
+  daysUntil: number,
+  redDays: number = DEFAULT_RED_DAYS,
+  orangeDays: number = DEFAULT_ORANGE_DAYS
+): ExpiryStatus {
   if (daysUntil < 0) {
     return "expired";
   }
-  if (daysUntil <= EXPIRY_THRESHOLDS.soon) {
+  if (daysUntil <= redDays) {
     return "expiring-soon";
   }
-  if (daysUntil <= EXPIRY_THRESHOLDS.later) {
+  if (daysUntil <= orangeDays) {
     return "expiring-later";
   }
   return "safe";
@@ -74,7 +82,11 @@ export const EXPIRY_STATUS_CONFIG: Record<
   },
 };
 
-export function buildExpiryRows(items: InventoryItem[]): ExpiryRow[] {
+export function buildExpiryRows(
+  items: InventoryItem[],
+  redDays: number = DEFAULT_RED_DAYS,
+  orangeDays: number = DEFAULT_ORANGE_DAYS
+): ExpiryRow[] {
   const rows: ExpiryRow[] = [];
   for (const item of items) {
     for (const batch of item.batches) {
@@ -82,7 +94,7 @@ export function buildExpiryRows(items: InventoryItem[]): ExpiryRow[] {
       rows.push({
         batch,
         daysUntil,
-        expiryStatus: classifyExpiry(daysUntil),
+        expiryStatus: classifyExpiry(daysUntil, redDays, orangeDays),
         item,
       });
     }

@@ -17,14 +17,19 @@ function daysFromNow(days: number): string {
 }
 
 describe("expiry domain", () => {
-  it("classifyExpiry respects thresholds 30 / 90", () => {
+  it("classifyExpiry defaults to red 7 / orange 30", () => {
     expect(classifyExpiry(-1)).toBe("expired");
     expect(classifyExpiry(0)).toBe("expiring-soon");
-    expect(classifyExpiry(12)).toBe("expiring-soon");
-    expect(classifyExpiry(30)).toBe("expiring-soon");
-    expect(classifyExpiry(31)).toBe("expiring-later");
-    expect(classifyExpiry(90)).toBe("expiring-later");
-    expect(classifyExpiry(91)).toBe("safe");
+    expect(classifyExpiry(7)).toBe("expiring-soon");
+    expect(classifyExpiry(8)).toBe("expiring-later");
+    expect(classifyExpiry(30)).toBe("expiring-later");
+    expect(classifyExpiry(31)).toBe("safe");
+  });
+
+  it("classifyExpiry honours custom red/orange thresholds", () => {
+    expect(classifyExpiry(10, 14, 60)).toBe("expiring-soon");
+    expect(classifyExpiry(15, 14, 60)).toBe("expiring-later");
+    expect(classifyExpiry(61, 14, 60)).toBe("safe");
   });
 
   it("daysUntilExpiry computes ceil diff", () => {
