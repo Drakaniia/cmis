@@ -68,7 +68,7 @@ function MonthStepper({
             Clicking it opens the full calendar to jump to any month or year. */}
         <Popover onOpenChange={setOpen} open={open}>
           <PopoverTrigger
-            aria-label={`Month, currently ${monthLabel}. Press to choose a date.`}
+            aria-label={`Month, currently ${monthLabel}. Press to choose a month.`}
             className="press-feedback relative grid min-w-[132px] place-items-center overflow-hidden px-1 text-center"
             render={<button type="button" />}
           >
@@ -94,6 +94,7 @@ function MonthStepper({
               <PopoverPopup className="surface-frosted w-64">
                 <Calendar
                   max={todayIso()}
+                  monthOnly
                   onSelect={handleSelect}
                   value={`${month}-01`}
                 />
