@@ -110,9 +110,15 @@ export interface GeneralSettings {
 }
 
 export interface AlertSettings {
+  /** Legacy single-window radio (30/60/90); kept for stored-shape migration.
+   *  The UI now edits `orangeDays`/`redDays` instead. */
   expiryWindowDays: ExpiryWindowDays;
   globalLowStock: number;
+  /** Orange warning band — batches expiring within this many days. */
+  orangeDays: number;
   overrides: ThresholdOverride[];
+  /** Red alert band — batches expiring within this many days (critical). */
+  redDays: number;
 }
 
 export interface SettingsState {
