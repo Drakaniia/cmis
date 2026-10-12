@@ -5,37 +5,8 @@ import { Check, RotateCcw, Search, X } from "lucide-react";
 import { type ChangeEvent, useCallback, useState } from "react";
 import { toast } from "sonner";
 
-import type { AlertSettings, ExpiryWindowDays } from "../types";
+import type { AlertSettings } from "../types";
 import { SettingsCard } from "./settings-card";
-
-const EXPIRY_WINDOWS: ExpiryWindowDays[] = [30, 60, 90];
-
-function ExpiryWindowOption({
-  days,
-  selected,
-  onSelect,
-}: {
-  days: ExpiryWindowDays;
-  onSelect: (days: ExpiryWindowDays) => void;
-  selected: boolean;
-}) {
-  const handleChange = useCallback(() => {
-    onSelect(days);
-  }, [onSelect, days]);
-
-  return (
-    <label className="inline-flex items-center gap-1.5">
-      <input
-        checked={selected}
-        className="accent-primary"
-        name="expiry-window"
-        onChange={handleChange}
-        type="radio"
-      />
-      {days} days
-    </label>
-  );
-}
 
 function ThresholdRow({
   draft,
@@ -146,8 +117,9 @@ export function ThresholdsTab({
   alerts: AlertSettings;
   onSetAlerts: (
     patch: Partial<{
-      expiryWindowDays: ExpiryWindowDays;
       globalLowStock: number;
+      orangeDays: number;
+      redDays: number;
     }>
   ) => void;
   onSetOverride: (id: string, value: number | null) => void;
@@ -161,9 +133,22 @@ export function ThresholdsTab({
     row.itemName.toLowerCase().includes(query)
   );
 
-  const handleWindowSelect = useCallback(
-    (days: ExpiryWindowDays) => {
-      onSetAlerts({ expiryWindowDays: days });
+  const handleOrangeChange = useCallback(
+    (next: number | "") => {
+      if (next === "") {
+        return;
+      }
+      onSetAlerts({ orangeDays: next });
+    },
+    [onSetAlerts]
+  );
+
+  const handleRedChange = useCallback(
+    (next: number | "") => {
+      if (next === "") {
+        return;
+      }
+      onSetAlerts({ redDays: next });
     },
     [onSetAlerts]
   );
@@ -216,6 +201,8 @@ export function ThresholdsTab({
     [alerts.overrides, onSetOverride]
   );
 
+  const thresholdsInvalid = alerts.redDays >= alerts.orangeDays;
+
   return (
     <div className="space-y-4">
       <SettingsCard
@@ -223,19 +210,49 @@ export function ThresholdsTab({
         title="Global defaults"
       >
         <div className="grid gap-4 sm:grid-cols-2">
-          <fieldset className="text-caption text-foreground">
-            <legend>Expiry window</legend>
-            <div className="mt-1 flex gap-3">
-              {EXPIRY_WINDOWS.map((days) => (
-                <ExpiryWindowOption
-                  days={days}
-                  key={days}
-                  onSelect={handleWindowSelect}
-                  selected={alerts.expiryWindowDays === days}
-                />
-              ))}
-            </div>
-          </fieldset>
+          <div>
+            <label
+              className="block text-caption text-foreground"
+              htmlFor="orange-expiry-threshold"
+            >
+              Orange warning — expires within {alerts.orangeDays} days
+              <QuantityStepper
+                aria-label="Orange warning — expires within days"
+                className="mt-1 h-8 w-32"
+                id="orange-expiry-threshold"
+                invalid={thresholdsInvalid}
+                max={365}
+                min={1}
+                onChange={handleOrangeChange}
+                value={alerts.orangeDays}
+              />
+            </label>
+            <label
+              className="mt-3 block text-caption text-foreground"
+              htmlFor="red-expiry-threshold"
+            >
+              Red alert — expires within {alerts.redDays} days
+              <QuantityStepper
+                aria-label="Red alert — expires within days"
+                className="mt-1 h-8 w-32"
+                id="red-expiry-threshold"
+                invalid={thresholdsInvalid}
+                max={365}
+                min={1}
+                onChange={handleRedChange}
+                value={alerts.redDays}
+              />
+            </label>
+            {thresholdsInvalid ? (
+              <p className="mt-1 text-caption text-destructive" role="alert">
+                Red alert must be fewer days than orange warning.
+              </p>
+            ) : (
+              <p className="mt-1 text-caption text-muted-foreground">
+                Batches past either date change colour everywhere.
+              </p>
+            )}
+          </div>
 
           <label
             className="block text-caption text-foreground"

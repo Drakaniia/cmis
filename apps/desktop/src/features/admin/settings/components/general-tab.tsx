@@ -50,9 +50,17 @@ export function GeneralTab({
   }, [general]);
 
   const dirty =
+    draft.appName.trim() !== general.appName ||
     draft.dateFormat !== general.dateFormat ||
     draft.operatorName !== general.operatorName ||
     draft.timeFormat !== general.timeFormat;
+
+  const handleAppNameChange = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => {
+      setDraft((prev) => ({ ...prev, appName: event.target.value }));
+    },
+    []
+  );
 
   const handleOperatorNameChange = useCallback(
     (event: ChangeEvent<HTMLInputElement>) => {
@@ -85,14 +93,17 @@ export function GeneralTab({
   return (
     <div className="space-y-4">
       <SettingsCard
-        description="App identity comes from the Tauri bundle and is read-only at runtime."
+        description="Applies app-wide the moment it is saved — sidebar, title bar, splash, and About."
         title="Application"
       >
         <label className="block text-caption text-foreground">
           App name
           <input
-            className="mt-1 h-8 w-full max-w-sm rounded-md border border-input bg-muted/40 px-3 text-muted-foreground text-sm outline-none"
-            readOnly
+            autoComplete="off"
+            className="mt-1 h-8 w-full max-w-sm rounded-md border border-input bg-background px-3 text-sm outline-none focus:border-ring focus:ring-1 focus:ring-ring"
+            maxLength={60}
+            onChange={handleAppNameChange}
+            placeholder="CMIS"
             value={draft.appName}
           />
         </label>
