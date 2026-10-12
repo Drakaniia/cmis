@@ -83,7 +83,10 @@ function BatchRow({
   validation: DraftValidation;
   onTouched: (rowId: string, column: string) => void;
 }) {
-  const label = row.batch.trim() || `row ${index + 1}`;
+  const trimmed = row.batch.trim();
+  const label = trimmed
+    ? `${trimmed} (batch ${index + 1})`
+    : `batch ${index + 1}`;
   const shouldShow = (column: string) =>
     Boolean(showErrors) || touched.has(`${row.id}:${column}`);
   const batchError = shouldShow("batch")
