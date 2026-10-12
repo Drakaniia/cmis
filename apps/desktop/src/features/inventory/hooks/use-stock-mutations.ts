@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { recordAudit } from "@/features/admin/audit/write-audit";
 import { getDb } from "@/lib/db";
+import { usableBatches } from "../domain/deduct-plan";
 import { isPackIncomplete, packSizeText } from "../domain/pack-size";
 import {
   composeDisplayName,
@@ -14,6 +15,19 @@ type Db = Awaited<ReturnType<typeof getDb>>;
 
 function nowIso(): string {
   return new Date().toISOString();
+}
+
+/**
+ * FEFO fallback for a stock-out that names no batch: earliest-expiring batch
+ * with stock, expired/empty excluded by `usableBatches`. Returns "" when none.
+ */
+async function resolveFefoBatch(db: Db, itemId: string): Promise<string> {
+  const rows = await db.select<
+    { batch: string; expiry: string | null; qty: number }[]
+  >("SELECT batch, expiry, qty FROM inventory_batches WHERE item_id = ?", [
+    itemId,
+  ]);
+  return usableBatches(rows)[0]?.batch ?? "";
 }
 
 /**
@@ -255,9 +269,11 @@ export function useStockOutMutation() {
         throw new Error("Insufficient stock");
       }
 
-      // Decrement batch qty if batch specified, else just item qty
-      if (payload.batch) {
-        await decrementBatch(db, payload.itemId, payload.batch, payload.qty);
+      // FEFO fallback: no batch named means earliest-expiring batch with stock.
+      const batchName =
+        payload.batch || (await resolveFefoBatch(db, payload.itemId));
+      if (batchName) {
+        await decrementBatch(db, payload.itemId, batchName, payload.qty);
       }
 
       const newQty = item.qty - payload.qty;
@@ -289,7 +305,7 @@ export function useStockOutMutation() {
           action: "stock-out",
           after: { qty: newQty, status: newStatus },
           before: { qty: item.qty },
-          detail: `${item.display_name || item.name}: ${payload.reason} ${payload.qty} ${payload.qty === 1 ? "unit" : "units"}${freeText ? ` — ${freeText}` : ""}${payload.batch ? ` (batch ${payload.batch})` : ""}, ${newQty} left`,
+          detail: `${item.display_name || item.name}: ${payload.reason} ${payload.qty} ${payload.qty === 1 ? "unit" : "units"}${freeText ? ` — ${freeText}` : ""}${batchName ? ` (batch ${batchName})` : ""}, ${newQty} left`,
           targetId: payload.itemId,
           targetKind: "item",
         },
