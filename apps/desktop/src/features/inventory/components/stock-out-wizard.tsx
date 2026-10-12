@@ -596,6 +596,13 @@ export function StockOutWizard({
   const handleCancel = useCallback(() => onOpenChange(false), [onOpenChange]);
   const handleNext = useCallback(() => goNext(), [goNext]);
 
+  // New item means new FEFO default: clear stale batch so the effect below
+  // picks earliest-expiring batch with stock for this item.
+  const handleSelect = useCallback((id: string) => {
+    setSelectedId(id);
+    setBatch("");
+  }, []);
+
   const filteredForPick = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) {
@@ -638,7 +645,7 @@ export function StockOutWizard({
       {step === 1 ? (
         <StepPick
           onSearchChange={setSearch}
-          onSelect={setSelectedId}
+          onSelect={handleSelect}
           results={filteredForPick}
           search={search}
           selectedId={selectedId}
