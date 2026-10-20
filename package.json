@@ -61,7 +61,7 @@
     "shadcn": "^4.21.0",
     "typescript": "catalog:",
     "ultracite": "7.10.7",
-    "vite-plus": "0.3.0"
+    "vite-plus": "1.1.0"
   },
   "packageManager": "pnpm@12.3.4",
   "engines": {
